@@ -21,6 +21,6 @@
 go.work
 go.work.sum
 
-# env file
+# base-env file
 .env
 .xlsx
