@@ -98,7 +98,7 @@ func init() {
 	if len(writers) > 1 {
 		writer = zerolog.MultiLevelWriter(writers...)
 	} else if len(writers) == 0 {
-		writer = zerolog.ConsoleWriter{Out: io.Discard}
+		writer = io.Discard
 	} else {
 		writer = writers[0]
 	}
