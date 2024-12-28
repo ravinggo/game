@@ -35,7 +35,7 @@ func TestTaskGroup_Put(t *testing.T) {
 	for {
 		time.Sleep(time.Second)
 		c := atomic.LoadInt64(&count)
-		fmt.Println(c, c-old, GetStatistics())
+		fmt.Println(c, c-old)
 		old = c
 	}
 }
