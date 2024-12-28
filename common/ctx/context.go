@@ -3,6 +3,7 @@ package ctx
 import (
 	"context"
 	"hash/crc32"
+	"math/rand/v2"
 	"sync"
 	"time"
 
@@ -101,21 +102,47 @@ func NewMarkCtx[MARK MarkToHash](mark MARK) *MarkCtx[MARK] {
 	return c
 }
 
-type Int64Mark int64
-
-func (i Int64Mark) MarkToHash() int64 {
-	return int64(i)
+type IntMark struct {
+	Mark     int64
+	ServerId int64
 }
 
-type StringMark string
-
-func (i StringMark) MarkToHash() int64 {
-	if len(i) == 0 {
-		return 0
+func (i IntMark) MarkToHash() int64 {
+	if i.Mark != 0 {
+		if i.Mark > 0 {
+			return i.Mark
+		}
+		return -i.Mark
+	}
+	if i.ServerId != 0 {
+		if i.ServerId > 0 {
+			return i.ServerId
+		}
+		return -i.ServerId
 	}
 
-	return int64(crc32.ChecksumIEEE(utils.StringToBytes(string(i))))
+	return rand.Int64()
 }
 
-type IntMarkCtx MarkCtx[Int64Mark]
-type StringMarkCtx MarkCtx[Int64Mark]
+type StringMark struct {
+	Mark     string
+	ServerId int64
+}
+
+func (i StringMark) MarkToHash() int64 {
+	if len(i.Mark) == 0 {
+		if i.ServerId != 0 {
+			if i.ServerId > 0 {
+				return i.ServerId
+			}
+			return -i.ServerId
+		}
+
+		return rand.Int64()
+	}
+
+	return int64(crc32.ChecksumIEEE(utils.StringToBytes(i.Mark)))
+}
+
+type IntMarkCtx MarkCtx[IntMark]
+type StringMarkCtx MarkCtx[StringMark]
