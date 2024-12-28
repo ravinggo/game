@@ -10,6 +10,7 @@ import (
 
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
+	"github.com/rs/zerolog/pkgerrors"
 	"gopkg.in/natefinch/lumberjack.v2"
 
 	baseenv "github.com/ravinggo/game/common/base-env"
@@ -21,16 +22,60 @@ var Log *Logger
 
 func init() {
 	envCnf := baseenv.GetConfig()
+	if !envCnf.LogTimestamp {
+		zerolog.TimeFieldFormat = "2006-01-02T15:04:05.000Z07:00"
+	} else {
+		zerolog.TimeFieldFormat = zerolog.TimeFormatUnix
+	}
+	var tz *time.Location
+	if envCnf.LogUtcTime {
+		zerolog.TimestampFunc = func() time.Time {
+			return time.Now().UTC()
+		}
+		tz = time.UTC
+	}
+	zerolog.MessageFieldName = "msg"
+	zerolog.ErrorFieldName = "err"
+
 	var writers []io.Writer
 	if envCnf.LogConsole != "" {
-		if envCnf.LogConsole == "stdout" {
-			writers = append(writers, zerolog.ConsoleWriter{Out: os.Stdout, TimeFormat: time.RFC3339})
-		} else if envCnf.LogConsole == "stderr" {
-			writers = append(writers, zerolog.ConsoleWriter{Out: os.Stderr, TimeFormat: time.RFC3339})
+		if envCnf.LogEncodingMode == "json" {
+			if envCnf.LogConsole == "stdout" {
+				writers = append(writers, os.Stdout)
+			} else if envCnf.LogConsole == "stderr" {
+				writers = append(writers, os.Stderr)
+			} else if envCnf.LogConsole == "discard" {
+				writers = append(writers, io.Discard)
+			} else {
+				panic("Console must be stdout or stderr or discard")
+			}
 		} else {
-			panic("Console must be stdout or stderr")
+			if envCnf.LogConsole == "stdout" {
+				writers = append(
+					writers, zerolog.ConsoleWriter{
+						Out: os.Stdout, TimeFormat: zerolog.TimeFieldFormat, TimeLocation: tz,
+						FormatCaller: func(i interface{}) string {
+							return i.(string)
+						},
+					},
+				)
+			} else if envCnf.LogConsole == "stderr" {
+				writers = append(
+					writers, zerolog.ConsoleWriter{
+						Out: os.Stderr, TimeFormat: zerolog.TimeFieldFormat, TimeLocation: tz,
+						FormatCaller: func(i interface{}) string {
+							return i.(string)
+						},
+					},
+				)
+			} else if envCnf.LogConsole == "discard" {
+				writers = append(writers, io.Discard)
+			} else {
+				panic("Console must be stdout or stderr or discard")
+			}
 		}
 	}
+
 	serverId := envCnf.ServerId
 	appName := envCnf.AppName
 	logDir := envCnf.LogDir
@@ -39,6 +84,7 @@ func init() {
 		if serverId != 0 {
 			filepath.Join(fp, strconv.Itoa(int(serverId)))
 		}
+		fp += ".log"
 		l := &lumberjack.Logger{
 			Filename:   fp,
 			MaxSize:    envCnf.LogMaxSize,   // megabytes
@@ -56,12 +102,16 @@ func init() {
 	} else {
 		writer = writers[0]
 	}
-	defaultLog := zerolog.New(writer).
-		Level(getLoggerLevel()).With().Timestamp().
-		Str("appName", appName).Int64("serverId", serverId).
-		Stack().Caller().Logger()
-
-	log.Logger = defaultLog
+	zerolog.ErrorStackMarshaler = pkgerrors.MarshalStack
+	ctx := zerolog.New(writer).
+		Level(getLoggerLevel()).With().Timestamp().Str("_AN_", appName).Stack()
+	if serverId > 0 {
+		ctx = ctx.Int64("_SID_", serverId)
+	}
+	if !envCnf.LogNotCaller {
+		ctx = ctx.Caller()
+	}
+	log.Logger = ctx.Logger()
 	Log = &log.Logger
 }
 

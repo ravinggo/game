@@ -32,17 +32,25 @@ type Config struct {
 	// LogLevel DEBUG, INFO, WARN, ERROR, PANIC
 	// default: DEBUG
 	LogLevel string `envconfig:"LOG_LEVEL"`
+
+	// 日志使用utc时间
+	LogUtcTime bool `envconfig:"LOG_UTC_TIME"`
+
+	LogTimestamp bool `envconfig:"LOG_TIMESTAMP"`
+
+	// output console. default stderr. yet can stdout or discard
+	LogConsole string `envconfig:"LOG_CONSOLE"`
+
+	LogDir string `envconfig:"LOG_DIR"`
 	// lumberjack 文件到多大时进行rotate
 	LogMaxSize int `envconfig:"LOG_MAX_SIZE"`
 	// lumberjack 最多保留多少个rotate
 	LogMaxBackup int `envconfig:"LOG_MAX_BACKUP"`
-	// 日志使用utc时间
-	LogUtcTime bool `envconfig:"LOG_UTC_TIME"`
-	// output console. default stderr. yet can stdout
-	LogConsole string `envconfig:"LOG_CONSOLE"`
-	LogDir     string `envconfig:"LOG_DIR"`
+
 	// 日志输出格式 默认"console",另有"json"
 	LogEncodingMode string `envconfig:"LOG_ENCODING_MODE"`
+
+	LogNotCaller bool `envconfig:"LOG_NOT_CALLER"`
 }
 
 var (
@@ -58,7 +66,9 @@ var (
 		LogLevel:        "debug",
 		LogConsole:      "stderr",
 		LogDir:          "",
-		LogEncodingMode: "console",
+		LogEncodingMode: "",
+		LogNotCaller:    false,
+		LogTimestamp:    false,
 	}
 )
 
