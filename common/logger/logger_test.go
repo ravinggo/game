@@ -10,6 +10,7 @@ func TestLog(t *testing.T) {
 	Log.Debug().Str("key", "value").Str("a", "a").Msg("testxxxx")
 	Log.Warn().Str("key", "value").Str("a", "a").Msg("testxxxx")
 	Log.Error().Stack().Str("key", "value").Str("a", "a").Err(os.ErrClosed).Msg("testxxxx")
+
 }
 
 func BenchmarkLogger(b *testing.B) {

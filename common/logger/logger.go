@@ -102,13 +102,18 @@ func init() {
 	} else {
 		writer = writers[0]
 	}
+
+	if envCnf.LogAsync {
+		writer = NewAsync(writer)
+	}
+
 	zerolog.ErrorStackMarshaler = pkgerrors.MarshalStack
 	ctx := zerolog.New(writer).
 		Level(getLoggerLevel()).With().Timestamp().Str("_AN_", appName).Stack()
 	if serverId > 0 {
 		ctx = ctx.Int64("_SID_", serverId)
 	}
-	if !envCnf.LogNotCaller {
+	if !envCnf.LogNoCaller {
 		ctx = ctx.Caller()
 	}
 	log.Logger = ctx.Logger()

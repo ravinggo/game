@@ -33,6 +33,9 @@ type Config struct {
 	// default: DEBUG
 	LogLevel string `envconfig:"LOG_LEVEL"`
 
+	// LogAsync async output log data
+	LogAsync bool `envconfig:"LOG_ASYNC"`
+
 	// 日志使用utc时间
 	LogUtcTime bool `envconfig:"LOG_UTC_TIME"`
 
@@ -50,7 +53,7 @@ type Config struct {
 	// 日志输出格式 默认"console",另有"json"
 	LogEncodingMode string `envconfig:"LOG_ENCODING_MODE"`
 
-	LogNotCaller bool `envconfig:"LOG_NOT_CALLER"`
+	LogNoCaller bool `envconfig:"LOG_NO_CALLER"`
 }
 
 var (
@@ -67,8 +70,9 @@ var (
 		LogConsole:      "stderr",
 		LogDir:          "",
 		LogEncodingMode: "",
-		LogNotCaller:    false,
+		LogNoCaller:     false,
 		LogTimestamp:    false,
+		LogAsync:        false,
 	}
 )
 
