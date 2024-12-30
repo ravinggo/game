@@ -1,0 +1,16 @@
+syntax = "proto3";
+
+package login;
+option go_package = "./basepb";
+
+message IntMark{
+  int64 mark = 1;
+  int64 from_server_id = 2;
+  string from_server_type= 3;
+}
+
+message StringMark{
+  string mark = 1;
+  int64 from_server_id = 2;
+  string from_server_type= 3;
+}

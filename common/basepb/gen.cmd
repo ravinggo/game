@@ -1,0 +1,1 @@
+protoc.exe -I. --go_out=.. ./*.proto

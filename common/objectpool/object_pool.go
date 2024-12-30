@@ -138,7 +138,6 @@ func getSlicePool[T any](s *slicePool, cap int, minCap int) *Slice[T] {
 }
 
 func putSlicePool[T any](s *slicePool, t *Slice[T]) {
-	clear(t.Data)
 	t.Data = t.Data[:0]
 	c := cap(t.Data)
 	idx := index(uint32(c))
@@ -190,6 +189,27 @@ func PutSlice[T any](t *Slice[T]) {
 	putSlicePool(s, t)
 }
 
+func PutSliceClear[T any](t *Slice[T]) {
+	if cap(t.Data) > math.MaxInt32 {
+		return
+	}
+	var a interface{} = (*Slice[T])(nil)
+	typPtr := *(*uintptr)(unsafe.Pointer(&a))
+	if typPtr != bytesPtr {
+		if cap(t.Data) < otherMinCap {
+			return
+		}
+		clear(t.Data)
+	} else {
+		if cap(t.Data) < byteMinCap {
+			return
+		}
+	}
+
+	s := op.getSlice(typPtr)
+	putSlicePool(s, t)
+}
+
 // GetMap  get a map from object pool with K and V
 func GetMap[K comparable, V any]() map[K]V {
 	var a interface{} = (map[K]V)(nil)
@@ -210,3 +230,5 @@ func PutMap[K comparable, V any](t map[K]V) {
 	p := op.get(typPtr)
 	p.Put(t)
 }
+
+type Bytes Slice[byte]
