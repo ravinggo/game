@@ -6,6 +6,7 @@ import (
 	"math/rand/v2"
 	"time"
 
+	"github.com/rs/zerolog"
 	"google.golang.org/protobuf/proto"
 
 	"github.com/ravinggo/game/common/basepb"
@@ -14,30 +15,49 @@ import (
 	"github.com/ravinggo/game/common/utils"
 )
 
-type canReset interface {
-	Reset()
+type Clear interface {
+	Clear()
+}
+
+type ToHash interface {
+	// ToHash return a hash value for cluster router msg
+	ToHash() uint64
+}
+
+type Trace interface {
+	TraceMarshalSize() int
+
+	// TraceMarshalAppend marshal the object to byte slice
+	TraceMarshalAppend([]byte) ([]byte, error)
+
+	// TraceMarshalFrom unmarshal the object from byte slice
+	TraceMarshalFrom([]byte) error
+
+	TraceLogField(*zerolog.Context)
+
+	GetServerIdAndType() (int64, string)
+	SetServerIdAndType(int64, string)
 }
 
 type IContext interface {
 	context.Context
 	Release()
-	canReset
-}
-
-type IHashContext interface {
-	IContext
+	Clear
 	ToHash
 }
 
 type BaseContext struct {
 	context.Context
-	TraceLog *logger.Logger
-	TraceID  string
+	TraceLog logger.Logger
+}
+
+func (c *BaseContext) ToHash() uint64 {
+	return rand.Uint64()
 }
 
 func (c *BaseContext) reset() {
 	c.Context = context.TODO()
-	c.TraceID = ""
+	logger.Log.With()
 }
 
 func (c *BaseContext) Deadline() (deadline time.Time, ok bool) {
@@ -75,6 +95,21 @@ func (c *BaseContext) SetValue(key any, value any) {
 	c.Context = context.WithValue(c.Context, key, value)
 }
 
+func (c *BaseContext) Clear() {
+	c.TraceLog.UpdateContext(
+		func(c zerolog.Context) zerolog.Context {
+			return c
+		},
+	)
+	c.Context = context.Background()
+}
+
+func (c *BaseContext) Release() {
+
+}
+
+var _ IContext = (*BaseContext)(nil)
+
 // Value returns the value associated with this context for key, or nil
 func Value[K comparable, V any](c IContext, key K) (V, bool) {
 	v := c.Value(key)
@@ -88,64 +123,50 @@ func Value[K comparable, V any](c IContext, key K) (V, bool) {
 	return zero, false
 }
 
-type ToHash interface {
-	// ToHash return a hash value for cluster router msg
-	ToHash() uint64
-}
-
-type MarshalCtx interface {
-	TraceMarshalSize() int
-
-	// TraceMarshalAppend marshal the object to byte slice
-	TraceMarshalAppend([]byte) ([]byte, error)
-
-	// TraceMarshalFrom unmarshal the object from byte slice
-	TraceMarshalFrom([]byte) error
-}
-
-// MarkCtx is a context with a mark
-// mark can be roleID,or roleInfo, or other
-type MarkCtx[MARK any] struct {
+// TraceCtx is a context with a trace data,
+// trace data can be roleID,or roleInfo, or other
+type TraceCtx[TraceData any] struct {
 	BaseContext
-	Mark MARK
+	TD TraceData
 }
 
-// NewMarkCtxWithMark create a new MarkCtx
-func NewMarkCtxWithMark[MARK any](mark MARK) *MarkCtx[MARK] {
-	c := objectpool.Get[MarkCtx[MARK]]()
-	c.Mark = mark
+// NewMarkCtxWithMark create a new TraceCtx
+func NewMarkCtxWithMark[TraceData any](traceData TraceData) *TraceCtx[TraceData] {
+	c := objectpool.Get[TraceCtx[TraceData]]()
+	c.TD = traceData
 	return c
 }
 
-// NewMarkCtx create a new MarkCtx
-func NewMarkCtx[MARK any]() *MarkCtx[MARK] {
-	c := objectpool.Get[MarkCtx[MARK]]()
+// NewMarkCtx create a new TraceCtx
+func NewMarkCtx[TraceData any]() *TraceCtx[TraceData] {
+	c := objectpool.Get[TraceCtx[TraceData]]()
 	return c
 }
 
-func (c *MarkCtx[MARK]) Release() {
-	c.Reset()
-	objectpool.Put[MarkCtx[MARK]](c)
+func (c *TraceCtx[TraceData]) Release() {
+	c.Clear()
+	objectpool.Put[TraceCtx[TraceData]](c)
 }
 
-func (c *MarkCtx[MARK]) Reset() {
-	var mark any = c.Mark
-	if m, ok := mark.(canReset); ok {
-		m.Reset()
+func (c *TraceCtx[TraceData]) Clear() {
+	c.BaseContext.Clear()
+	var mark any = c.TD
+	if m, ok := mark.(Clear); ok {
+		m.Clear()
 	}
 	c.reset()
 }
 
-type IntMark struct {
-	basepb.IntMark
+type IntTrace struct {
+	basepb.IntTrace
 }
 
-func (i *IntMark) ToHash() uint64 {
-	if i.Mark != 0 {
-		if i.Mark > 0 {
-			return uint64(i.Mark)
+func (i *IntTrace) ToHash() uint64 {
+	if i.RoleId != 0 {
+		if i.RoleId > 0 {
+			return uint64(i.RoleId)
 		}
-		return uint64(-i.Mark)
+		return uint64(-i.RoleId)
 	}
 	if i.FromServerId != 0 {
 		if i.FromServerId > 0 {
@@ -157,24 +178,38 @@ func (i *IntMark) ToHash() uint64 {
 	return rand.Uint64()
 }
 
-func (i *IntMark) TraceMarshalSize() int {
+func (i *IntTrace) TraceMarshalSize() int {
 	return proto.Size(i)
 }
 
-func (i *IntMark) TraceMarshalAppend(b []byte) ([]byte, error) {
+func (i *IntTrace) TraceMarshalAppend(b []byte) ([]byte, error) {
 	return proto.MarshalOptions{}.MarshalAppend(b, i)
 }
 
-func (i *IntMark) TraceMarshalFrom(b []byte) error {
+func (i *IntTrace) TraceMarshalFrom(b []byte) error {
 	return proto.Unmarshal(b, i)
 }
 
-type StringMark struct {
-	basepb.StringMark
+func (i *IntTrace) GetServerIdAndType() (int64, string) {
+	return i.FromServerId, i.FromServerType
 }
 
-func (i *StringMark) ToHash() uint64 {
-	if len(i.Mark) == 0 {
+func (i *IntTrace) SetServerIdAndType(serverId int64, serverType string) {
+	i.FromServerId = serverId
+	i.FromServerType = serverType
+}
+
+func (i *IntTrace) TraceLogField(zc *zerolog.Context) {
+	zc.Str("traceId", i.TraceId).Int64("fromServerId", i.FromServerId).
+		Str("fromServerType", i.FromServerType).Int64("roleId", i.RoleId)
+}
+
+type StringTrace struct {
+	basepb.StringTrace
+}
+
+func (i *StringTrace) ToHash() uint64 {
+	if len(i.RoleId) == 0 {
 		if i.FromServerId != 0 {
 			if i.FromServerId > 0 {
 				return uint64(i.FromServerId)
@@ -185,25 +220,45 @@ func (i *StringMark) ToHash() uint64 {
 		return rand.Uint64()
 	}
 
-	return uint64(crc32.ChecksumIEEE(utils.StringToBytes(i.Mark)))
+	return uint64(crc32.ChecksumIEEE(utils.StringToBytes(i.RoleId)))
 }
 
-func (i *StringMark) TraceMarshalSize() int {
+func (i *StringTrace) TraceMarshalSize() int {
 	return proto.Size(i)
 }
 
-func (i *StringMark) TraceMarshalAppend(b []byte) ([]byte, error) {
+func (i *StringTrace) TraceMarshalAppend(b []byte) ([]byte, error) {
 	return proto.MarshalOptions{}.MarshalAppend(b, i)
 }
 
-func (i *StringMark) TraceMarshalFrom(b []byte) error {
+func (i *StringTrace) TraceMarshalFrom(b []byte) error {
 	return proto.Unmarshal(b, i)
 }
 
-type Int64MarkCtx MarkCtx[IntMark]
-type StringMarkCtx MarkCtx[StringMark]
+func (i *StringTrace) GetServerIdAndType() (int64, string) {
+	return i.FromServerId, i.FromServerType
+}
+
+func (i *StringTrace) SetServerIdAndType(serverId int64, serverType string) {
+	i.FromServerId = serverId
+	i.FromServerType = serverType
+}
+
+func (i *StringTrace) TraceLogField(zc *zerolog.Context) {
+	zc.Str("traceId", i.TraceId).Int64("fromServerId", i.FromServerId).
+		Str("fromServerType", i.FromServerType).Str("roleId", i.RoleId)
+}
+
+type Int64TraceCtx TraceCtx[IntTrace]
+type StringTraceCtx TraceCtx[StringTrace]
 
 var (
-	_ ToHash = (*IntMark)(nil)
-	_ ToHash = (*StringMark)(nil)
+	_ ToHash = (*IntTrace)(nil)
+	_ ToHash = (*StringTrace)(nil)
+
+	_ Trace = (*IntTrace)(nil)
+	_ Trace = (*StringTrace)(nil)
+
+	_ IContext = (*Int64TraceCtx)(nil)
+	_ IContext = (*StringTraceCtx)(nil)
 )

@@ -1,6 +1,8 @@
 package objectpool
 
 import (
+	"fmt"
+	"reflect"
 	"sync"
 	"testing"
 	"unsafe"
@@ -20,7 +22,26 @@ type Struct2 struct {
 	b string
 }
 
+func Get1[T any]() *T {
+	var a interface{} = (*T)(nil)
+	c := reflect.TypeOf(a)
+	fmt.Println(c.String())
+	typPtr1 := **(**uintptr)(unsafe.Pointer(&c))
+	typPtr := *(*uintptr)(unsafe.Pointer(&a))
+	fmt.Println(typPtr1, typPtr)
+
+	var t1 T
+	to := reflect.TypeOf(t1)
+	fmt.Println(to.String())
+	typPtr3 := **(**uintptr)(unsafe.Pointer(&to))
+	fmt.Println(typPtr3)
+	return new(T)
+}
+
 func TestGet(t *testing.T) {
+	GetPtr[*Struct1]()
+	Get1[Struct1]()
+
 	s1 := Get[Struct1]()
 	Put(s1)
 	s2 := Get[Struct1]()

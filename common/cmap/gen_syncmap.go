@@ -50,7 +50,7 @@ func (m *Map[K, V]) Swap(key K, value V) (previous V, loaded bool) {
 	if !ok {
 		return m.zero, false
 	}
-	return v, true
+	return v.(V), true
 }
 
 func (m *Map[K, V]) CompareAndSwap(key K, old, new V) (swapped bool) {

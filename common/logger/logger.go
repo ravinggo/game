@@ -77,7 +77,7 @@ func init() {
 	}
 
 	serverId := envCnf.ServerId
-	appName := envCnf.AppName
+	appName := envCnf.ServerType
 	logDir := envCnf.LogDir
 	if logDir != "" {
 		fp := filepath.Join(logDir, appName)

@@ -1,0 +1,51 @@
+syntax = "proto3";
+
+package login;
+option go_package = "./basepb";
+import "google/protobuf/descriptor.proto";
+
+/*
+Why do we need to define ErrorInfo and ErrorMessage?
+Because clients need to support multiple languages for different errors.
+And the server needs to quickly locate the logic and stack of returning errors during development.
+*/
+
+// just for error define and code generate
+message ErrorInfo {
+  string tip_name = 1;
+  string tip_desc = 2;
+  int64 error_code = 3;
+}
+
+extend google.protobuf.EnumValueOptions {
+  ErrorInfo error_info = 50001;
+}
+
+enum ErrorType{
+  ETNo = 0; // no error
+  ETNormal = 1; // normal error
+
+  // the client can handle the following error types uniformly
+  // ETProtocol,ETPanic,ETDataBase can be unified as an internal server error
+  // ETNoAuth not login, you can treat it as disconnected and then jump to the login interface
+  ETProtocol = 2; // data transmission error
+  ETPanic = 3; // panic error
+  ETDataBase = 4; // database error
+  ETNoAuth = 5; // not login auth
+}
+
+message ErrorMessage{
+  ErrorType err_code = 1;
+
+  // every error unique flag on same ErrorType
+  string err_msg = 2;
+
+  // server error detail, only for log, empty for client
+  string err_internal_info = 3;
+
+  // server error stack stace, only for log, empty for client
+  repeated uint64 stack_stace = 4;
+
+  // extra for error. For example, if there is an insufficient item error, this field can be the specific item ID.
+  string err_extra_info = 5;
+}

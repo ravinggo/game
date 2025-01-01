@@ -1,7 +1,6 @@
 package natsclient
 
 import (
-	"errors"
 	"math"
 	"strconv"
 	"strings"
@@ -11,6 +10,9 @@ import (
 	"github.com/nats-io/nats.go"
 	"google.golang.org/protobuf/proto"
 
+	baseenv "github.com/ravinggo/game/common/base-env"
+	"github.com/ravinggo/game/common/basepb"
+	"github.com/ravinggo/game/common/berror"
 	"github.com/ravinggo/game/common/cmap"
 	"github.com/ravinggo/game/common/ctx"
 	"github.com/ravinggo/game/common/logger"
@@ -18,8 +20,8 @@ import (
 	"github.com/ravinggo/game/common/utils"
 )
 
-var (
-	ErrInvalidRequestLength = errors.New("invalid request length")
+const (
+	totalSizeLen = 4
 )
 
 type NatsClient struct {
@@ -29,14 +31,19 @@ type NatsClient struct {
 	conn     *nats.Conn
 	serverId int64
 	closed   int32
-	f        func(*nats.Msg)
+	f        nats.MsgHandler
+	timeout  time.Duration
 }
 
-func NewNatsClient(name string, urls string) *NatsClient {
+func NewNatsClient(name string, urls string, timeout time.Duration) *NatsClient {
+	if timeout <= 0 {
+		timeout = time.Second * 10
+	}
 	nc := &NatsClient{
-		subs: cmap.New[*nats.Subscription](),
-		name: name,
-		urls: urls,
+		subs:    cmap.New[*nats.Subscription](),
+		name:    name,
+		urls:    urls,
+		timeout: timeout,
 	}
 	c, err := nats.Connect(
 		urls, nats.ReconnectWait(time.Millisecond*10), nats.MaxReconnects(math.MaxInt64),
@@ -90,15 +97,76 @@ func (this_ *NatsClient) Close() {
 	)
 }
 
-// Publish 推送数据
-func (this_ *NatsClient) Publish(c ctx.IHashContext, toServerId int64, msg proto.Message) error {
+// Shutdown 关闭NATS
+func (this_ *NatsClient) Shutdown() {
+	if atomic.CompareAndSwapInt32(&this_.closed, 0, 1) {
+		_ = this_.conn.FlushTimeout(time.Second * 3)
+		this_.conn.Close()
+	}
+}
+
+// Subscribe 订阅主题
+func (this_ *NatsClient) Subscribe(subj string, h nats.MsgHandler) {
+	if _, ok := this_.subs.Get(subj); ok {
+		logger.Log.Panic().Str("subj", subj).Msg("subj had Subscribed")
+	}
+	logger.Log.Info().Str("urls", this_.urls).Str("subj", subj).Msg("Subscribe")
+	sub, err := this_.conn.Subscribe(subj, h)
+	if err != nil {
+		logger.Log.Panic().Err(err).Str("subj", subj).Msg("Subscribe error")
+	}
+	this_.subs.Set(subj, sub)
+}
+
+// QueueSubscribe 订阅Topic for queue
+func (this_ *NatsClient) QueueSubscribe(subj string, h nats.MsgHandler) {
+	if _, ok := this_.subs.Get(subj); ok {
+		logger.Log.Panic().Str("subj", subj).Msg("subj had Subscribed")
+	}
+	group := strings.ReplaceAll(subj, ">", "group")
+	logger.Log.Info().Str("urls", this_.urls).Str("subj", subj).Str("group", group).Msg("SubscribeHandler")
+
+	cb := this_.f
+	if h != nil {
+		cb = h
+	}
+	sub, err := this_.conn.QueueSubscribe(subj, group, cb)
+	if err != nil {
+		logger.Log.Panic().Err(err).Str("subj", subj).Msg("Subscribe error")
+	}
+	this_.subs.Set(subj, sub)
+}
+
+// UnSub 解除订阅
+func (this_ *NatsClient) UnSub(subj string) {
+	if s, ok := this_.subs.Get(subj); ok {
+		logger.Log.Info().Str("subj", subj).Msg("Unsubscribe")
+		_ = s.Unsubscribe()
+		this_.subs.Remove(subj)
+	}
+}
+
+// Publish  msg to any one instance of the server
+func (this_ *NatsClient) Publish(c ctx.IContext, msg proto.Message) *berror.ErrMsg {
+	return this_.PublishToServer(c, 0, msg)
+}
+
+// PublishToServer publish msg to specified server instance of toServerId
+func (this_ *NatsClient) PublishToServer(c ctx.IContext, toServerId int64, msg proto.Message) *berror.ErrMsg {
 	msgName := string(proto.MessageName(msg))
 	msgNameSize := 21 + len(msgName)
 	traceSize := 0
 	var err error
-	marshalCtx, ok := c.(ctx.MarshalCtx)
-	if ok {
-		traceSize = marshalCtx.TraceMarshalSize()
+	var traceCtx ctx.Trace
+	if c != nil {
+		var ok bool
+		traceCtx, ok = c.(ctx.Trace)
+		if ok {
+			oldServerId, oldServerType := traceCtx.GetServerIdAndType()
+			traceCtx.SetServerIdAndType(baseenv.GetConfig().ServerId, baseenv.GetConfig().ServerType)
+			defer traceCtx.SetServerIdAndType(oldServerId, oldServerType)
+			traceSize = traceCtx.TraceMarshalSize()
+		}
 	}
 	size := 2 + proto.Size(msg) + traceSize
 	if toServerId > 0 {
@@ -119,108 +187,239 @@ func (this_ *NatsClient) Publish(c ctx.IHashContext, toServerId int64, msg proto
 	}
 
 	if traceSize > 0 {
+		if traceSize > math.MaxUint16 {
+			return berror.NewProtocolStr("trace data too long,max size is 65535")
+		}
 		data = append(data, byte(traceSize), byte(traceSize>>8))
-		data, err = marshalCtx.TraceMarshalAppend(data)
+		data, err = traceCtx.TraceMarshalAppend(data)
 		if err != nil {
-			return err
+			return berror.NewProtocolErr(err)
 		}
 	}
 	data, err = proto.MarshalOptions{}.MarshalAppend(data, msg)
 	if err != nil {
-		return err
+		return berror.NewProtocolErr(err)
 	}
 
 	err = this_.conn.Publish(msgName, data)
+	return berror.NewProtocolErr(err)
+}
+
+func (this_ *NatsClient) PublishRawData(c ctx.IContext, toServerId int64, msgName string, msgData []byte) *berror.ErrMsg {
+	msgNameSize := 21 + len(msgName)
+	traceSize := 0
+	var err error
+	var traceCtx ctx.Trace
+	if c != nil {
+		var ok bool
+		traceCtx, ok = c.(ctx.Trace)
+		if ok {
+			oldServerId, oldServerType := traceCtx.GetServerIdAndType()
+			traceCtx.SetServerIdAndType(baseenv.GetConfig().ServerId, baseenv.GetConfig().ServerType)
+			defer traceCtx.SetServerIdAndType(oldServerId, oldServerType)
+			traceSize = traceCtx.TraceMarshalSize()
+		}
+	}
+	size := 2 + len(msgData) + traceSize
+	if toServerId > 0 {
+		size += msgNameSize
+	}
+	b := objectpool.GetSlice[byte](size)
+	defer objectpool.PutSlice(b)
+
+	data := b.Data
+	if toServerId > 0 {
+		data = b.Data[msgNameSize:]
+		index := strings.LastIndexByte(msgName, '.')
+		b.Data = append(b.Data, msgName[:index]...) // index != -1
+		b.Data = append(b.Data, '.')
+		b.Data = strconv.AppendInt(b.Data, toServerId, 10)
+		b.Data = append(b.Data, msgName[index:]...)
+		msgName = utils.BytesToString(b.Data)
+	}
+
+	if traceSize > 0 {
+		if traceSize > math.MaxUint16 {
+			return berror.NewProtocolStr("trace data too long,max size is 65535")
+		}
+		data = append(data, byte(traceSize), byte(traceSize>>8))
+		data, err = traceCtx.TraceMarshalAppend(data)
+		if err != nil {
+			return berror.NewProtocolErr(err)
+		}
+	}
+	if len(msgData) > 0 {
+		data = append(data, msgData...)
+	}
+	err = this_.conn.Publish(msgName, data)
+	return berror.NewProtocolErr(err)
+}
+
+func (this_ *NatsClient) Request(c ctx.IContext, msg proto.Message, out proto.Message) *berror.ErrMsg {
+	return this_.RequestToServer(c, 0, msg, out)
+}
+
+type Request[T any] struct {
+	Ret T
+}
+
+func (r *Request[T]) Request(nc *NatsClient, c ctx.IContext, msg proto.Message) *berror.ErrMsg {
+	var a any = &r.Ret
+	err := nc.Request(c, msg, a.(proto.Message))
 	return err
 }
 
-// Publish 推送数据
-// func (this_ *NatsClient) Publish(serverId int64, h *models.ServerHeader, msg proto.Message) *errmsg.ErrMsg {
-// 	if h != nil && (h.FromServerId != this_.serverId || h.FromServerType != this_.serverType) {
-// 		os, ot := h.FromServerId, h.FromServerType
-// 		h.FromServerId, h.FromServerType = this_.serverId, this_.serverType
-// 		defer func() {
-// 			h.FromServerId, h.FromServerType = os, ot
-// 		}()
-// 	}
-// 	n := protocol.NatsMarshalSize(h, msg)
-// 	d := bytespool.GetSample(n)
-// 	defer bytespool.PutSample(d)
-// 	d.Data = d.Data[:0]
-// 	err := protocol.NatsMarshalTo(&d.Data, h, msg)
-// 	if err != nil {
-// 		return err
-// 	}
-// 	msgName := string(proto.MessageName(msg))
-// 	if serverId != 0 {
-// 		n := strings.IndexByte(msgName, '.')
-// 		if n == -1 {
-// 			return errmsg.NewProtocolErrorInfo(
-// 				fmt.Sprintf(
-// 					"header.Data.TypeUrl is not a proto.MessageName:%s", msgName,
-// 				),
-// 			)
-// 		}
-//
-// 		b := bytespool.GetSample(len(msgName) + 10)
-// 		defer bytespool.PutSample(b)
-//
-// 		b.Data = b.Data[:0]
-// 		b.Data = append(b.Data, msgName[:n]...)
-// 		b.Data = append(b.Data, '.')
-// 		b.Data = strconv.AppendInt(b.Data, serverId, 10)
-// 		b.Data = append(b.Data, msgName[n:]...)
-// 		msgName = *(*string)(unsafe.Pointer(&b.Data))
-// 	}
-// 	// 	this_.log.Info("publish", zap.String("msgName", msgName), zap.Any("msg", msg))
-// 	return errmsg.NewProtocolError(this_.conn.Publish(msgName, d.Data))
-// }
-//
-// // PublishRawData 推送数据
-// func (this_ *NatsClient) PublishRawData(
-// 	serverId int64,
-// 	h *models.ServerHeader,
-// 	msgName string,
-// 	msgData []byte,
-// ) *errmsg.ErrMsg {
-// 	if h != nil && (h.FromServerId != this_.serverId || h.FromServerType != this_.serverType) {
-// 		os, ot := h.FromServerId, h.FromServerType
-// 		h.FromServerId, h.FromServerType = this_.serverId, this_.serverType
-// 		defer func() {
-// 			h.FromServerId, h.FromServerType = os, ot
-// 		}()
-// 	}
-// 	n := protocol.NatsMarshalDataSize(h, msgData)
-// 	d := bytespool.GetSample(n)
-// 	defer bytespool.PutSample(d)
-// 	d.Data = d.Data[:0]
-// 	err := protocol.NatsMarshalDataTo(&d.Data, h, msgData)
-// 	if err != nil {
-// 		return err
-// 	}
-// 	if serverId != 0 {
-// 		n := strings.IndexByte(msgName, '.')
-// 		if n == -1 {
-// 			return errmsg.NewProtocolErrorInfo(
-// 				fmt.Sprintf(
-// 					"header.Data.TypeUrl is not a proto.MessageName:%s", msgName,
-// 				),
-// 			)
-// 		}
-//
-// 		b := bytespool.GetSample(len(msgName) + 10)
-// 		defer bytespool.PutSample(b)
-// 		b.Data = b.Data[:0]
-// 		b.Data = append(b.Data, msgName[:n]...)
-// 		b.Data = append(b.Data, '.')
-// 		b.Data = strconv.AppendInt(b.Data, serverId, 10)
-// 		b.Data = append(b.Data, msgName[n:]...)
-// 		msgName = *(*string)(unsafe.Pointer(&b.Data))
-// 	}
-// 	// 	this_.log.Info("publish", zap.String("msgName", msgName), zap.Any("msg", msg))
-// 	return errmsg.NewProtocolError(this_.conn.Publish(msgName, d.Data))
-// }
-//
+func (this_ *NatsClient) RequestToServer(c ctx.IContext, toServerId int64, msg proto.Message, out proto.Message) *berror.ErrMsg {
+	msgName := string(proto.MessageName(msg))
+	msgNameSize := 21 + len(msgName)
+	traceSize := 0
+	var err error
+	var traceCtx ctx.Trace
+	if c != nil {
+		var ok bool
+		traceCtx, ok = c.(ctx.Trace)
+		if ok {
+			oldServerId, oldServerType := traceCtx.GetServerIdAndType()
+			traceCtx.SetServerIdAndType(baseenv.GetConfig().ServerId, baseenv.GetConfig().ServerType)
+			defer traceCtx.SetServerIdAndType(oldServerId, oldServerType)
+			traceSize = traceCtx.TraceMarshalSize()
+		}
+	}
+	size := 2 + proto.Size(msg) + traceSize
+	if toServerId > 0 {
+		size += msgNameSize
+	}
+	b := objectpool.GetSlice[byte](size)
+	defer objectpool.PutSlice(b)
+
+	data := b.Data
+	if toServerId > 0 {
+		data = b.Data[msgNameSize:]
+		index := strings.LastIndexByte(msgName, '.')
+		b.Data = append(b.Data, msgName[:index]...) // index != -1
+		b.Data = append(b.Data, '.')
+		b.Data = strconv.AppendInt(b.Data, toServerId, 10)
+		b.Data = append(b.Data, msgName[index:]...)
+		msgName = utils.BytesToString(b.Data)
+	}
+
+	if traceSize > 0 {
+		if traceSize > math.MaxUint16 {
+			return berror.NewProtocolStr("trace data too long,max size is 65535")
+		}
+		data = append(data, byte(traceSize), byte(traceSize>>8))
+		data, err = traceCtx.TraceMarshalAppend(data)
+		if err != nil {
+			return berror.NewProtocolErr(err)
+		}
+	}
+	data, err = proto.MarshalOptions{}.MarshalAppend(data, msg)
+	if err != nil {
+		return berror.NewProtocolErr(err)
+	}
+	var natsMsg *nats.Msg
+	natsMsg, err = this_.conn.Request(msgName, data, this_.timeout)
+	if err != nil {
+		return berror.NewProtocolErr(err)
+	}
+	return NatsUnmarshalResponseWithout(natsMsg.Data, out)
+}
+
+func natsUnmarshalResponse(data []byte) (string, []byte, *berror.ErrMsg) {
+	if len(data) < totalSizeLen {
+		return "", nil, berror.NewProtocolStr("invalid message")
+	}
+	msgNameLen := int(data[0])
+	if len(data) < totalSizeLen+msgNameLen {
+		return "", nil, berror.NewProtocolStr("invalid msg data")
+	}
+	dataLen := int(data[1]) | (int(data[2]) << 8) | (int(data[3]) << 16)
+	dataIndex := totalSizeLen + msgNameLen
+	if len(data) != dataIndex+dataLen {
+		return "", nil, berror.NewProtocolStr("invalid msg data")
+	}
+	msgName := utils.BytesToString(data[totalSizeLen:dataIndex])
+	return msgName, data[dataIndex:], nil
+}
+
+func NatsUnmarshalResponseWithout(d []byte, out proto.Message) *berror.ErrMsg {
+	msgName, data, err := natsUnmarshalResponse(d)
+	if err != nil {
+		return err
+	}
+	if msgName == berror.ErrMsgName {
+		errMsg := &basepb.ErrorMessage{}
+		e := proto.Unmarshal(data, errMsg)
+		if e != nil {
+			return berror.NewProtocolErr(e)
+		}
+		return (*berror.ErrMsg)(errMsg)
+	}
+	outMsgName := string(proto.MessageName(out))
+	if outMsgName != msgName {
+		return berror.NewProtocolStr("response msg is " + msgName + ", not is " + outMsgName)
+	}
+	e := proto.Unmarshal(data, out)
+	if e != nil {
+		return berror.NewProtocolErr(e)
+	}
+	return nil
+}
+
+func (this_ *NatsClient) RequestRaw(c ctx.IContext, toServerId int64, msgName string, msgData []byte) ([]byte, *berror.ErrMsg) {
+	msgNameSize := 21 + len(msgName)
+	traceSize := 0
+	var err error
+	var traceCtx ctx.Trace
+	if c != nil {
+		var ok bool
+		traceCtx, ok = c.(ctx.Trace)
+		if ok {
+			oldServerId, oldServerType := traceCtx.GetServerIdAndType()
+			traceCtx.SetServerIdAndType(baseenv.GetConfig().ServerId, baseenv.GetConfig().ServerType)
+			defer traceCtx.SetServerIdAndType(oldServerId, oldServerType)
+			traceSize = traceCtx.TraceMarshalSize()
+		}
+	}
+
+	size := 2 + len(msgData) + traceSize
+	if toServerId > 0 {
+		size += msgNameSize
+	}
+	b := objectpool.GetSlice[byte](size)
+	defer objectpool.PutSlice(b)
+
+	data := b.Data
+	if toServerId > 0 {
+		data = b.Data[msgNameSize:]
+		index := strings.LastIndexByte(msgName, '.')
+		b.Data = append(b.Data, msgName[:index]...) // index != -1
+		b.Data = append(b.Data, '.')
+		b.Data = strconv.AppendInt(b.Data, toServerId, 10)
+		b.Data = append(b.Data, msgName[index:]...)
+		msgName = utils.BytesToString(b.Data)
+	}
+
+	if traceSize > 0 {
+		if traceSize > math.MaxUint16 {
+			return nil, berror.NewProtocolStr("trace data too long,max size is 65535")
+		}
+		data = append(data, byte(traceSize), byte(traceSize>>8))
+		data, err = traceCtx.TraceMarshalAppend(data)
+		if err != nil {
+			return nil, berror.NewProtocolErr(err)
+		}
+	}
+	if len(msgData) > 0 {
+		data = append(data, msgData...)
+	}
+	natsMsg, err := this_.conn.Request(msgName, data, this_.timeout)
+	if err != nil {
+		return nil, berror.NewProtocolErr(err)
+	}
+	return natsMsg.Data, nil
+}
+
 // func (this_ *NatsClient) RequestWithCtx(c *ctx.Context, serverId int64, req, out proto.Message) *errmsg.ErrMsg {
 // 	var h *models.ServerHeader
 // 	if c != nil {

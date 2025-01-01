@@ -3,6 +3,7 @@ package objectpool
 import (
 	"math"
 	"math/bits"
+	"reflect"
 	"sync"
 	"unsafe"
 )
@@ -11,7 +12,38 @@ const (
 	maxIndex    = math.MaxUint16 - 1
 	otherMinCap = 16
 	byteMinCap  = 128
+	KindMask    = (1 << 5) - 1
 )
+
+// Type copy from abi.Type
+type Type struct {
+	Size_       uintptr
+	PtrBytes    uintptr
+	Hash        uint32
+	TFlag       uint8
+	Align_      uint8
+	FieldAlign_ uint8
+	Kind_       uint8
+	Equal       func(unsafe.Pointer, unsafe.Pointer) bool
+	GCData      *byte
+	Str         int32
+	PtrToThis   int32
+}
+
+// PtrType copy from abi.PtrType
+type PtrType struct {
+	Type
+	Elem *Type
+}
+
+func GetPtr[T any]() uintptr {
+	var a any = (*T)(nil)
+	t := *(**Type)(unsafe.Pointer(&a))
+	if t.Kind_&(1<<5-1) == uint8(reflect.Pointer) {
+		t = (*PtrType)(unsafe.Pointer(t)).Elem
+	}
+	return (uintptr)(unsafe.Pointer(t))
+}
 
 var (
 	op       = objectPool{}
@@ -88,10 +120,7 @@ func (o *objectPool) getSlice(p uintptr) *slicePool {
 
 // Get get a object from object pool with T
 func Get[T any]() *T {
-	var a interface{} = (*T)(nil)
-	typPtr := *(*uintptr)(unsafe.Pointer(&a))
-	p := op.get(typPtr)
-	v := p.Get()
+	v := op.get(GetPtr[T]()).Get()
 	if v != nil {
 		return v.(*T)
 	}
@@ -100,10 +129,7 @@ func Get[T any]() *T {
 
 // Put put a object to object pool with T
 func Put[T any](t *T) {
-	var a interface{} = (*T)(nil)
-	typPtr := *(*uintptr)(unsafe.Pointer(&a))
-	p := op.get(typPtr)
-	p.Put(t)
+	op.get(GetPtr[T]()).Put(t)
 }
 
 // Slice  is a slice object pool for T
@@ -149,8 +175,7 @@ func putSlicePool[T any](s *slicePool, t *Slice[T]) {
 
 // GetSlice get a slice from object pool with T,len() == 0
 func GetSlice[T any](cap int) *Slice[T] {
-	var a interface{} = (*Slice[T])(nil)
-	typPtr := *(*uintptr)(unsafe.Pointer(&a))
+	typPtr := GetPtr[Slice[T]]()
 	s := op.getSlice(typPtr)
 	var minCap int
 	if typPtr != bytesPtr {
@@ -173,8 +198,7 @@ func PutSlice[T any](t *Slice[T]) {
 	if cap(t.Data) > math.MaxInt32 {
 		return
 	}
-	var a interface{} = (*Slice[T])(nil)
-	typPtr := *(*uintptr)(unsafe.Pointer(&a))
+	typPtr := GetPtr[Slice[T]]()
 	if typPtr != bytesPtr {
 		if cap(t.Data) < otherMinCap {
 			return
@@ -193,8 +217,7 @@ func PutSliceClear[T any](t *Slice[T]) {
 	if cap(t.Data) > math.MaxInt32 {
 		return
 	}
-	var a interface{} = (*Slice[T])(nil)
-	typPtr := *(*uintptr)(unsafe.Pointer(&a))
+	typPtr := GetPtr[Slice[T]]()
 	if typPtr != bytesPtr {
 		if cap(t.Data) < otherMinCap {
 			return
@@ -212,8 +235,7 @@ func PutSliceClear[T any](t *Slice[T]) {
 
 // GetMap  get a map from object pool with K and V
 func GetMap[K comparable, V any]() map[K]V {
-	var a interface{} = (map[K]V)(nil)
-	typPtr := *(*uintptr)(unsafe.Pointer(&a))
+	typPtr := GetPtr[map[K]V]()
 	p := op.get(typPtr)
 	v := p.Get()
 	if v != nil {
@@ -225,8 +247,7 @@ func GetMap[K comparable, V any]() map[K]V {
 // PutMap put a map to object pool with K and V
 func PutMap[K comparable, V any](t map[K]V) {
 	clear(t)
-	var a interface{} = (map[K]V)(nil)
-	typPtr := *(*uintptr)(unsafe.Pointer(&a))
+	typPtr := GetPtr[map[K]V]()
 	p := op.get(typPtr)
 	p.Put(t)
 }

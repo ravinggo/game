@@ -7,8 +7,8 @@ import (
 )
 
 type Config struct {
-	AppName  string `envconfig:"APP_NAME"` // 应用名
-	ServerId int64  `envconfig:"SERVER_ID"`
+	ServerType string `envconfig:"ServerType"` // 应用名
+	ServerId   int64  `envconfig:"SERVER_ID"`
 
 	/* ============================== */
 	/* ========== 配置中心 =========== */
@@ -54,11 +54,13 @@ type Config struct {
 	LogEncodingMode string `envconfig:"LOG_ENCODING_MODE"`
 
 	LogNoCaller bool `envconfig:"LOG_NO_CALLER"`
+
+	ErrorStackTrace bool `envconfig:"ERROR_STACK_TRACE"`
 }
 
 var (
 	cfg = Config{
-		AppName:         "ravinggo-game",
+		ServerType:      "ravinggo-game",
 		ServerId:        0,
 		ConfType:        "consul",
 		ConfHosts:       "127.0.0.1:8500",
@@ -73,6 +75,7 @@ var (
 		LogNoCaller:     false,
 		LogTimestamp:    false,
 		LogAsync:        false,
+		ErrorStackTrace: false,
 	}
 )
 
