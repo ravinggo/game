@@ -39,7 +39,7 @@ type PtrType struct {
 func GetPtr[T any]() uintptr {
 	var a any = (*T)(nil)
 	t := *(**Type)(unsafe.Pointer(&a))
-	if t.Kind_&(1<<5-1) == uint8(reflect.Pointer) {
+	if t.Kind_&KindMask == uint8(reflect.Pointer) {
 		t = (*PtrType)(unsafe.Pointer(t)).Elem
 	}
 	return (uintptr)(unsafe.Pointer(t))
