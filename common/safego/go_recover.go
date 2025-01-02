@@ -1,8 +1,6 @@
 package safego
 
 import (
-	"github.com/rs/zerolog"
-
 	"github.com/ravinggo/game/common/logger"
 )
 
@@ -20,7 +18,7 @@ func RecoverFunc(panicHandler func(e interface{})) {
 	}
 }
 
-func RecoverWithLogger(log zerolog.Logger) {
+func RecoverWithLogger(log logger.Logger) {
 	if e := recover(); e != nil {
 		log.Error().Any("panic info", e).Msg("panic")
 	}
@@ -33,7 +31,7 @@ func Go(f func()) {
 	}()
 }
 
-func GOWithLogger(log zerolog.Logger, f func()) {
+func GOWithLogger(log logger.Logger, f func()) {
 	go func() {
 		defer RecoverWithLogger(log)
 		f()

@@ -4,8 +4,11 @@ import (
 	"math"
 	"math/bits"
 	"reflect"
+	"strconv"
 	"sync"
 	"unsafe"
+
+	"github.com/ravinggo/game/common/utils"
 )
 
 const (
@@ -50,6 +53,7 @@ var (
 	bytesPtr = func() uintptr {
 		return GetPtr[Slice[byte]]()
 	}()
+	bytesPool = op.getSlice(bytesPtr)
 )
 
 type poolUintptr struct {
@@ -252,3 +256,51 @@ func PutMap[K comparable, V any](t map[K]V) {
 }
 
 type Bytes Slice[byte]
+
+func GetBytes(cap int) *Bytes {
+	return (*Bytes)(getSlicePool[byte](bytesPool, cap, byteMinCap))
+}
+
+func (b *Bytes) WriteString(s string) {
+	b.Data = append(b.Data, s...)
+}
+
+func (b *Bytes) WriteBytes(c ...byte) {
+	b.Data = append(b.Data, c...)
+}
+
+func (b *Bytes) String() string {
+	return utils.BytesToString(b.Data)
+}
+
+func (b *Bytes) WriteInt(i int64) {
+	b.Data = strconv.AppendInt(b.Data, i, 10)
+}
+
+func (b *Bytes) WriteUint(i uint64) {
+	b.Data = strconv.AppendUint(b.Data, i, 10)
+}
+
+func (b *Bytes) WriteFloat(f float64) {
+	b.Data = strconv.AppendFloat(b.Data, f, 'g', -1, 64)
+}
+
+func (b *Bytes) Len() int {
+	return len(b.Data)
+}
+
+func (b *Bytes) Cap() int {
+	return cap(b.Data)
+}
+
+func (b *Bytes) Bytes() []byte {
+	return b.Data
+}
+
+func (b *Bytes) Clear() {
+	b.Data = b.Data[:0]
+}
+
+func (b *Bytes) Free() {
+	Put((*Slice[byte])(b))
+}

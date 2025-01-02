@@ -15,6 +15,10 @@ import (
 	"github.com/ravinggo/game/common/utils"
 )
 
+type RoleIdType interface {
+	int64 | string
+}
+
 type Clear interface {
 	Clear()
 }

@@ -17,6 +17,7 @@ import (
 	"github.com/ravinggo/game/common/ctx"
 	"github.com/ravinggo/game/common/logger"
 	"github.com/ravinggo/game/common/objectpool"
+	"github.com/ravinggo/game/common/safego"
 	"github.com/ravinggo/game/common/utils"
 )
 
@@ -420,6 +421,106 @@ func (this_ *NatsClient) RequestRaw(c ctx.IContext, toServerId int64, msgName st
 	return natsMsg.Data, nil
 }
 
+type UserSubject interface {
+	CreateSubj() string
+	CreatePublish(bytes *objectpool.Bytes)
+}
+
+type IntUserSubject struct {
+	ServerType string
+	ServerId   int64
+	RoleId     int64
+	MsgName    string
+}
+
+func (u *IntUserSubject) CreateSubj() string {
+	b := utils.NewStringBuilder(256)
+	b.WriteString(u.ServerType)
+	b.WriteByte('/')
+	b.WriteInt(u.ServerId)
+	b.WriteByte('/')
+	b.WriteInt(u.RoleId)
+	b.WriteString(".>")
+	return b.String()
+}
+
+func (u *IntUserSubject) CreatePublish(bytes *objectpool.Bytes) {
+	bytes.Clear()
+	bytes.WriteString(u.ServerType)
+	bytes.WriteBytes('/')
+	bytes.WriteInt(u.ServerId)
+	bytes.WriteBytes('/')
+	bytes.WriteInt(u.RoleId)
+	bytes.WriteBytes('.')
+	bytes.WriteString(u.MsgName)
+}
+
+type StringUserSubject struct {
+	ServerType string
+	ServerId   int64
+	RoleId     string
+	MsgName    string
+}
+
+func (u *StringUserSubject) CreateSubj() string {
+	b := utils.NewStringBuilder(256)
+	b.WriteString(u.ServerType)
+	b.WriteByte('/')
+	b.WriteInt(u.ServerId)
+	b.WriteByte('/')
+	b.WriteString(u.RoleId)
+	b.WriteString(".>")
+	return b.String()
+}
+
+func (u *StringUserSubject) CreatePublish(bytes *objectpool.Bytes) {
+	bytes.Clear()
+	bytes.WriteString(u.ServerType)
+	bytes.WriteBytes('/')
+	bytes.WriteInt(u.ServerId)
+	bytes.WriteBytes('/')
+	bytes.WriteString(u.RoleId)
+	bytes.WriteBytes('.')
+	bytes.WriteString(u.MsgName)
+}
+
+// SubscribeUser Subscribe user topic
+func (this_ *NatsClient) SubscribeUser(us UserSubject, queue chan *nats.Msg) {
+	subj := us.CreateSubj()
+	if _, ok := this_.subs.Get(subj); ok {
+		return
+	}
+	logger.Log.Info().Str("subj", subj).Msg("QueueSubscribeUser")
+	sub, err := this_.conn.ChanSubscribe(subj, queue)
+	if err != nil {
+		logger.Log.Error().Err(err).Str("subj", subj).Msg("QueueSubscribeUser")
+	}
+	this_.subs.Set(subj, sub)
+}
+
+func (this_ *NatsClient) UnsubscribeUser(us UserSubject) {
+	subj := us.CreateSubj()
+	if v, ok := this_.subs.Get(subj); ok {
+		this_.subs.Remove(subj)
+		safego.Go(
+			func() {
+				if v.IsValid() {
+					err := v.Drain()
+					if err != nil {
+						logger.Log.Error().Err(err).Str("subj", subj).Msg("[Un]subscribeUser Drain error")
+					}
+				}
+				for i := 0; i < 10; i++ {
+					if !v.IsValid() {
+						break
+					}
+				}
+			},
+		)
+		logger.Log.Info().Str("subj", subj).Msg("Queue[Un]subscribeUser")
+	}
+}
+
 // func (this_ *NatsClient) RequestWithCtx(c *ctx.Context, serverId int64, req, out proto.Message) *errmsg.ErrMsg {
 // 	var h *models.ServerHeader
 // 	if c != nil {
@@ -536,13 +637,13 @@ func (this_ *NatsClient) RequestRaw(c ctx.IContext, toServerId int64, msgName st
 // 	this_.subs.Set(subj, sub)
 // }
 //
-// type UserSubject struct {
+// type userSubject struct {
 // 	GameServerId int64
 // 	RoleId       int64
 // 	MsgName      string
 // }
 //
-// func (s *UserSubject) CreateSubj(serverType common.ServerType) string {
+// func (s *userSubject) CreateSubj(serverType common.ServerType) string {
 // 	b := strings.Builder{}
 // 	b.WriteString(serverType.String())
 // 	b.WriteByte('/')
@@ -553,7 +654,7 @@ func (this_ *NatsClient) RequestRaw(c ctx.IContext, toServerId int64, msgName st
 // 	return b.String()
 // }
 //
-// func (s *UserSubject) CreatePublish(serverType models.ServerType, b []byte) []byte {
+// func (s *userSubject) CreatePublish(serverType models.ServerType, b []byte) []byte {
 // 	b = append(b, serverType.String()...)
 // 	b = append(b, '/')
 // 	b = strconv.AppendInt(b, s.GameServerId, 10)
@@ -564,33 +665,33 @@ func (this_ *NatsClient) RequestRaw(c ctx.IContext, toServerId int64, msgName st
 // 	return b
 // }
 //
-// func (s *UserSubject) Parse(str string) error {
+// func (s *userSubject) Parse(str string) error {
 // 	return ParseUserSubject(str, s)
 // }
 //
-// func ParseUserSubject(str string, us *UserSubject) error {
+// func ParseUserSubject(str string, us *userSubject) error {
 // 	index := strings.IndexByte(str, '.')
 // 	if index == -1 {
-// 		return errors.New("Invalid UserSubject " + str)
+// 		return errors.New("Invalid userSubject " + str)
 // 	}
 // 	header := str[:index]
 // 	msgName := str[index+1:]
 // 	index = strings.IndexByte(header, '/')
 // 	if index == -1 {
-// 		return errors.New("Invalid UserSubject " + str)
+// 		return errors.New("Invalid userSubject " + str)
 // 	}
 // 	header = header[index+1:]
 // 	index = strings.IndexByte(header, '/')
 // 	if index == -1 {
-// 		return errors.New("Invalid UserSubject " + str)
+// 		return errors.New("Invalid userSubject " + str)
 // 	}
 // 	gameServerId, err := strconv.ParseInt(header[:index], 10, 64)
 // 	if err != nil {
-// 		return errors.New("Invalid UserSubject " + str)
+// 		return errors.New("Invalid userSubject " + str)
 // 	}
 // 	RoleId, err := strconv.ParseInt(header[index+1:], 10, 64)
 // 	if err != nil {
-// 		return errors.New("Invalid UserSubject " + str)
+// 		return errors.New("Invalid userSubject " + str)
 // 	}
 // 	us.MsgName = msgName
 // 	us.GameServerId = gameServerId
@@ -600,7 +701,7 @@ func (this_ *NatsClient) RequestRaw(c ctx.IContext, toServerId int64, msgName st
 //
 // // SubscribeUser 订阅某个用户
 // func (this_ *NatsClient) SubscribeUser(serverType common.ServerType, gameServerId, roleId int64, queue chan *nats.Msg) {
-// 	us := &UserSubject{
+// 	us := &userSubject{
 // 		GameServerId: gameServerId,
 // 		RoleId:       roleId,
 // 	}
@@ -616,7 +717,7 @@ func (this_ *NatsClient) RequestRaw(c ctx.IContext, toServerId int64, msgName st
 //
 // // UnsubscribeUser 取消某个用户的订阅
 // func (this_ *NatsClient) UnsubscribeUser(serverType common.ServerType, gameServerId, roleId int64) {
-// 	us := &UserSubject{
+// 	us := &userSubject{
 // 		GameServerId: gameServerId,
 // 		RoleId:       roleId,
 // 	}
@@ -648,7 +749,7 @@ func (this_ *NatsClient) RequestRaw(c ctx.IContext, toServerId int64, msgName st
 // 	gameServerId, roleId int64,
 // 	msg proto.Message,
 // ) *errmsg.ErrMsg {
-// 	us := UserSubject{
+// 	us := userSubject{
 // 		GameServerId: gameServerId,
 // 		RoleId:       roleId,
 // 		MsgName:      string(proto.MessageName(msg)),
