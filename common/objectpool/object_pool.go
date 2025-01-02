@@ -48,8 +48,7 @@ func GetPtr[T any]() uintptr {
 var (
 	op       = objectPool{}
 	bytesPtr = func() uintptr {
-		var a interface{} = (*Slice[byte])(nil)
-		return *(*uintptr)(unsafe.Pointer(&a))
+		return GetPtr[Slice[byte]]()
 	}()
 )
 
