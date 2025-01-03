@@ -23,7 +23,8 @@ import (
 )
 
 const (
-	totalSizeLen = 4
+	totalSizeLen    = 4
+	maxProtoMsgSize = math.MaxInt32 >> 8
 )
 
 type NatsClient struct {
@@ -364,6 +365,90 @@ func NatsUnmarshalResponseWithout(d []byte, out proto.Message) *berror.ErrMsg {
 	e := proto.Unmarshal(data, out)
 	if e != nil {
 		return berror.NewProtocolErr(e)
+	}
+	return nil
+}
+
+func NatsReplyError(reply *nats.Msg, err *berror.ErrMsg) *berror.ErrMsg {
+	if err == nil {
+		return nil
+	}
+	return natsMsgReplyOne(reply, (*basepb.ErrorMessage)(err))
+}
+
+func NatsMsgReply(reply *nats.Msg, msg ...proto.Message) *berror.ErrMsg {
+	if len(msg) == 0 {
+		return nil
+	}
+	if len(msg) == 1 {
+		return natsMsgReplyOne(reply, msg[0])
+	}
+
+	totalSize := 0
+	for _, m := range msg {
+		s, err := natsMarshalResponseSize(m)
+		if err != nil {
+			return err
+		}
+		totalSize += s
+	}
+	b := objectpool.GetBytes(totalSize)
+	defer objectpool.Put(b)
+
+	for _, m := range msg {
+		err := natsMarshalAppendResponse(b, m)
+		if err != nil {
+			return err
+		}
+	}
+	return berror.NewProtocolErr(reply.Respond(b.Data))
+}
+
+func natsMsgReplyOne(reply *nats.Msg, msg proto.Message) *berror.ErrMsg {
+	msgName := string(proto.MessageName(msg))
+	msgNameSize := len(msgName)
+	if msgNameSize > math.MaxUint8 {
+		return berror.NewProtocolStr("msg name too long")
+	}
+	msgSize := proto.Size(msg)
+	if msgSize > maxProtoMsgSize {
+		return berror.NewProtocolStr("msg data too long")
+	}
+	b := objectpool.GetBytes(totalSizeLen + msgNameSize + msgSize)
+	defer objectpool.Put(b)
+	b.WriteBytes(byte(msgNameSize))
+	b.WriteString(msgName)
+	b.WriteBytes(byte(msgSize), byte(msgSize>>8), byte(msgSize>>16))
+	var err error
+	b.Data, err = proto.MarshalOptions{}.MarshalAppend(b.Data, msg)
+	if err != nil {
+		return berror.NewProtocolErr(err)
+	}
+	return berror.NewProtocolErr(reply.Respond(b.Data))
+}
+
+func natsMarshalResponseSize(msg proto.Message) (int, *berror.ErrMsg) {
+	msgSize := proto.Size(msg)
+	if msgSize > maxProtoMsgSize {
+		return 0, berror.NewProtocolStr("msg data too long")
+	}
+	return totalSizeLen + len(proto.MessageName(msg)) + msgSize, nil
+}
+
+func natsMarshalAppendResponse(b *objectpool.Bytes, msg proto.Message) *berror.ErrMsg {
+	msgName := string(proto.MessageName(msg))
+	msgNameLen := len(msgName)
+	if msgNameLen > math.MaxUint8 {
+		return berror.NewProtocolStr("msg name too long")
+	}
+	b.WriteBytes(byte(msgNameLen))
+	b.WriteString(msgName)
+	msgSize := proto.Size(msg)
+	b.WriteBytes(byte(msgSize), byte(msgSize>>8), byte(msgSize>>16))
+	var err error
+	b.Data, err = proto.MarshalOptions{}.MarshalAppend(b.Data, msg)
+	if err != nil {
+		return berror.NewProtocolErr(err)
 	}
 	return nil
 }

@@ -18,6 +18,22 @@ const (
 	KindMask    = (1 << 5) - 1
 )
 
+func GetTypePool[T any]() *sync.Pool {
+	return get[*T](&op, GetPtr[T]())
+}
+
+func GetTypeElemPool[T any]() *sync.Pool {
+	return get[*T](&op, GetPtrElem[T]())
+}
+
+func newPool[T any]() *sync.Pool {
+	return &sync.Pool{
+		New: func() any {
+			return new(T)
+		},
+	}
+}
+
 // Type copy from abi.Type
 type Type struct {
 	Size_       uintptr
@@ -48,6 +64,18 @@ func GetPtr[T any]() uintptr {
 	return (uintptr)(unsafe.Pointer(t))
 }
 
+func GetPtrElem[T any]() uintptr {
+	var a any = (*T)(nil)
+	t := *(**Type)(unsafe.Pointer(&a))
+	if t.Kind_&KindMask == uint8(reflect.Pointer) {
+		t = (*PtrType)(unsafe.Pointer(t)).Elem
+	}
+	if t.Kind_&KindMask == uint8(reflect.Pointer) {
+		t = (*PtrType)(unsafe.Pointer(t)).Elem
+	}
+	return (uintptr)(unsafe.Pointer(t))
+}
+
 var (
 	op       = objectPool{}
 	bytesPtr = func() uintptr {
@@ -67,7 +95,7 @@ type objectPool struct {
 	ml [math.MaxUint16]sync.Mutex
 }
 
-func (o *objectPool) get(p uintptr) *sync.Pool {
+func get[T any](o *objectPool, p uintptr) *sync.Pool {
 	index := (p >> 6) & maxIndex
 
 	ss := o.m[index]
@@ -87,7 +115,7 @@ func (o *objectPool) get(p uintptr) *sync.Pool {
 	}
 	pu := &poolUintptr{
 		uintptr:    p,
-		singlePool: &sync.Pool{},
+		singlePool: newPool[T](),
 	}
 	o.m[index] = append(o.m[index], pu)
 	o.ml[index].Unlock()
@@ -123,16 +151,27 @@ func (o *objectPool) getSlice(p uintptr) *slicePool {
 
 // Get get a object from object pool with T
 func Get[T any]() *T {
-	v := op.get(GetPtr[T]()).Get()
-	if v != nil {
-		return v.(*T)
-	}
-	return new(T)
+	return get[T](&op, GetPtr[T]()).Get().(*T)
 }
 
 // Put put a object to object pool with T
 func Put[T any](t *T) {
-	op.get(GetPtr[T]()).Put(t)
+	get[T](&op, GetPtr[T]()).Put(t)
+}
+
+// GetElem get a object from object pool with T
+// T must is pointer type
+// eg: GetElem[*basepb.ErrorMessage]() == Get[basepb.ErrorMessage]()
+// why? proto.Message == *basepb.ErrorMessage
+// Interface Constraint Generics If it is implemented by pointer
+func GetElem[T any]() T {
+	return get[T](&op, GetPtrElem[T]()).Get().(T)
+}
+
+// PutElem put a object to object pool with T
+// why? look GetElem[T]()
+func PutElem[T any](t T) {
+	get[T](&op, GetPtrElem[T]()).Put(t)
 }
 
 // Slice  is a slice object pool for T
@@ -238,21 +277,13 @@ func PutSliceClear[T any](t *Slice[T]) {
 
 // GetMap  get a map from object pool with K and V
 func GetMap[K comparable, V any]() map[K]V {
-	typPtr := GetPtr[map[K]V]()
-	p := op.get(typPtr)
-	v := p.Get()
-	if v != nil {
-		return v.(map[K]V)
-	}
-	return map[K]V{}
+	return get[map[K]V](&op, GetPtr[map[K]V]()).Get().(map[K]V)
 }
 
 // PutMap put a map to object pool with K and V
 func PutMap[K comparable, V any](t map[K]V) {
 	clear(t)
-	typPtr := GetPtr[map[K]V]()
-	p := op.get(typPtr)
-	p.Put(t)
+	get[map[K]V](&op, GetPtr[map[K]V]()).Put(t)
 }
 
 type Bytes Slice[byte]

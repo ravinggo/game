@@ -6,6 +6,7 @@ import (
 	"math/rand/v2"
 	"time"
 
+	"github.com/nats-io/nats.go"
 	"github.com/rs/zerolog"
 	"google.golang.org/protobuf/proto"
 
@@ -48,11 +49,23 @@ type IContext interface {
 	Release()
 	Clear
 	ToHash
+
+	// MustBaseContext implementations of IContext must contain BaseContext
+	MustBaseContext() *BaseContext
 }
 
 type BaseContext struct {
 	context.Context
 	TraceLog logger.Logger
+	Req      proto.Message
+	Resp     []proto.Message
+
+	// for rpc reply
+	NatsMsg *nats.Msg
+}
+
+func (c *BaseContext) MustBaseContext() *BaseContext {
+	return c
 }
 
 func (c *BaseContext) ToHash() uint64 {
