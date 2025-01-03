@@ -90,6 +90,9 @@ func TestGet(t *testing.T) {
 	m[1] = 1
 	PutMap(m)
 	m = GetMap[int, int]()
+	if len(m) != 0 {
+		t.Errorf("GetMap[int, int]() len is not %d", 0)
+	}
 }
 
 func BenchmarkGetPut(b *testing.B) {
