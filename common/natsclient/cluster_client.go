@@ -1,205 +1,208 @@
 package natsclient
 
-//
-// import (
-// 	"context"
-// 	"encoding/binary"
-// 	"hash/crc32"
-// 	"math/rand"
-//
-// 	"github.com/nats-io/nats.go"
-// 	"go.opentelemetry.io/otel"
-// 	"go.opentelemetry.io/otel/attribute"
-// 	"go.opentelemetry.io/otel/trace"
-// 	"google.golang.org/protobuf/proto"
-//
-// 	"github.com/ravinggo/game/common/logger"
-// )
-//
-// type ClusterClient struct {
-// 	natsClients []*NatsClient
-// }
-//
-// var natsTracer = otel.Tracer("NatsClient")
-//
-// func NewClusterClient(serverType models.ServerType, serverId int64, urls []string, log *logger.Logger) *ClusterClient {
-// 	clusterClient := &ClusterClient{}
-// 	clusterClient.natsClients = make([]*NatsClient, 0, len(urls))
-// 	for _, url := range urls {
-// 		natsClient := NewNatsClient(serverType, serverId, url, log)
-// 		clusterClient.natsClients = append(clusterClient.natsClients, natsClient)
-// 	}
-// 	return clusterClient
-// }
-//
-// func (this_ *ClusterClient) SubscribeUser(
-// 	serverType models.ServerType,
-// 	gameServerId, roleId int64,
-// 	queue chan *nats.Msg,
-// ) {
-// 	nsl := len(this_.natsClients)
-// 	if nsl == 0 {
-// 		panic("nats client is empty")
-// 	}
-//
-// 	client := this_.natsClients[roleId%int64(nsl)]
-// 	client.SubscribeUser(serverType, gameServerId, roleId, queue)
-// }
-//
-// func (this_ *ClusterClient) RequestWithCtx(c *ctx.Context, serverId int64, req, out proto.Message) *errmsg.ErrMsg {
-// 	var h *models.ServerHeader
-// 	if c != nil {
-// 		h = &c.ServerHeader
-// 	}
-// 	nc := this_.getNatsClientWithHeader(h, serverId)
-// 	return nc.RequestWithCtx(c, serverId, req, out)
-// }
-//
-// func (this_ *ClusterClient) Request(
-// 	h *models.ServerHeader,
-// 	serverId int64,
-// 	req proto.Message,
-// 	out proto.Message,
-// ) *errmsg.ErrMsg {
-// 	nc := this_.getNatsClientWithHeader(h, serverId)
-// 	return nc.Request(h, serverId, req, out)
-// }
-//
-// func (this_ *ClusterClient) RequestRaw(h *models.ServerHeader, serverId int64, msgName string, data []byte) (
-// 	[]byte,
-// 	*errmsg.ErrMsg,
-// ) {
-// 	nc := this_.getNatsClientWithHeader(h, serverId)
-// 	return nc.RequestRaw(h, serverId, msgName, data)
-// }
-//
-// func (this_ *ClusterClient) PublishUser(
-// 	serverType models.ServerType,
-// 	gameServerId, roleId int64,
-// 	msg proto.Message,
-// ) *errmsg.ErrMsg {
-// 	nsl := len(this_.natsClients)
-// 	if nsl == 0 {
-// 		panic("nats client is empty")
-// 	}
-// 	client := this_.natsClients[roleId%int64(nsl)]
-// 	return client.PublishUser(serverType, gameServerId, roleId, msg)
-// }
-//
-// func (this_ *ClusterClient) UnsubscribeUser(serverType models.ServerType, gameServerId, roleId int64) {
-// 	nsl := len(this_.natsClients)
-// 	if nsl == 0 {
-// 		panic("nats client is empty")
-// 	}
-// 	client := this_.natsClients[roleId%int64(nsl)]
-// 	client.UnsubscribeUser(serverType, gameServerId, roleId)
-// }
-//
-// func (this_ *ClusterClient) Close() {
-// 	for _, natsClient := range this_.natsClients {
-// 		natsClient.Close()
-// 	}
-// }
-//
-// func (this_ *ClusterClient) PublishCtx(c *ctx.Context, serverId int64, msg proto.Message) *errmsg.ErrMsg {
-// 	if global_env.GetConfig().OpenTraceing && c != nil {
-// 		var span trace.Span
-// 		c.Context, span = natsTracer.Start(c.Context, "PublishCtx")
-// 		defer span.End()
-// 		span.SetAttributes(attribute.String("name", string(proto.MessageName(msg))))
-// 	}
-// 	var header *models.ServerHeader
-// 	if c != nil {
-// 		header = &c.ServerHeader
-// 	}
-// 	nc := this_.getNatsClientWithHeader(header, serverId)
-// 	return nc.Publish(serverId, header, msg)
-// }
-//
-// func (this_ *ClusterClient) Publish(serverId int64, h *models.ServerHeader, msg proto.Message) *errmsg.ErrMsg {
-// 	if global_env.GetConfig().OpenTraceing {
-// 		var span trace.Span
-// 		_, span = natsTracer.Start(context.Background(), "Publish")
-// 		defer span.End()
-// 		span.SetAttributes(attribute.String("name", string(proto.MessageName(msg))))
-// 	}
-// 	nc := this_.getNatsClientWithHeader(h, serverId)
-// 	return nc.Publish(serverId, h, msg)
-// }
-//
-// func (this_ *ClusterClient) PublishRawData(
-// 	serverId int64,
-// 	h *models.ServerHeader,
-// 	msgName string,
-// 	msgData []byte,
-// ) *errmsg.ErrMsg {
-// 	if global_env.GetConfig().OpenTraceing {
-// 		var span trace.Span
-// 		_, span = natsTracer.Start(context.Background(), "PublishRawData")
-// 		defer span.End()
-// 		span.SetAttributes(attribute.String("name", msgName))
-// 	}
-// 	nc := this_.getNatsClientWithHeader(h, serverId)
-// 	return nc.PublishRawData(serverId, h, msgName, msgData)
-// }
-//
-// func (this_ *ClusterClient) Shutdown() {
-// 	for _, natsClient := range this_.natsClients {
-// 		natsClient.Shutdown()
-// 	}
-// }
-//
-// func (this_ *ClusterClient) Subscribe(subj string, h nats.MsgHandler) {
-// 	for _, natsClient := range this_.natsClients {
-// 		natsClient.Subscribe(subj, h)
-// 	}
-// }
-//
-// func (this_ *ClusterClient) SubscribeHandler(subj string, f func(*nats.Msg)) {
-// 	for _, natsClient := range this_.natsClients {
-// 		natsClient.SubscribeHandler(subj, f)
-// 	}
-// }
-//
-// func (this_ *ClusterClient) UnSub(subj string) {
-// 	for _, natsClient := range this_.natsClients {
-// 		natsClient.UnSub(subj)
-// 	}
-// }
-//
-// func (this_ *ClusterClient) SubscribeBroadcast(subj string, f func(*nats.Msg)) {
-// 	for _, natsClient := range this_.natsClients {
-// 		natsClient.SubscribeBroadcast(subj, f)
-// 	}
-// }
-//
-// func (this_ *ClusterClient) getNatsClientWithHeader(sh *models.ServerHeader, serverId int64) *NatsClient {
-// 	nsl := len(this_.natsClients)
-// 	if nsl == 0 {
-// 		panic("nats client is empty")
-// 	}
-// 	if nsl == 1 {
-// 		return this_.natsClients[0]
-// 	}
-// 	if sh != nil {
-// 		if sh.RoleId != 0 {
-// 			return this_.natsClients[sh.RoleId%int64(nsl)]
-// 		}
-//
-// 		if sh.FromServerId > 0 {
-// 			temp := bytespool.GetSample(8)
-// 			binary.LittleEndian.PutUint64(temp.Data, uint64(sh.FromServerId))
-// 			nc := this_.natsClients[crc32.ChecksumIEEE(temp.Data)%uint32(nsl)]
-// 			bytespool.PutSample(temp)
-// 			return nc
-// 		}
-// 	}
-// 	if serverId > 0 {
-// 		temp := bytespool.GetSample(8)
-// 		binary.LittleEndian.PutUint64(temp.Data, uint64(serverId))
-// 		nc := this_.natsClients[crc32.ChecksumIEEE(temp.Data)%uint32(nsl)]
-// 		bytespool.PutSample(temp)
-// 		return nc
-// 	}
-// 	return this_.natsClients[rand.Intn(nsl)]
-// }
+import (
+	"math/rand/v2"
+	"time"
+
+	"github.com/nats-io/nats.go"
+	"google.golang.org/protobuf/proto"
+
+	"github.com/ravinggo/game/common/berror"
+	"github.com/ravinggo/game/common/ctx"
+)
+
+type ClusterClient struct {
+	natsClients []*NatsClient
+}
+
+func NewClusterClient(name string, urls []string, timeout time.Duration) *ClusterClient {
+	clusterClient := &ClusterClient{}
+	clusterClient.natsClients = make([]*NatsClient, 0, len(urls))
+	for _, url := range urls {
+		natsClient := NewNatsClient(name, url, timeout)
+		clusterClient.natsClients = append(clusterClient.natsClients, natsClient)
+	}
+	return clusterClient
+}
+
+func (this_ *ClusterClient) Close() {
+	for _, natsClient := range this_.natsClients {
+		natsClient.Close()
+	}
+}
+
+func (this_ *ClusterClient) Shutdown() {
+	for _, natsClient := range this_.natsClients {
+		natsClient.Shutdown()
+	}
+}
+
+func (this_ *ClusterClient) SubscribeAll(subj string, h nats.MsgHandler) {
+	for _, natsClient := range this_.natsClients {
+		natsClient.Subscribe(subj, h)
+	}
+}
+
+func (this_ *ClusterClient) QueueSubscribeAll(subj string, h nats.MsgHandler) {
+	for _, natsClient := range this_.natsClients {
+		natsClient.QueueSubscribe(subj, h)
+	}
+}
+
+func (this_ *ClusterClient) Unsubscribe(subj string) {
+	for _, natsClient := range this_.natsClients {
+		natsClient.Unsubscribe(subj)
+	}
+}
+
+func (this_ *ClusterClient) getClient(c ctx.IContext) *NatsClient {
+	nsl := len(this_.natsClients)
+	if nsl == 0 {
+		panic("nats client is empty")
+	}
+	if nsl == 1 {
+		return this_.natsClients[0]
+	}
+	hashCtx, ok := c.(ctx.ToHash)
+	if ok {
+		return this_.natsClients[hashCtx.ToHash()%uint64(nsl)]
+	}
+	return this_.natsClients[rand.IntN(nsl)]
+}
+
+func (this_ *ClusterClient) getClientToServerId(c ctx.IContext, toServerId int64) *NatsClient {
+	nsl := len(this_.natsClients)
+	if nsl == 0 {
+		panic("nats client is empty")
+	}
+	if nsl == 1 {
+		return this_.natsClients[0]
+	}
+	hashCtx, ok := c.(ctx.ToHash)
+	if ok {
+		return this_.natsClients[hashCtx.ToHash()%uint64(nsl)]
+	}
+	if toServerId > 0 {
+		return this_.natsClients[toServerId%int64(nsl)]
+	}
+	return this_.natsClients[rand.IntN(nsl)]
+}
+
+func (this_ *ClusterClient) Publish(c ctx.IContext, msg proto.Message) *berror.ErrMsg {
+	return this_.getClient(c).Publish(c, msg)
+}
+
+func (this_ *ClusterClient) PublishToServer(c ctx.IContext, toServerId int64, msg proto.Message) *berror.ErrMsg {
+	nc := this_.getClientToServerId(c, toServerId)
+	return nc.PublishToServer(c, toServerId, msg)
+}
+
+func (this_ *ClusterClient) PublishRawData(c ctx.IContext, toServerId int64, msgName string, msgData []byte) *berror.ErrMsg {
+	nc := this_.getClientToServerId(c, toServerId)
+	return nc.PublishRawData(c, toServerId, msgName, msgData)
+}
+
+func (this_ *ClusterClient) Request(c ctx.IContext, msg proto.Message, out proto.Message) *berror.ErrMsg {
+	return this_.getClient(c).Request(c, msg, out)
+}
+
+type ClusterRequest[T any] struct {
+	Ret T
+}
+
+func (r *ClusterRequest[T]) Request(cnc *ClusterClient, c ctx.IContext, msg proto.Message) *berror.ErrMsg {
+	var a any = &r.Ret
+	err := cnc.Request(c, msg, a.(proto.Message))
+	return err
+}
+
+func (r *ClusterRequest[T]) RequestToServer(nc *ClusterClient, c ctx.IContext, toServerId int64, msg proto.Message) *berror.ErrMsg {
+	var a any = &r.Ret
+	err := nc.RequestToServer(c, toServerId, msg, a.(proto.Message))
+	return err
+}
+
+func (this_ *ClusterClient) RequestToServer(c ctx.IContext, toServerId int64, msg proto.Message, out proto.Message) *berror.ErrMsg {
+	nc := this_.getClientToServerId(c, toServerId)
+	return nc.RequestToServer(c, toServerId, msg, out)
+}
+
+func (this_ *ClusterClient) RequestRaw(c ctx.IContext, toServerId int64, msgName string, msgData []byte) ([]byte, *berror.ErrMsg) {
+	nc := this_.getClientToServerId(c, toServerId)
+	return nc.RequestRaw(c, toServerId, msgName, msgData)
+}
+
+func (this_ *ClusterClient) SubscribeOneUser(
+	us UserSubject, queue chan *nats.Msg,
+) {
+	nsl := len(this_.natsClients)
+	if nsl == 0 {
+		panic("nats client is empty")
+	}
+
+	client := this_.natsClients[us.RoleIdInt()%int64(nsl)]
+	client.SubscribeUser(us, queue)
+}
+
+func (this_ *ClusterClient) SubscribeUserAll(
+	us UserSubject, queue chan *nats.Msg,
+) {
+	nsl := len(this_.natsClients)
+	if nsl == 0 {
+		panic("nats client is empty")
+	}
+	for _, client := range this_.natsClients {
+		client.SubscribeUser(us, queue)
+	}
+}
+
+func (this_ *ClusterClient) UnsubscribeOneUser(us UserSubject) {
+	nsl := len(this_.natsClients)
+	if nsl == 0 {
+		panic("nats client is empty")
+	}
+
+	client := this_.natsClients[us.RoleIdInt()%int64(nsl)]
+	client.UnsubscribeUser(us)
+}
+
+func (this_ *ClusterClient) UnsubscribeAllUser(us UserSubject) {
+	nsl := len(this_.natsClients)
+	if nsl == 0 {
+		panic("nats client is empty")
+	}
+	for _, client := range this_.natsClients {
+		client.UnsubscribeUser(us)
+	}
+}
+
+func (this_ *ClusterClient) PublishUser(c ctx.IContext, us UserSubject, msg proto.Message) *berror.ErrMsg {
+	nsl := len(this_.natsClients)
+	if nsl == 0 {
+		panic("nats client is empty")
+	}
+
+	client := this_.natsClients[us.RoleIdInt()%int64(nsl)]
+	return client.PublishUser(c, us, msg)
+}
+
+func (this_ *ClusterClient) RequestUser(c ctx.IContext, us UserSubject, msg proto.Message, out proto.Message) *berror.ErrMsg {
+	nsl := len(this_.natsClients)
+	if nsl == 0 {
+		panic("nats client is empty")
+	}
+
+	client := this_.natsClients[us.RoleIdInt()%int64(nsl)]
+	return client.RequestUser(c, us, msg, out)
+}
+
+type ClusterRequestUser[T any] struct {
+	Ret T
+	US  UserSubject
+}
+
+func (r *ClusterRequestUser[T]) Request(cnc *ClusterClient, c ctx.IContext, msg proto.Message) *berror.ErrMsg {
+	var a any = &r.Ret
+	err := cnc.RequestUser(c, r.US, msg, a.(proto.Message))
+	return err
+}

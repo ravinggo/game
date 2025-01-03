@@ -172,12 +172,6 @@ func (i *IntTrace) ToHash() uint64 {
 		}
 		return uint64(-i.RoleId)
 	}
-	if i.FromServerId != 0 {
-		if i.FromServerId > 0 {
-			return uint64(i.FromServerId)
-		}
-		return uint64(-i.FromServerId)
-	}
 
 	return rand.Uint64()
 }
@@ -213,18 +207,11 @@ type StringTrace struct {
 }
 
 func (i *StringTrace) ToHash() uint64 {
-	if len(i.RoleId) == 0 {
-		if i.FromServerId != 0 {
-			if i.FromServerId > 0 {
-				return uint64(i.FromServerId)
-			}
-			return uint64(-i.FromServerId)
-		}
-
-		return rand.Uint64()
+	if i.RoleId != "" {
+		return uint64(crc32.ChecksumIEEE(utils.StringToBytes(i.RoleId)))
 	}
 
-	return uint64(crc32.ChecksumIEEE(utils.StringToBytes(i.RoleId)))
+	return rand.Uint64()
 }
 
 func (i *StringTrace) TraceMarshalSize() int {

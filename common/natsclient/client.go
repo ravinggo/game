@@ -1,6 +1,7 @@
 package natsclient
 
 import (
+	"hash/crc32"
 	"math"
 	"strconv"
 	"strings"
@@ -138,8 +139,8 @@ func (this_ *NatsClient) QueueSubscribe(subj string, h nats.MsgHandler) {
 	this_.subs.Set(subj, sub)
 }
 
-// UnSub 解除订阅
-func (this_ *NatsClient) UnSub(subj string) {
+// Unsubscribe 解除订阅
+func (this_ *NatsClient) Unsubscribe(subj string) {
 	if s, ok := this_.subs.Get(subj); ok {
 		logger.Log.Info().Str("subj", subj).Msg("Unsubscribe")
 		_ = s.Unsubscribe()
@@ -422,7 +423,9 @@ func (this_ *NatsClient) RequestRaw(c ctx.IContext, toServerId int64, msgName st
 }
 
 type UserSubject interface {
+	RoleIdInt() int64
 	CreateSubj() string
+	CreatePublishSize() int
 	CreatePublish(bytes *objectpool.Bytes)
 }
 
@@ -442,6 +445,13 @@ func (u *IntUserSubject) CreateSubj() string {
 	b.WriteInt(u.RoleId)
 	b.WriteString(".>")
 	return b.String()
+}
+func (u *IntUserSubject) RoleIdInt() int64 {
+	return u.RoleId
+}
+
+func (u *IntUserSubject) CreatePublishSize() int {
+	return len(u.ServerType) + utils.CountIntByte(u.ServerId) + utils.CountIntByte(u.RoleId) + len(u.MsgName) + 3
 }
 
 func (u *IntUserSubject) CreatePublish(bytes *objectpool.Bytes) {
@@ -471,6 +481,14 @@ func (u *StringUserSubject) CreateSubj() string {
 	b.WriteString(u.RoleId)
 	b.WriteString(".>")
 	return b.String()
+}
+
+func (u *StringUserSubject) RoleIdInt() int64 {
+	return int64(crc32.ChecksumIEEE(utils.StringToBytes(u.RoleId)))
+}
+
+func (u *StringUserSubject) CreatePublishSize() int {
+	return len(u.ServerType) + utils.CountIntByte(u.ServerId) + len(u.RoleId) + len(u.MsgName) + 3
 }
 
 func (u *StringUserSubject) CreatePublish(bytes *objectpool.Bytes) {
@@ -521,298 +539,93 @@ func (this_ *NatsClient) UnsubscribeUser(us UserSubject) {
 	}
 }
 
-// func (this_ *NatsClient) RequestWithCtx(c *ctx.Context, serverId int64, req, out proto.Message) *errmsg.ErrMsg {
-// 	var h *models.ServerHeader
-// 	if c != nil {
-// 		h = &c.ServerHeader
-// 	}
-// 	return this_.Request(h, serverId, req, out)
-// }
-//
-// func (this_ *NatsClient) Request(
-// 	h *models.ServerHeader,
-// 	serverId int64,
-// 	req proto.Message,
-// 	out proto.Message,
-// ) *errmsg.ErrMsg {
-// 	if h != nil {
-// 		oldServerId, oldServerType := h.FromServerId, h.FromServerType
-// 		h.FromServerId, h.FromServerType = this_.serverId, this_.serverType
-// 		defer func() {
-// 			h.FromServerId, h.FromServerType = oldServerId, oldServerType
-// 		}()
-// 	}
-// 	size := protocol.NatsMarshalSize(h, req)
-// 	d := bytespool.GetSample(size)
-// 	defer bytespool.PutSample(d)
-// 	d.Data = d.Data[:0]
-// 	err := protocol.NatsMarshalTo(&d.Data, h, req)
-// 	if err != nil {
-// 		return err
-// 	}
-// 	msgName := string(proto.MessageName(req))
-// 	if serverId != 0 {
-// 		n := strings.IndexByte(msgName, '.')
-// 		if n == -1 {
-// 			return errmsg.NewProtocolErrorInfo(fmt.Sprintf("msgName is not a proto.MessageName:%s", msgName))
-// 		}
-//
-// 		b := bytespool.GetSample(len(msgName) + 10)
-// 		defer bytespool.PutSample(b)
-// 		b.Data = b.Data[:0]
-// 		b.Data = append(b.Data, msgName[:n]...)
-// 		b.Data = append(b.Data, '.')
-// 		b.Data = strconv.AppendInt(b.Data, serverId, 10)
-// 		b.Data = append(b.Data, msgName[n:]...)
-// 		msgName = *(*string)(unsafe.Pointer(&b.Data))
-// 	}
-// 	outMsg, e := this_.conn.Request(msgName, d.Data, time.Second*10)
-// 	if e != nil {
-// 		return errmsg.NewProtocolError(e)
-// 	}
-// 	err = protocol.NatsUnmarshalResponseWithout(outMsg.Data, out)
-// 	if err != nil {
-// 		return err
-// 	}
-// 	return nil
-// }
-//
-// func (this_ *NatsClient) RequestRaw(h *models.ServerHeader, serverId int64, msgName string, data []byte) (
-// 	[]byte,
-// 	*errmsg.ErrMsg,
-// ) {
-// 	if h != nil {
-// 		oldServerId, oldServerType := h.FromServerId, h.FromServerType
-// 		h.FromServerId, h.FromServerType = this_.serverId, this_.serverType
-// 		defer func() {
-// 			h.FromServerId, h.FromServerType = oldServerId, oldServerType
-// 		}()
-// 	}
-// 	size := protocol.NatsMarshalDataSize(h, data)
-// 	d := bytespool.GetSample(size)
-// 	defer bytespool.PutSample(d)
-// 	d.Data = d.Data[:0]
-// 	err := protocol.NatsMarshalDataTo(&d.Data, h, data)
-// 	if err != nil {
-// 		return nil, err
-// 	}
-// 	if serverId != 0 {
-// 		n := strings.IndexByte(msgName, '.')
-// 		if n == -1 {
-// 			return nil, errmsg.NewProtocolErrorInfo(fmt.Sprintf("msgName is not a proto.MessageName:%s", msgName))
-// 		}
-//
-// 		b := bytespool.GetSample(len(msgName) + 10)
-// 		defer bytespool.PutSample(b)
-// 		b.Data = b.Data[:0]
-// 		b.Data = append(b.Data, msgName[:n]...)
-// 		b.Data = append(b.Data, '.')
-// 		b.Data = strconv.AppendInt(b.Data, serverId, 10)
-// 		b.Data = append(b.Data, msgName[n:]...)
-// 		msgName = *(*string)(unsafe.Pointer(&b.Data))
-// 	}
-// 	outMsg, e := this_.conn.Request(msgName, d.Data, time.Second*10)
-// 	if e != nil {
-// 		return nil, errmsg.NewProtocolError(e)
-// 	}
-// 	return outMsg.Data, nil
-// }
+func (this_ *NatsClient) PublishUser(c ctx.IContext, us UserSubject, msg proto.Message) *berror.ErrMsg {
+	traceSize := 0
+	var err error
+	var traceCtx ctx.Trace
+	if c != nil {
+		var ok bool
+		traceCtx, ok = c.(ctx.Trace)
+		if ok {
+			oldServerId, oldServerType := traceCtx.GetServerIdAndType()
+			traceCtx.SetServerIdAndType(baseenv.GetConfig().ServerId, baseenv.GetConfig().ServerType)
+			defer traceCtx.SetServerIdAndType(oldServerId, oldServerType)
+			traceSize = traceCtx.TraceMarshalSize()
+		}
+	}
+	if traceSize > math.MaxUint16 {
+		return berror.NewProtocolStr("trace data too long,max size is 65535")
+	}
+	size := us.CreatePublishSize()
+	msgSize := proto.Size(msg)
+	b := objectpool.GetBytes(size + 2 + traceSize + msgSize)
+	defer objectpool.Put(b)
+	us.CreatePublish(b)
+	if traceSize > 0 {
+		b.Data = append(b.Data, byte(traceSize), byte(traceSize>>8))
+		b.Data, err = traceCtx.TraceMarshalAppend(b.Data)
+		if err != nil {
+			return berror.NewProtocolErr(err)
+		}
+	}
+	_, err = proto.MarshalOptions{}.MarshalAppend(b.Data, msg)
+	if err != nil {
+		return berror.NewProtocolErr(err)
+	}
 
-// Shutdown 关闭NATS
-// func (this_ *NatsClient) Shutdown() {
-// 	if atomic.CompareAndSwapInt32(&this_.closed, 0, 1) {
-// 		_ = this_.conn.FlushTimeout(time.Second * 3)
-// 		this_.conn.Close()
-// 	}
-// }
-//
-// // Subscribe 订阅主题
-// func (this_ *NatsClient) Subscribe(subj string, h nats.MsgHandler) {
-// 	if _, ok := this_.subs.Get(subj); ok {
-// 		panic(fmt.Sprintf("subj [%s] had Subscribed", subj))
-// 	}
-// 	this_.log.Info("Subscribe", zap.String("urls", this_.urls), zap.String("subj", subj))
-// 	sub, err := this_.conn.Subscribe(subj, h)
-// 	utils.Must(err)
-// 	this_.subs.Set(subj, sub)
-// }
-//
-// type userSubject struct {
-// 	GameServerId int64
-// 	RoleId       int64
-// 	MsgName      string
-// }
-//
-// func (s *userSubject) CreateSubj(serverType common.ServerType) string {
-// 	b := strings.Builder{}
-// 	b.WriteString(serverType.String())
-// 	b.WriteByte('/')
-// 	b.WriteString(strconv.FormatInt(s.GameServerId, 10))
-// 	b.WriteByte('/')
-// 	b.WriteString(strconv.FormatInt(s.RoleId, 10))
-// 	b.WriteString(".>")
-// 	return b.String()
-// }
-//
-// func (s *userSubject) CreatePublish(serverType models.ServerType, b []byte) []byte {
-// 	b = append(b, serverType.String()...)
-// 	b = append(b, '/')
-// 	b = strconv.AppendInt(b, s.GameServerId, 10)
-// 	b = append(b, '/')
-// 	b = strconv.AppendInt(b, s.RoleId, 10)
-// 	b = append(b, '.')
-// 	b = append(b, s.MsgName...)
-// 	return b
-// }
-//
-// func (s *userSubject) Parse(str string) error {
-// 	return ParseUserSubject(str, s)
-// }
-//
-// func ParseUserSubject(str string, us *userSubject) error {
-// 	index := strings.IndexByte(str, '.')
-// 	if index == -1 {
-// 		return errors.New("Invalid userSubject " + str)
-// 	}
-// 	header := str[:index]
-// 	msgName := str[index+1:]
-// 	index = strings.IndexByte(header, '/')
-// 	if index == -1 {
-// 		return errors.New("Invalid userSubject " + str)
-// 	}
-// 	header = header[index+1:]
-// 	index = strings.IndexByte(header, '/')
-// 	if index == -1 {
-// 		return errors.New("Invalid userSubject " + str)
-// 	}
-// 	gameServerId, err := strconv.ParseInt(header[:index], 10, 64)
-// 	if err != nil {
-// 		return errors.New("Invalid userSubject " + str)
-// 	}
-// 	RoleId, err := strconv.ParseInt(header[index+1:], 10, 64)
-// 	if err != nil {
-// 		return errors.New("Invalid userSubject " + str)
-// 	}
-// 	us.MsgName = msgName
-// 	us.GameServerId = gameServerId
-// 	us.RoleId = RoleId
-// 	return nil
-// }
-//
-// // SubscribeUser 订阅某个用户
-// func (this_ *NatsClient) SubscribeUser(serverType common.ServerType, gameServerId, roleId int64, queue chan *nats.Msg) {
-// 	us := &userSubject{
-// 		GameServerId: gameServerId,
-// 		RoleId:       roleId,
-// 	}
-// 	subj := us.CreateSubj(serverType)
-// 	if _, ok := this_.subs.Get(subj); ok {
-// 		return
-// 	}
-// 	this_.log.Info("QueueSubscribeUser", zap.String("subj", subj))
-// 	sub, err := this_.conn.ChanSubscribe(subj, queue)
-// 	utils.Must(err)
-// 	this_.subs.Set(subj, sub)
-// }
-//
-// // UnsubscribeUser 取消某个用户的订阅
-// func (this_ *NatsClient) UnsubscribeUser(serverType common.ServerType, gameServerId, roleId int64) {
-// 	us := &userSubject{
-// 		GameServerId: gameServerId,
-// 		RoleId:       roleId,
-// 	}
-// 	subj := us.CreateSubj(serverType)
-// 	if v, ok := this_.subs.Get(subj); ok {
-// 		this_.subs.Remove(subj)
-// 		safego.GOWithLogger(
-// 			this_.log, func() {
-// 				if v.IsValid() {
-// 					err := v.Drain()
-// 					if err != nil {
-// 						this_.log.Warn("UnsubscribeUser Drain error", zap.String("subj", subj), zap.Error(err))
-// 					}
-// 				}
-// 				for i := 0; i < 10; i++ {
-// 					if !v.IsValid() {
-// 						break
-// 					}
-// 				}
-// 			},
-// 		)
-// 		this_.log.Info("QueueUnsubscribeUser", zap.String("subj", subj))
-// 	}
-// }
-//
-// // PublishUser 推送数据给某个用户
-// func (this_ *NatsClient) PublishUser(
-// 	serverType models.ServerType,
-// 	gameServerId, roleId int64,
-// 	msg proto.Message,
-// ) *errmsg.ErrMsg {
-// 	us := userSubject{
-// 		GameServerId: gameServerId,
-// 		RoleId:       roleId,
-// 		MsgName:      string(proto.MessageName(msg)),
-// 	}
-// 	b := bytespool.GetSample(256)
-// 	defer bytespool.PutSample(b)
-// 	b.Data = b.Data[:0]
-// 	subjBytes := us.CreatePublish(serverType, b.Data)
-// 	subj := utils.BytesToString(subjBytes)
-// 	n := protocol.NatsMarshalResponseSize(msg)
-// 	d := bytespool.GetSample(n)
-// 	defer bytespool.PutSample(d)
-// 	d.Data = d.Data[:0]
-// 	err := protocol.NatsMarshalResponse(&d.Data, msg)
-// 	if err != nil {
-// 		return err
-// 	}
-// 	this_.log.Info(
-// 		"PublishUser", zap.String("serverType", serverType.String()), zap.Int64("gameServerId", gameServerId),
-// 		zap.Int64("roleId", roleId), zap.String("msgName", subj),
-// 		zap.String("msgSize", utils.ByteCountIEC(int64(len(d.Data)))),
-// 	)
-// 	return errmsg.NewProtocolError(this_.conn.Publish(subj, d.Data))
-// }
-//
-// // SubscribeHandler 订阅Topic
-// func (this_ *NatsClient) SubscribeHandler(subj string, f func(*nats.Msg)) {
-// 	if _, ok := this_.subs.Get(subj); ok {
-// 		panic(fmt.Sprintf("subj [%s] had Subscribed", subj))
-// 	}
-// 	group := strings.ReplaceAll(subj, ">", "group")
-// 	this_.log.Info(
-// 		"SubscribeHandler", zap.String("urls", this_.urls), zap.String("subj", subj), zap.String("group", group),
-// 	)
-// 	cb := this_.f
-// 	if f != nil {
-// 		cb = f
-// 	}
-// 	sub, err := this_.conn.QueueSubscribe(subj, group, cb)
-// 	utils.Must(err)
-// 	this_.subs.Set(subj, sub)
-// }
-//
-// // UnSub 解除订阅
-// func (this_ *NatsClient) UnSub(subj string) {
-// 	if s, ok := this_.subs.Get(subj); ok {
-// 		this_.log.Info("Unsubscribe", zap.String("subj", subj))
-// 		_ = s.Unsubscribe()
-// 		this_.subs.Remove(subj)
-// 	}
-// }
-//
-// // SubscribeBroadcast 订阅广播主题
-// func (this_ *NatsClient) SubscribeBroadcast(subj string, f func(*nats.Msg)) {
-// 	if _, ok := this_.subs.Get(subj); ok {
-// 		panic(fmt.Sprintf("subj [%s] had Subscribed", subj))
-// 	}
-// 	this_.log.Info("SubscribeBroadcast", zap.String("urls", this_.urls), zap.String("subj", subj))
-// 	cb := this_.f
-// 	if f != nil {
-// 		cb = f
-// 	}
-// 	sub, err := this_.conn.Subscribe(subj, cb)
-// 	utils.Must(err)
-// 	this_.subs.Set(subj, sub)
-// }
+	err = this_.conn.Publish(utils.BytesToString(b.Data[:size]), b.Data[size:])
+	return berror.NewProtocolErr(err)
+}
+
+func (this_ *NatsClient) RequestUser(c ctx.IContext, us UserSubject, msg proto.Message, out proto.Message) *berror.ErrMsg {
+	traceSize := 0
+	var err error
+	var traceCtx ctx.Trace
+	if c != nil {
+		var ok bool
+		traceCtx, ok = c.(ctx.Trace)
+		if ok {
+			oldServerId, oldServerType := traceCtx.GetServerIdAndType()
+			traceCtx.SetServerIdAndType(baseenv.GetConfig().ServerId, baseenv.GetConfig().ServerType)
+			defer traceCtx.SetServerIdAndType(oldServerId, oldServerType)
+			traceSize = traceCtx.TraceMarshalSize()
+		}
+	}
+	if traceSize > math.MaxUint16 {
+		return berror.NewProtocolStr("trace data too long,max size is 65535")
+	}
+
+	size := us.CreatePublishSize()
+	msgSize := proto.Size(msg)
+	b := objectpool.GetBytes(size + 2 + traceSize + msgSize)
+	defer objectpool.Put(b)
+	us.CreatePublish(b)
+	if traceSize > 0 {
+		b.Data = append(b.Data, byte(traceSize), byte(traceSize>>8))
+		b.Data, err = traceCtx.TraceMarshalAppend(b.Data)
+		if err != nil {
+			return berror.NewProtocolErr(err)
+		}
+	}
+	_, err = proto.MarshalOptions{}.MarshalAppend(b.Data, msg)
+	if err != nil {
+		return berror.NewProtocolErr(err)
+	}
+	outMsg, err := this_.conn.Request(utils.BytesToString(b.Data[:size]), b.Data[size:], this_.timeout)
+	if err != nil {
+		return berror.NewProtocolErr(err)
+	}
+
+	return NatsUnmarshalResponseWithout(outMsg.Data, out)
+}
+
+type RequestUser[T any] struct {
+	Ret T
+	US  UserSubject
+}
+
+func (r *RequestUser[T]) Request(nc *NatsClient, c ctx.IContext, msg proto.Message) *berror.ErrMsg {
+	var a any = &r.Ret
+	err := nc.RequestUser(c, r.US, msg, a.(proto.Message))
+	return err
+}
