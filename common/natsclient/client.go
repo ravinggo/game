@@ -198,6 +198,8 @@ func (this_ *NatsClient) PublishToServer(c ctx.IContext, toServerId int64, msg p
 		if err != nil {
 			return berror.NewProtocolErr(err)
 		}
+	} else {
+		data = append(data, 0, 0)
 	}
 	data, err = proto.MarshalOptions{}.MarshalAppend(data, msg)
 	if err != nil {
@@ -250,6 +252,8 @@ func (this_ *NatsClient) PublishRawData(c ctx.IContext, toServerId int64, msgNam
 		if err != nil {
 			return berror.NewProtocolErr(err)
 		}
+	} else {
+		data = append(data, 0, 0)
 	}
 	if len(msgData) > 0 {
 		data = append(data, msgData...)
@@ -315,6 +319,8 @@ func (this_ *NatsClient) RequestToServer(c ctx.IContext, toServerId int64, msg p
 		if err != nil {
 			return berror.NewProtocolErr(err)
 		}
+	} else {
+		data = append(data, 0, 0)
 	}
 	data, err = proto.MarshalOptions{}.MarshalAppend(data, msg)
 	if err != nil {
@@ -369,7 +375,7 @@ func NatsUnmarshalResponseWithout(d []byte, out proto.Message) *berror.ErrMsg {
 	return nil
 }
 
-func NatsReplyError(reply *nats.Msg, err *berror.ErrMsg) *berror.ErrMsg {
+func NatsMsgReplyError(reply *nats.Msg, err *berror.ErrMsg) *berror.ErrMsg {
 	if err == nil {
 		return nil
 	}
@@ -691,6 +697,8 @@ func (this_ *NatsClient) RequestUser(c ctx.IContext, us UserSubject, msg proto.M
 		if err != nil {
 			return berror.NewProtocolErr(err)
 		}
+	} else {
+		b.Data = append(b.Data, 0, 0)
 	}
 	_, err = proto.MarshalOptions{}.MarshalAppend(b.Data, msg)
 	if err != nil {

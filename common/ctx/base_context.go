@@ -3,7 +3,6 @@ package ctx
 import (
 	"context"
 	"hash/crc32"
-	"math/rand/v2"
 	"time"
 
 	"github.com/nats-io/nats.go"
@@ -26,6 +25,8 @@ type Clear interface {
 
 type ToHash interface {
 	// ToHash return a hash value for cluster router msg
+	// uint64 is the hash value
+	// one hash one goroutine if bool is true
 	ToHash() uint64
 }
 
@@ -38,7 +39,7 @@ type Trace interface {
 	// TraceMarshalFrom unmarshal the object from byte slice
 	TraceMarshalFrom([]byte) error
 
-	TraceLogField(*zerolog.Context)
+	TraceLogField(zerolog.Context) zerolog.Context
 
 	GetServerIdAndType() (int64, string)
 	SetServerIdAndType(int64, string)
@@ -49,7 +50,6 @@ type IContext interface {
 	Release()
 	Clear
 	ToHash
-
 	// MustBaseContext implementations of IContext must contain BaseContext
 	MustBaseContext() *BaseContext
 }
@@ -69,7 +69,7 @@ func (c *BaseContext) MustBaseContext() *BaseContext {
 }
 
 func (c *BaseContext) ToHash() uint64 {
-	return rand.Uint64()
+	return 0
 }
 
 func (c *BaseContext) reset() {
@@ -186,7 +186,7 @@ func (i *IntTrace) ToHash() uint64 {
 		return uint64(-i.RoleId)
 	}
 
-	return rand.Uint64()
+	return 0
 }
 
 func (i *IntTrace) TraceMarshalSize() int {
@@ -210,8 +210,8 @@ func (i *IntTrace) SetServerIdAndType(serverId int64, serverType string) {
 	i.FromServerType = serverType
 }
 
-func (i *IntTrace) TraceLogField(zc *zerolog.Context) {
-	zc.Str("traceId", i.TraceId).Int64("fromServerId", i.FromServerId).
+func (i *IntTrace) TraceLogField(zc zerolog.Context) zerolog.Context {
+	return zc.Str("traceId", i.TraceId).Int64("fromServerId", i.FromServerId).
 		Str("fromServerType", i.FromServerType).Int64("roleId", i.RoleId)
 }
 
@@ -224,7 +224,7 @@ func (i *StringTrace) ToHash() uint64 {
 		return uint64(crc32.ChecksumIEEE(utils.StringToBytes(i.RoleId)))
 	}
 
-	return rand.Uint64()
+	return 0
 }
 
 func (i *StringTrace) TraceMarshalSize() int {
@@ -248,8 +248,8 @@ func (i *StringTrace) SetServerIdAndType(serverId int64, serverType string) {
 	i.FromServerType = serverType
 }
 
-func (i *StringTrace) TraceLogField(zc *zerolog.Context) {
-	zc.Str("traceId", i.TraceId).Int64("fromServerId", i.FromServerId).
+func (i *StringTrace) TraceLogField(zc zerolog.Context) zerolog.Context {
+	return zc.Str("traceId", i.TraceId).Int64("fromServerId", i.FromServerId).
 		Str("fromServerType", i.FromServerType).Str("roleId", i.RoleId)
 }
 

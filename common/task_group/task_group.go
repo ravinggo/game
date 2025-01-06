@@ -1,14 +1,9 @@
 package task_group
 
 import (
-	"errors"
 	"sync"
 
 	"github.com/ravinggo/game/common/safego"
-)
-
-var (
-	QueueFullError = errors.New("task_group queue full,maybe block")
 )
 
 type TaskGroupElem[T any] struct {
@@ -23,6 +18,7 @@ type TaskGroup[T any] struct {
 	f         func(TaskGroupElem[T])
 	isRunning bool
 	maxCap    int
+	onStop    func()
 }
 
 func NewTaskGroup[T any](f func(TaskGroupElem[T]), maxCap int) *TaskGroup[T] {
@@ -60,10 +56,16 @@ func (this_ *TaskGroup[T]) PutForce(d T, f func()) {
 	if run {
 		safego.Go(
 			func() {
+				defer func() {
+					if this_.onStop != nil {
+						this_.onStop()
+					}
+				}()
 				for {
 					this_.mu.Lock()
 					if !this_.isRunning {
 						this_.mu.Unlock()
+
 						return
 					}
 					this_.data[0], this_.data[1] = this_.data[1], this_.data[0]
@@ -90,13 +92,13 @@ func (this_ *TaskGroup[T]) PutForce(d T, f func()) {
 	}
 }
 
-func (this_ *TaskGroup[T]) Put(d T, f func()) error {
+func (this_ *TaskGroup[T]) Put(d T, f func()) bool {
 	run := false
 	this_.mu.Lock()
 	l := len(this_.data[0])
 	if this_.maxCap != 0 && l >= this_.maxCap {
 		this_.mu.Unlock()
-		return QueueFullError
+		return false
 	}
 	this_.data[0] = append(this_.data[0], TaskGroupElem[T]{d, f})
 	l++
@@ -108,6 +110,11 @@ func (this_ *TaskGroup[T]) Put(d T, f func()) error {
 	if run {
 		safego.Go(
 			func() {
+				defer func() {
+					if this_.onStop != nil {
+						this_.onStop()
+					}
+				}()
 				for {
 					this_.mu.Lock()
 					if !this_.isRunning {
@@ -136,7 +143,7 @@ func (this_ *TaskGroup[T]) Put(d T, f func()) error {
 			},
 		)
 	}
-	return nil
+	return true
 }
 
 func (this_ *TaskGroup[T]) IsRunning() bool {

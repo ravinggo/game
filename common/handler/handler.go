@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"reflect"
 	"runtime"
+	"strings"
 	"sync"
 
 	"google.golang.org/protobuf/proto"
@@ -80,13 +81,15 @@ type Handler[CTX ctx.IContext] struct {
 	handle         map[protoreflect.FullName]*Elem[CTX]
 	subjMap        map[string]struct{}
 	baseMiddleware []MiddleWare[CTX]
+	broadcastSubj  map[string]struct{}
 }
 
 // NewHandler create Router Handler
 func NewHandler[T ctx.IContext](middlewares ...MiddleWare[T]) *Handler[T] {
 	h := &Handler[T]{
-		handle:  map[protoreflect.FullName]*Elem[T]{},
-		subjMap: map[string]struct{}{},
+		handle:        map[protoreflect.FullName]*Elem[T]{},
+		subjMap:       map[string]struct{}{},
+		broadcastSubj: map[string]struct{}{},
 	}
 	h.baseMiddleware = append(h.baseMiddleware, middlewares...)
 	return h
@@ -109,14 +112,24 @@ func (h *Handler[CTX]) GetHandler(msgName string) (*Elem[CTX], bool) {
 	return e, ok
 }
 
-// RegisterRPC RESP is out parameter and Call in many goroutines
+// GetQueueSubjInfo get all queue subj topic prefix
+func (h *Handler[CTX]) GetQueueSubjInfo() map[string]struct{} {
+	return h.subjMap
+}
+
+// GetBroadcastSubjInfo get all broadcast subj topic prefix
+func (h *Handler[CTX]) GetBroadcastSubjInfo() map[string]struct{} {
+	return h.broadcastSubj
+}
+
+// RegisterRPC RESP is out parameter and Call in many goroutines,just one sub will receive the event
 func RegisterRPC[T ctx.IContext, REQ, RESP proto.Message](
 	h *Handler[T], desc string, f func(T, REQ) (RESP, *berror.ErrMsg), middlewares ...MiddleWare[T],
 ) {
 	registerRPC(h, desc, f, false, false, middlewares...)
 }
 
-// RegisterRPCSingle RESP is out parameter and Call on eventloop
+// RegisterRPCSingle RESP is out parameter and Call on eventloop,just one sub will receive the event
 func RegisterRPCSingle[T ctx.IContext, REQ, RESP proto.Message](
 	h *Handler[T], desc string, f func(T, REQ) (RESP, *berror.ErrMsg), middlewares ...MiddleWare[T],
 ) {
@@ -124,18 +137,23 @@ func RegisterRPCSingle[T ctx.IContext, REQ, RESP proto.Message](
 }
 
 // RegisterRPCForce f is force handle when Server is busy many goroutines
-// It is only used for very important businesses, such as recharge-related interfaces, adding gold coins to players, etc.
+// it is only used for very important businesses, such as recharge-related interfaces, adding gold coins to players, etc.
+// just one sub will receive the event
 func RegisterRPCForce[T ctx.IContext, REQ, RESP proto.Message](
 	h *Handler[T], desc string, f func(T, REQ) (RESP, *berror.ErrMsg), middlewares ...MiddleWare[T],
 ) {
 	registerRPC(h, desc, f, true, false, middlewares...)
 }
 
-// RegisterRPCForceSingle f is force handle when Server is busy on eventloop
+// RegisterRPCForceSingle f is force handle when Server is busy on eventloop，just one sub will receive the event
 func RegisterRPCForceSingle[T ctx.IContext, REQ, RESP proto.Message](
 	h *Handler[T], desc string, f func(T, REQ) (RESP, *berror.ErrMsg), middlewares ...MiddleWare[T],
 ) {
 	registerRPC(h, desc, f, true, true, middlewares...)
+}
+
+func getSubjPrefix(msgName string) string {
+	return msgName[:strings.LastIndexByte(msgName, '.')+1]
 }
 
 func registerRPC[T ctx.IContext, REQ, RESP proto.Message](
@@ -145,6 +163,12 @@ func registerRPC[T ctx.IContext, REQ, RESP proto.Message](
 	msgName := proto.MessageName(req)
 	if v, ok := h.handle[msgName]; ok {
 		panic(fmt.Sprintf("Handler %s already registered![%s]", msgName, v.String()))
+	} else {
+		subj := getSubjPrefix(string(msgName))
+		if _, ok := h.broadcastSubj[subj]; ok {
+			panic(fmt.Sprintf("subj %s already registered as broadcast message,not is normal message[%s]", msgName, v.String()))
+		}
+		h.subjMap[subj] = struct{}{}
 	}
 
 	midS := make([]MiddleWare[T], 0, len(h.baseMiddleware)+len(middlewares))
@@ -172,14 +196,14 @@ func registerRPC[T ctx.IContext, REQ, RESP proto.Message](
 	}
 }
 
-// RegisterRPCResp RESP is in parameter and Call in many goroutines
+// RegisterRPCResp RESP is in parameter and Call in many goroutines，just one sub will receive the event
 func RegisterRPCResp[T ctx.IContext, REQ, RESP proto.Message](
 	h *Handler[T], desc string, f func(T, REQ, RESP) *berror.ErrMsg, middlewares ...MiddleWare[T],
 ) {
 	registerRPCResp(h, desc, f, false, false, middlewares...)
 }
 
-// RegisterRPCRespSingle RESP is in parameter and Call in eventloop
+// RegisterRPCRespSingle RESP is in parameter and Call in eventloop，just one sub will receive the event
 func RegisterRPCRespSingle[T ctx.IContext, REQ, RESP proto.Message](
 	h *Handler[T], desc string, f func(T, REQ, RESP) *berror.ErrMsg, middlewares ...MiddleWare[T],
 ) {
@@ -188,13 +212,14 @@ func RegisterRPCRespSingle[T ctx.IContext, REQ, RESP proto.Message](
 
 // RegisterRPCRespForce f is force handle when Server is busy many goroutines
 // It is only used for very important businesses, such as recharge-related interfaces, adding gold coins to players, etc.
+// just one sub will receive the event
 func RegisterRPCRespForce[T ctx.IContext, REQ, RESP proto.Message](
 	h *Handler[T], desc string, f func(T, REQ, RESP) *berror.ErrMsg, middlewares ...MiddleWare[T],
 ) {
 	registerRPCResp(h, desc, f, true, false, middlewares...)
 }
 
-// RegisterRPCRespForceSingle f is force handle when Server is busy on eventloop
+// RegisterRPCRespForceSingle f is force handle when Server is busy on eventloop，just one sub will receive the event
 func RegisterRPCRespForceSingle[T ctx.IContext, REQ, RESP proto.Message](
 	h *Handler[T], desc string, f func(T, REQ, RESP) *berror.ErrMsg, middlewares ...MiddleWare[T],
 ) {
@@ -208,6 +233,12 @@ func registerRPCResp[T ctx.IContext, REQ, RESP proto.Message](
 	msgName := proto.MessageName(req)
 	if v, ok := h.handle[msgName]; ok {
 		panic(fmt.Sprintf("Handler %s already registered![%s]", msgName, v.String()))
+	} else {
+		subj := getSubjPrefix(string(msgName))
+		if _, ok := h.broadcastSubj[subj]; ok {
+			panic(fmt.Sprintf("subj %s already registered as broadcast message,not is normal message[%s]", msgName, v.String()))
+		}
+		h.subjMap[subj] = struct{}{}
 	}
 
 	midS := make([]MiddleWare[T], 0, len(h.baseMiddleware)+len(middlewares))
@@ -237,42 +268,57 @@ func registerRPCResp[T ctx.IContext, REQ, RESP proto.Message](
 	}
 }
 
-// RegisterEvent Call in many goroutines
+// RegisterEvent Call in many goroutines, just one sub will receive the event
 func RegisterEvent[T ctx.IContext, REQ proto.Message](
 	h *Handler[T], desc string, f func(T, REQ) *berror.ErrMsg, middlewares ...MiddleWare[T],
 ) {
-	registerEvent(h, desc, f, false, false, middlewares...)
+	registerEvent(h, desc, f, false, false, false, middlewares...)
 }
 
-// RegisterEventSingle Call in eventloop
+// RegisterEventSingle Call in eventloop, just one sub will receive the event
 func RegisterEventSingle[T ctx.IContext, REQ proto.Message](
 	h *Handler[T], desc string, f func(T, REQ) *berror.ErrMsg, middlewares ...MiddleWare[T],
 ) {
-	registerEvent(h, desc, f, false, true, middlewares...)
+	registerEvent(h, desc, f, false, true, false, middlewares...)
 }
 
 // RegisterEventForce f is force handle when Server is busy many goroutines
-// It is only used for very important businesses, such as recharge-related interfaces, adding gold coins to players, etc.
+// it is only used for very important businesses, such as recharge-related interfaces, adding gold coins to players, etc.
+// just one sub will receive the event
 func RegisterEventForce[T ctx.IContext, REQ proto.Message](
 	h *Handler[T], desc string, f func(T, REQ) *berror.ErrMsg, middlewares ...MiddleWare[T],
 ) {
-	registerEvent(h, desc, f, true, false, middlewares...)
+	registerEvent(h, desc, f, true, false, false, middlewares...)
 }
 
 // RegisterEventForceSingle f is force handle when Server is busy on eventloop
+// just one sub will receive the event
 func RegisterEventForceSingle[T ctx.IContext, REQ proto.Message](
 	h *Handler[T], desc string, f func(T, REQ) *berror.ErrMsg, middlewares ...MiddleWare[T],
 ) {
-	registerEvent(h, desc, f, true, true, middlewares...)
+	registerEvent(h, desc, f, true, true, false, middlewares...)
 }
 
 func registerEvent[T ctx.IContext, REQ proto.Message](
-	h *Handler[T], desc string, f func(T, REQ) *berror.ErrMsg, isForceHandle, isSingle bool, middlewares ...MiddleWare[T],
+	h *Handler[T], desc string, f func(T, REQ) *berror.ErrMsg, isForceHandle, isSingle, isBroadcast bool, middlewares ...MiddleWare[T],
 ) {
 	var req REQ
 	msgName := proto.MessageName(req)
 	if v, ok := h.handle[msgName]; ok {
 		panic(fmt.Sprintf("Handler %s already registered![%s]", msgName, v.String()))
+	} else {
+		subj := getSubjPrefix(string(msgName))
+		if isBroadcast {
+			if _, ok := h.subjMap[subj]; ok {
+				panic(fmt.Sprintf("subj %s already registered as normal handler,not is broadcast message[%s]", msgName, v.String()))
+			}
+			h.broadcastSubj[subj] = struct{}{}
+		} else {
+			if _, ok := h.broadcastSubj[subj]; ok {
+				panic(fmt.Sprintf("subj %s already registered as broadcast message,not is normal message[%s]", msgName, v.String()))
+			}
+			h.subjMap[subj] = struct{}{}
+		}
 	}
 
 	midS := make([]MiddleWare[T], 0, len(h.baseMiddleware)+len(middlewares))
@@ -292,4 +338,35 @@ func registerEvent[T ctx.IContext, REQ proto.Message](
 		funcType: " [" + runtime.FuncForPC(reflect.ValueOf(f).Pointer()).Name() + "] " + reflect.TypeOf(f).String(),
 		reqPool:  objectpool.GetTypeElemPool[REQ](),
 	}
+}
+
+// RegisterEventBroadcast Call in many goroutines,and all subscribers will receive
+func RegisterEventBroadcast[T ctx.IContext, REQ proto.Message](
+	h *Handler[T], desc string, f func(T, REQ) *berror.ErrMsg, middlewares ...MiddleWare[T],
+) {
+	registerEvent(h, desc, f, false, false, true, middlewares...)
+}
+
+// RegisterEventSingleBroadcast Call in eventloop ,and all subscribers will receive
+func RegisterEventSingleBroadcast[T ctx.IContext, REQ proto.Message](
+	h *Handler[T], desc string, f func(T, REQ) *berror.ErrMsg, middlewares ...MiddleWare[T],
+) {
+	registerEvent(h, desc, f, false, true, true, middlewares...)
+}
+
+// RegisterEventForceBroadcast f is force handle when Server is busy many goroutines
+// it is only used for very important businesses, such as recharge-related interfaces, adding gold coins to players, etc.
+// all subscribers will receive
+func RegisterEventForceBroadcast[T ctx.IContext, REQ proto.Message](
+	h *Handler[T], desc string, f func(T, REQ) *berror.ErrMsg, middlewares ...MiddleWare[T],
+) {
+	registerEvent(h, desc, f, true, false, true, middlewares...)
+}
+
+// RegisterEventForceSingleBroadcast f is force handle when Server is busy on eventloop
+// all subscribers will receive
+func RegisterEventForceSingleBroadcast[T ctx.IContext, REQ proto.Message](
+	h *Handler[T], desc string, f func(T, REQ) *berror.ErrMsg, middlewares ...MiddleWare[T],
+) {
+	registerEvent(h, desc, f, true, true, true, middlewares...)
 }
