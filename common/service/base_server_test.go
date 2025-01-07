@@ -35,7 +35,7 @@ func NewTestService() *TestService {
 }
 
 func (t *TestService) Router() {
-	handler.RegisterRPCResp(t.svc.GetHandler(), "测试", t.Trace)
+	handler.RegisterRPCRespSingle(t.svc.GetHandler(), "测试", t.Trace)
 }
 
 func (t *TestService) Start() {

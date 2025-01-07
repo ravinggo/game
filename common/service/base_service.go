@@ -300,7 +300,7 @@ func (s *BaseService[CTX, T]) dealNatsMsg(msg *nats.Msg) {
 		baseCtx.NatsMsg = msg
 	}
 	if elem.IsSingle() {
-		s.PostEventloop(c)
+		s.el.PostEventQueue(ce[CTX, T]{Data: c, Elem: elem})
 	} else {
 		l := len(s.taskGroupHash)
 		hash := ic.ToHash()
