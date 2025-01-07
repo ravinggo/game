@@ -19,11 +19,11 @@ const (
 )
 
 func GetTypePool[T any]() *sync.Pool {
-	return get[*T](&op, GetPtr[T]())
+	return get[T](&op, GetPtr[T]())
 }
 
 func GetTypeElemPool[T any]() *sync.Pool {
-	return get[*T](&op, GetPtrElem[T]())
+	return get[T](&op, GetPtrElem[T]())
 }
 
 func newPool[T any]() *sync.Pool {

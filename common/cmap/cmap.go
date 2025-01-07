@@ -103,6 +103,21 @@ func (m ConcurrentMap[K, V]) Get(key K) (V, bool) {
 	return val, ok
 }
 
+func (m ConcurrentMap[K, V]) GetOrCreate(key K, new func() V) (V, bool) {
+	// Get shard
+	shard := m.GetShard(key)
+	shard.Lock()
+	// Get item from shard.
+	val, ok := shard.items[key]
+	if !ok {
+		val = new()
+		shard.items[key] = val
+	}
+	shard.Unlock()
+	return val, ok
+
+}
+
 // Count returns the number of elements within the map.
 func (m ConcurrentMap[K, V]) Count() int {
 	count := 0

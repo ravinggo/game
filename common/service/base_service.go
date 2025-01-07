@@ -13,6 +13,7 @@ import (
 
 	baseenv "github.com/ravinggo/game/common/base-env"
 	"github.com/ravinggo/game/common/berror"
+	"github.com/ravinggo/game/common/cmap"
 	"github.com/ravinggo/game/common/ctx"
 	"github.com/ravinggo/game/common/eventloop"
 	"github.com/ravinggo/game/common/handler"
@@ -24,7 +25,6 @@ import (
 )
 
 type handlerElemKey struct{}
-type deleteTaskMap uint32
 
 type BaseService[CTX ctx.IContext] struct {
 	h             *handler.Handler[CTX]
@@ -32,16 +32,16 @@ type BaseService[CTX ctx.IContext] struct {
 	el            *eventloop.DoubleBuffQueue
 	taskGroupHash []task_group.TaskGroup[CTX]
 	taskPoolMark  uint64
-	taskMap       map[uint64]*task_group.TaskGroup[CTX]
-	taskGroupPool sync.Pool
+	taskMap       cmap.ConcurrentMap[uint64, *task_group.TaskGroup[CTX]]
+	taskGroupPool *sync.Pool
 	taskPool      *task_group.TaskPool
 }
 
 type RunMode int
 
 const (
-	FixedPoolMode RunMode = iota
-	TaskPoolMode
+	FixedGoPoolMode RunMode = iota
+	OneHashOneGo
 	OneTaskOneGo
 )
 
@@ -55,16 +55,23 @@ func NewBaseService[CTX ctx.IContext](
 		h:           handler.NewHandler[CTX](),
 		natsCluster: natsclient.NewClusterClient(baseenv.GetConfig().ServerType, natsUrls, rpcTimeout),
 		el:          eventloop.NewDoubleBuffQueue(lockQueueThread),
-		taskMap:     make(map[uint64]*task_group.TaskGroup[CTX], 1024),
-		// taskPool:    task_group.NewTaskPool(1024, 100000),
+		taskMap: cmap.NewWithCustomShardingFunction[uint64, *task_group.TaskGroup[CTX]](
+			func(key uint64) uint32 {
+				return uint32(key)
+			},
+		),
+		taskGroupPool: objectpool.GetTypePool[task_group.TaskGroup[CTX]](),
 	}
 	numCpu := uint64(runtime.NumCPU())
 	if numCpu&1 == 1 {
 		numCpu++
 	}
 	taskPoolSize := numCpu * 1024
+	if mode < FixedGoPoolMode || mode > OneTaskOneGo {
+		mode = FixedGoPoolMode
+	}
 	switch mode {
-	case FixedPoolMode:
+	case FixedGoPoolMode:
 		numCpu := uint64(runtime.NumCPU())
 		if numCpu&1 == 1 {
 			numCpu++
@@ -87,13 +94,8 @@ func NewBaseService[CTX ctx.IContext](
 				},
 			)
 		}
-	case TaskPoolMode:
-		s.taskPool = task_group.NewTaskPool(int64(taskPoolSize), int64(taskPoolSize*10))
-	case OneTaskOneGo:
-	default:
-
 	}
-
+	s.taskPool = task_group.NewTaskPool(int64(taskPoolSize), int64(taskPoolSize*10))
 	return s
 }
 
@@ -129,35 +131,6 @@ func (s *BaseService[CTX]) Start(f func(any)) {
 			}
 		},
 	)
-}
-
-func (s *BaseService[CTX]) dispatchCtx(c CTX) {
-	e, ok := ctx.Value[handlerElemKey, *handler.Elem[CTX]](c, handlerElemKey{})
-	if ok {
-		if e.IsSingle() {
-			s.call(c, e)
-		} else {
-			hash := c.ToHash()
-			if hash > 0 {
-				tp, ok := s.taskMap[hash]
-				if !ok {
-					tp = s.taskGroupPool.Get().(*task_group.TaskGroup[CTX])
-					s.taskMap[hash] = tp
-				}
-				if !e.IsForce() {
-					if !tp.Put(
-						c, nil,
-					) {
-						ReplyTaskPoolFull(c.MustBaseContext())
-					}
-				} else {
-					tp.PutForce(c, nil)
-				}
-			}
-		}
-	} else {
-		logger.Log.Warn().Msgf("invalid %s,ctx not found handler elem", reflect.TypeOf(c).String())
-	}
 }
 
 func (s *BaseService[CTX]) handleCtx(c CTX) {
@@ -312,11 +285,41 @@ func (s *BaseService[CTX]) dealNatsMsg(msg *nats.Msg) {
 
 				return
 			}
-			s.el.PostEventQueue(c)
+			tg, _ := s.taskMap.GetOrCreate(
+				hash, func() *task_group.TaskGroup[CTX] {
+					tg := s.taskGroupPool.Get().(*task_group.TaskGroup[CTX])
+					tg.SetTaskFunc(
+						func(e task_group.TaskGroupElem[CTX]) {
+							defer safego.RecoverWithLogger(baseCtx.TraceLog)
+							if e.Data != nil {
+								s.handleCtx(e.Data)
+							}
+							if e.Func != nil {
+								e.Func()
+							}
+						},
+					)
+					tg.SetMaxCap(128)
+					tg.SetOnStop(
+						func(t *task_group.TaskGroup[CTX]) {
+							tg.SetOnStop(nil)
+							s.taskGroupPool.Put(tg)
+						},
+					)
+					return tg
+				},
+			)
+			if elem.IsForce() {
+				tg.PutForce(c, nil)
+			} else {
+				if !tg.Put(c, nil) {
+					ReplyTaskPoolFull(baseCtx)
+					logger.Log.Warn().Err(err).Msg("task group full")
+				}
+			}
 			return
 		}
-		if l > 0 { // TODO 这里应该用 协程池来处理
-
+		if s.taskPool != nil {
 			if elem.IsForce() {
 				s.taskPool.PutForce(
 					func() {
