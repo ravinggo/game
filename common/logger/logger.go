@@ -17,6 +17,7 @@ import (
 )
 
 type Logger = zerolog.Logger
+type Context = zerolog.Context
 
 var Log *Logger
 

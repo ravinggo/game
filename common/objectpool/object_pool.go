@@ -22,10 +22,6 @@ func GetTypePool[T any]() *sync.Pool {
 	return get[T](&op, GetPtr[T]())
 }
 
-func GetTypeElemPool[T any]() *sync.Pool {
-	return get[T](&op, GetPtrElem[T]())
-}
-
 func newPool[T any]() *sync.Pool {
 	return &sync.Pool{
 		New: func() any {
@@ -58,18 +54,6 @@ type PtrType struct {
 func GetPtr[T any]() uintptr {
 	var a any = (*T)(nil)
 	t := *(**Type)(unsafe.Pointer(&a))
-	if t.Kind_&KindMask == uint8(reflect.Pointer) {
-		t = (*PtrType)(unsafe.Pointer(t)).Elem
-	}
-	return (uintptr)(unsafe.Pointer(t))
-}
-
-func GetPtrElem[T any]() uintptr {
-	var a any = (*T)(nil)
-	t := *(**Type)(unsafe.Pointer(&a))
-	if t.Kind_&KindMask == uint8(reflect.Pointer) {
-		t = (*PtrType)(unsafe.Pointer(t)).Elem
-	}
 	if t.Kind_&KindMask == uint8(reflect.Pointer) {
 		t = (*PtrType)(unsafe.Pointer(t)).Elem
 	}
@@ -157,21 +141,6 @@ func Get[T any]() *T {
 // Put put a object to object pool with T
 func Put[T any](t *T) {
 	get[T](&op, GetPtr[T]()).Put(t)
-}
-
-// GetElem get a object from object pool with T
-// T must is pointer type
-// eg: GetElem[*basepb.ErrorMessage]() == Get[basepb.ErrorMessage]()
-// why? proto.Message == *basepb.ErrorMessage
-// Interface Constraint Generics If it is implemented by pointer
-func GetElem[T any]() T {
-	return get[T](&op, GetPtrElem[T]()).Get().(T)
-}
-
-// PutElem put a object to object pool with T
-// why? look GetElem[T]()
-func PutElem[T any](t T) {
-	get[T](&op, GetPtrElem[T]()).Put(t)
 }
 
 // Slice  is a slice object pool for T
@@ -289,7 +258,13 @@ func PutMap[K comparable, V any](t map[K]V) {
 type Bytes Slice[byte]
 
 func GetBytes(cap int) *Bytes {
-	return (*Bytes)(getSlicePool[byte](bytesPool, cap, byteMinCap))
+	b := (*Bytes)(getSlicePool[byte](bytesPool, cap, byteMinCap))
+	b.Data = b.Data[:0]
+	return b
+}
+
+func PutBytes(b *Bytes) {
+	PutSlice((*Slice[byte])(b))
 }
 
 func (b *Bytes) WriteString(s string) {

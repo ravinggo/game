@@ -22,6 +22,9 @@ type Struct2 struct {
 	b string
 }
 
+type Ptr[T any | *any] interface {
+}
+
 func Get1[T any]() *T {
 	var a interface{} = (*T)(nil)
 	c := reflect.TypeOf(a)

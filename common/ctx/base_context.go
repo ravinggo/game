@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"github.com/nats-io/nats.go"
-	"github.com/rs/zerolog"
 	"google.golang.org/protobuf/proto"
 
 	"github.com/ravinggo/game/common/basepb"
@@ -39,10 +38,15 @@ type Trace interface {
 	// TraceMarshalFrom unmarshal the object from byte slice
 	TraceMarshalFrom([]byte) error
 
-	TraceLogField(zerolog.Context) zerolog.Context
+	TraceLogField(logger.Context) logger.Context
 
 	GetServerIdAndType() (int64, string)
 	SetServerIdAndType(int64, string)
+}
+
+type IContextPtr[T any] interface {
+	IContext
+	*T
 }
 
 type IContext interface {
@@ -55,7 +59,7 @@ type IContext interface {
 }
 
 type BaseContext struct {
-	context.Context
+	Context  context.Context
 	TraceLog logger.Logger
 	Req      proto.Message
 	Resp     []proto.Message
@@ -113,16 +117,13 @@ func (c *BaseContext) SetValue(key any, value any) {
 }
 
 func (c *BaseContext) Clear() {
-	c.TraceLog.UpdateContext(
-		func(c zerolog.Context) zerolog.Context {
-			return c
-		},
-	)
 	c.Context = context.Background()
+	clear(c.Resp)
+	c.Resp = c.Resp[:0]
 }
 
 func (c *BaseContext) Release() {
-
+	objectpool.Put(c)
 }
 
 var _ IContext = (*BaseContext)(nil)
@@ -162,6 +163,7 @@ func NewMarkCtx[TraceData any]() *TraceCtx[TraceData] {
 
 func (c *TraceCtx[TraceData]) Release() {
 	c.Clear()
+	c.TD = *new(TraceData)
 	objectpool.Put[TraceCtx[TraceData]](c)
 }
 
@@ -210,7 +212,7 @@ func (i *IntTrace) SetServerIdAndType(serverId int64, serverType string) {
 	i.FromServerType = serverType
 }
 
-func (i *IntTrace) TraceLogField(zc zerolog.Context) zerolog.Context {
+func (i *IntTrace) TraceLogField(zc logger.Context) logger.Context {
 	return zc.Str("traceId", i.TraceId).Int64("fromServerId", i.FromServerId).
 		Str("fromServerType", i.FromServerType).Int64("roleId", i.RoleId)
 }
@@ -248,13 +250,13 @@ func (i *StringTrace) SetServerIdAndType(serverId int64, serverType string) {
 	i.FromServerType = serverType
 }
 
-func (i *StringTrace) TraceLogField(zc zerolog.Context) zerolog.Context {
+func (i *StringTrace) TraceLogField(zc logger.Context) logger.Context {
 	return zc.Str("traceId", i.TraceId).Int64("fromServerId", i.FromServerId).
 		Str("fromServerType", i.FromServerType).Str("roleId", i.RoleId)
 }
 
-type Int64TraceCtx TraceCtx[IntTrace]
-type StringTraceCtx TraceCtx[StringTrace]
+type Int64TraceCtx = TraceCtx[IntTrace]
+type StringTraceCtx = TraceCtx[StringTrace]
 
 var (
 	_ ToHash = (*IntTrace)(nil)

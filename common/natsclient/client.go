@@ -276,6 +276,12 @@ func (r *Request[T]) Request(nc *NatsClient, c ctx.IContext, msg proto.Message) 
 	return err
 }
 
+func (r *Request[T]) RequestToServer(nc *NatsClient, c ctx.IContext, toServerId int64, msg proto.Message) *berror.ErrMsg {
+	var a any = &r.Ret
+	err := nc.RequestToServer(c, toServerId, msg, a.(proto.Message))
+	return err
+}
+
 func (this_ *NatsClient) RequestToServer(c ctx.IContext, toServerId int64, msg proto.Message, out proto.Message) *berror.ErrMsg {
 	msgName := string(proto.MessageName(msg))
 	msgNameSize := 21 + len(msgName)
@@ -301,7 +307,7 @@ func (this_ *NatsClient) RequestToServer(c ctx.IContext, toServerId int64, msg p
 
 	data := b.Data
 	if toServerId > 0 {
-		data = b.Data[msgNameSize:]
+		data = b.Data[msgNameSize : cap(b.Data)-msgNameSize][:0]
 		index := strings.LastIndexByte(msgName, '.')
 		b.Data = append(b.Data, msgName[:index]...) // index != -1
 		b.Data = append(b.Data, '.')
@@ -399,7 +405,7 @@ func NatsMsgReply(reply *nats.Msg, msg ...proto.Message) *berror.ErrMsg {
 		totalSize += s
 	}
 	b := objectpool.GetBytes(totalSize)
-	defer objectpool.Put(b)
+	defer objectpool.PutBytes(b)
 
 	for _, m := range msg {
 		err := natsMarshalAppendResponse(b, m)
@@ -421,10 +427,10 @@ func natsMsgReplyOne(reply *nats.Msg, msg proto.Message) *berror.ErrMsg {
 		return berror.NewProtocolStr("msg data too long")
 	}
 	b := objectpool.GetBytes(totalSizeLen + msgNameSize + msgSize)
-	defer objectpool.Put(b)
+	defer objectpool.PutBytes(b)
 	b.WriteBytes(byte(msgNameSize))
-	b.WriteString(msgName)
 	b.WriteBytes(byte(msgSize), byte(msgSize>>8), byte(msgSize>>16))
+	b.WriteString(msgName)
 	var err error
 	b.Data, err = proto.MarshalOptions{}.MarshalAppend(b.Data, msg)
 	if err != nil {
@@ -448,9 +454,9 @@ func natsMarshalAppendResponse(b *objectpool.Bytes, msg proto.Message) *berror.E
 		return berror.NewProtocolStr("msg name too long")
 	}
 	b.WriteBytes(byte(msgNameLen))
-	b.WriteString(msgName)
 	msgSize := proto.Size(msg)
 	b.WriteBytes(byte(msgSize), byte(msgSize>>8), byte(msgSize>>16))
+	b.WriteString(msgName)
 	var err error
 	b.Data, err = proto.MarshalOptions{}.MarshalAppend(b.Data, msg)
 	if err != nil {
@@ -650,7 +656,7 @@ func (this_ *NatsClient) PublishUser(c ctx.IContext, us UserSubject, msg proto.M
 	size := us.CreatePublishSize()
 	msgSize := proto.Size(msg)
 	b := objectpool.GetBytes(size + 2 + traceSize + msgSize)
-	defer objectpool.Put(b)
+	defer objectpool.PutBytes(b)
 	us.CreatePublish(b)
 	if traceSize > 0 {
 		b.Data = append(b.Data, byte(traceSize), byte(traceSize>>8))
@@ -689,7 +695,7 @@ func (this_ *NatsClient) RequestUser(c ctx.IContext, us UserSubject, msg proto.M
 	size := us.CreatePublishSize()
 	msgSize := proto.Size(msg)
 	b := objectpool.GetBytes(size + 2 + traceSize + msgSize)
-	defer objectpool.Put(b)
+	defer objectpool.PutBytes(b)
 	us.CreatePublish(b)
 	if traceSize > 0 {
 		b.Data = append(b.Data, byte(traceSize), byte(traceSize>>8))

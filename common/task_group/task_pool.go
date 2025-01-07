@@ -24,21 +24,20 @@ func NewTaskPool(poolSize int64, maxCap int64) *TaskPool {
 
 func (tp *TaskPool) PutForce(f func()) {
 	if atomic.AddInt64(&tp.poolSize, 1) <= tp.maxCap {
-		safego.Go(
-			func() {
-				defer func() {
-					atomic.AddInt64(&tp.poolSize, -1)
-				}()
-				f()
-				for {
-					f, ok := <-tp.c
-					if !ok {
-						return
-					}
-					f()
+		go func() {
+			defer func() {
+				safego.Recover()
+				atomic.AddInt64(&tp.poolSize, -1)
+			}()
+			f()
+			for {
+				f, ok := <-tp.c
+				if !ok {
+					return
 				}
-			},
-		)
+				f()
+			}
+		}()
 		return
 	}
 	atomic.AddInt64(&tp.poolSize, -1)
@@ -47,21 +46,25 @@ func (tp *TaskPool) PutForce(f func()) {
 
 func (tp *TaskPool) Put(f func()) bool {
 	if atomic.AddInt64(&tp.poolSize, 1) <= tp.maxCap {
-		safego.Go(
-			func() {
-				defer func() {
-					atomic.AddInt64(&tp.poolSize, -1)
-				}()
-				f()
-				for {
-					f, ok := <-tp.c
+		go func() {
+			defer func() {
+				safego.Recover()
+				atomic.AddInt64(&tp.poolSize, -1)
+			}()
+
+			f()
+			for {
+				select {
+				case f, ok := <-tp.c:
 					if !ok {
 						return
 					}
 					f()
+				default:
+					return
 				}
-			},
-		)
+			}
+		}()
 		return true
 	}
 	atomic.AddInt64(&tp.poolSize, -1)

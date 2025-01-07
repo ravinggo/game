@@ -59,41 +59,40 @@ func (this_ *TaskGroup[T]) PutForce(d T, f func()) {
 	}
 	this_.mu.Unlock()
 	if run {
-		safego.Go(
-			func() {
-				defer func() {
-					if this_.onStop != nil {
-						this_.onStop()
-					}
-				}()
-				for {
-					this_.mu.Lock()
-					if !this_.isRunning {
-						this_.mu.Unlock()
-
-						return
-					}
-					this_.data[0], this_.data[1] = this_.data[1], this_.data[0]
-					if len(this_.data[1]) == 0 {
-						this_.isRunning = false
-						this_.mu.Unlock()
-						return
-					}
+		go func() {
+			defer safego.Recover()
+			defer func() {
+				if this_.onStop != nil {
+					this_.onStop()
+				}
+			}()
+			for {
+				this_.mu.Lock()
+				if !this_.isRunning {
 					this_.mu.Unlock()
 
-					for _, v := range this_.data[1] {
-						this_.f(v)
-					}
-
-					if len(this_.data[1]) > this_.maxCap*2 {
-						this_.data[1] = make([]TaskGroupElem[T], 0, this_.maxCap*2)
-					} else {
-						clear(this_.data[1])
-						this_.data[1] = this_.data[1][:0]
-					}
+					return
 				}
-			},
-		)
+				this_.data[0], this_.data[1] = this_.data[1], this_.data[0]
+				if len(this_.data[1]) == 0 {
+					this_.isRunning = false
+					this_.mu.Unlock()
+					return
+				}
+				this_.mu.Unlock()
+
+				for _, v := range this_.data[1] {
+					this_.f(v)
+				}
+
+				if len(this_.data[1]) > this_.maxCap*2 {
+					this_.data[1] = make([]TaskGroupElem[T], 0, this_.maxCap*2)
+				} else {
+					clear(this_.data[1])
+					this_.data[1] = this_.data[1][:0]
+				}
+			}
+		}()
 	}
 }
 
@@ -113,40 +112,39 @@ func (this_ *TaskGroup[T]) Put(d T, f func()) bool {
 	}
 	this_.mu.Unlock()
 	if run {
-		safego.Go(
-			func() {
-				defer func() {
-					if this_.onStop != nil {
-						this_.onStop()
-					}
-				}()
-				for {
-					this_.mu.Lock()
-					if !this_.isRunning {
-						this_.mu.Unlock()
-						return
-					}
-					this_.data[0], this_.data[1] = this_.data[1], this_.data[0]
-					if len(this_.data[1]) == 0 {
-						this_.isRunning = false
-						this_.mu.Unlock()
-						return
-					}
-					this_.mu.Unlock()
-
-					for _, v := range this_.data[1] {
-						this_.f(v)
-					}
-
-					if len(this_.data[1]) > this_.maxCap*2 {
-						this_.data[1] = make([]TaskGroupElem[T], 0, this_.maxCap*2)
-					} else {
-						clear(this_.data[1])
-						this_.data[1] = this_.data[1][:0]
-					}
+		go func() {
+			defer safego.Recover()
+			defer func() {
+				if this_.onStop != nil {
+					this_.onStop()
 				}
-			},
-		)
+			}()
+			for {
+				this_.mu.Lock()
+				if !this_.isRunning {
+					this_.mu.Unlock()
+					return
+				}
+				this_.data[0], this_.data[1] = this_.data[1], this_.data[0]
+				if len(this_.data[1]) == 0 {
+					this_.isRunning = false
+					this_.mu.Unlock()
+					return
+				}
+				this_.mu.Unlock()
+
+				for _, v := range this_.data[1] {
+					this_.f(v)
+				}
+
+				if len(this_.data[1]) > this_.maxCap*2 {
+					this_.data[1] = make([]TaskGroupElem[T], 0, this_.maxCap*2)
+				} else {
+					clear(this_.data[1])
+					this_.data[1] = this_.data[1][:0]
+				}
+			}
+		}()
 	}
 	return true
 }

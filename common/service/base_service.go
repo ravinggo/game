@@ -26,102 +26,119 @@ import (
 
 type handlerElemKey struct{}
 
-type BaseService[CTX ctx.IContext] struct {
-	h             *handler.Handler[CTX]
+type BaseService[CTX ctx.IContextPtr[T], T any] struct {
+	h             *handler.Handler[CTX, T]
 	natsCluster   *natsclient.ClusterClient
 	el            *eventloop.DoubleBuffQueue
-	taskGroupHash []task_group.TaskGroup[CTX]
+	taskGroupHash []task_group.TaskGroup[ce[CTX, T]]
 	taskPoolMark  uint64
-	taskMap       cmap.ConcurrentMap[uint64, *task_group.TaskGroup[CTX]]
+	taskMap       cmap.ConcurrentMap[uint64, *task_group.TaskGroup[ce[CTX, T]]]
 	taskGroupPool *sync.Pool
 	taskPool      *task_group.TaskPool
 }
 
-type RunMode int
+type HashRunMode int
 
 const (
-	FixedGoPoolMode RunMode = iota
-	OneHashOneGo
-	OneTaskOneGo
+	FixedHashPoolMode HashRunMode = 0
+	OneHashOneGo      HashRunMode = 1
 )
 
-func NewBaseService[CTX ctx.IContext](
+type TaskRunMode int
+
+const (
+	TaskPool     TaskRunMode = 0
+	OneTaskOneGo TaskRunMode = 1
+)
+
+type ce[CTX ctx.IContextPtr[T], T any] struct {
+	Data CTX
+	Elem *handler.Elem[CTX, T]
+}
+
+func NewBaseService[CTX ctx.IContextPtr[T], T any](
 	natsUrls []string,
 	lockQueueThread bool,
-	mode RunMode,
+	hashMode HashRunMode,
+	taskMode TaskRunMode,
 	rpcTimeout time.Duration,
-) *BaseService[CTX] {
-	s := &BaseService[CTX]{
+) *BaseService[CTX, T] {
+	s := &BaseService[CTX, T]{
 		h:           handler.NewHandler[CTX](),
 		natsCluster: natsclient.NewClusterClient(baseenv.GetConfig().ServerType, natsUrls, rpcTimeout),
 		el:          eventloop.NewDoubleBuffQueue(lockQueueThread),
-		taskMap: cmap.NewWithCustomShardingFunction[uint64, *task_group.TaskGroup[CTX]](
+		taskMap: cmap.NewWithCustomShardingFunction[uint64, *task_group.TaskGroup[ce[CTX, T]]](
 			func(key uint64) uint32 {
 				return uint32(key)
 			},
 		),
 		taskGroupPool: objectpool.GetTypePool[task_group.TaskGroup[CTX]](),
 	}
+
 	numCpu := uint64(runtime.NumCPU())
 	if numCpu&1 == 1 {
 		numCpu++
 	}
 	taskPoolSize := numCpu * 1024
-	if mode < FixedGoPoolMode || mode > OneTaskOneGo {
-		mode = FixedGoPoolMode
+	if hashMode < FixedHashPoolMode || hashMode > OneHashOneGo {
+		hashMode = FixedHashPoolMode
 	}
-	switch mode {
-	case FixedGoPoolMode:
+	switch hashMode {
+	case FixedHashPoolMode:
 		numCpu := uint64(runtime.NumCPU())
 		if numCpu&1 == 1 {
 			numCpu++
 		}
 		taskPoolSize := numCpu * 1024
 		s.taskPoolMark = taskPoolSize - 1
-		s.taskGroupHash = make([]task_group.TaskGroup[CTX], taskPoolSize)
+		s.taskGroupHash = make([]task_group.TaskGroup[ce[CTX, T]], taskPoolSize)
 		for i := uint64(0); i < taskPoolSize; i++ {
 			s.taskGroupHash[i].SetMaxCap(128)
-			s.taskGroupHash[i].SetTaskFunc(
-				func(e task_group.TaskGroupElem[CTX]) {
-					defer safego.Recover()
-					if e.Data != nil {
-						c := e.Data
-						s.handleCtx(c)
-					}
-					if e.Func != nil {
-						e.Func()
-					}
-				},
-			)
+			s.taskGroupHash[i].SetTaskFunc(s.taskFunc)
 		}
 	}
-	s.taskPool = task_group.NewTaskPool(int64(taskPoolSize), int64(taskPoolSize*10))
+
+	if taskMode == TaskPool {
+		s.taskPool = task_group.NewTaskPool(int64(taskPoolSize), int64(taskPoolSize*10))
+	}
+
 	return s
 }
 
-func (s *BaseService[CTX]) GetHandler() *handler.Handler[CTX] {
+func (s *BaseService[CTX, T]) taskFunc(e task_group.TaskGroupElem[ce[CTX, T]]) {
+	defer safego.Recover()
+	if e.Data.Data != nil {
+		s.handleCtx(e.Data.Data, e.Data.Elem)
+	}
+	if e.Func != nil {
+		e.Func()
+	}
+}
+
+func (s *BaseService[CTX, T]) GetHandler() *handler.Handler[CTX, T] {
 	return s.h
 }
 
-func (s *BaseService[CTX]) GetNatsCluster() *natsclient.ClusterClient {
+func (s *BaseService[CTX, T]) GetNatsCluster() *natsclient.ClusterClient {
 	return s.natsCluster
 }
 
-func (s *BaseService[CTX]) PostEventloop(e any) {
+func (s *BaseService[CTX, T]) PostEventloop(e any) {
 	s.el.PostEventQueue(e)
 }
 
-func (s *BaseService[CTX]) Start(f func(any)) {
+func (s *BaseService[CTX, T]) Start(f func(any)) {
 	if f == nil {
 		f = func(e any) {
 			logger.Log.Warn().Str("type", reflect.TypeOf(e).String()).Any("data", e).Msg("unknown event")
 		}
 	}
+	s.subscribe()
 	s.el.Start(
 		func(e any) {
 			switch c := e.(type) {
-			case CTX:
-				s.handleCtx(c)
+			case ce[CTX, T]:
+				s.handleCtx(c.Data, c.Elem)
 			case func():
 				c()
 			default:
@@ -133,16 +150,23 @@ func (s *BaseService[CTX]) Start(f func(any)) {
 	)
 }
 
-func (s *BaseService[CTX]) handleCtx(c CTX) {
-	e, ok := ctx.Value[handlerElemKey, *handler.Elem[CTX]](c, handlerElemKey{})
-	if ok {
-		s.call(c, e)
-	} else {
-		logger.Log.Warn().Msgf("invalid %s,ctx not found handler elem", reflect.TypeOf(c).String())
+func (s *BaseService[CTX, T]) handleCtx(c CTX, e *handler.Elem[CTX, T]) {
+	s.call(c, e)
+	baseCtx := c.MustBaseContext()
+	if baseCtx.Req != nil {
+		proto.Reset(baseCtx.Req)
+		e.ReqPool().Put(baseCtx.Req)
+		baseCtx.Req = nil
 	}
+	if e.IsRPC() {
+		last := len(baseCtx.Resp) - 1
+		proto.Reset(baseCtx.Resp[last])
+		e.RespPool().Put(baseCtx.Resp[last])
+	}
+	c.Release()
 }
 
-func (s *BaseService[CTX]) call(c CTX, e *handler.Elem[CTX]) {
+func (s *BaseService[CTX, T]) call(c CTX, e *handler.Elem[CTX, T]) {
 	var err *berror.ErrMsg
 	start := time.Now()
 	baseCtx := c.MustBaseContext()
@@ -179,19 +203,20 @@ func (s *BaseService[CTX]) call(c CTX, e *handler.Elem[CTX]) {
 	}
 }
 
-func (s *BaseService[CTX]) Stop() {
+func (s *BaseService[CTX, T]) Stop() {
+	s.natsCluster.Close()
 	s.el.Stop()
 	s.natsCluster.Shutdown()
 }
 
-func (s *BaseService[CTX]) subscribe() {
+func (s *BaseService[CTX, T]) subscribe() {
 	subjInfo := s.h.GetQueueSubjInfo()
 	serverId := baseenv.GetConfig().ServerId
 	for subj := range subjInfo {
 		if serverId == 0 {
-			subj = subj + ".>"
+			subj = subj + ">"
 		} else {
-			subj = subj + "." + strconv.FormatInt(serverId, 10) + ".>"
+			subj = subj + strconv.FormatInt(serverId, 10) + ".>"
 		}
 
 		s.natsCluster.QueueSubscribeAll(subj, s.dealNatsMsg)
@@ -201,33 +226,41 @@ func (s *BaseService[CTX]) subscribe() {
 	broadcastSubjInfo := s.h.GetBroadcastSubjInfo()
 	for subj := range broadcastSubjInfo {
 		// all services of the same type
-		subjTop := subj + ".>"
+		subjTop := subj + ">"
 		s.natsCluster.SubscribeAll(subjTop, s.dealNatsMsg)
 		logger.Log.Info().Str("subjTop", subjTop).Msg("subscribe broadcast top topic")
 		// all services of the same type and serverId
 		if serverId != 0 {
-			subjServerId := subj + "." + strconv.FormatInt(serverId, 10) + ".>"
+			subjServerId := subj + strconv.FormatInt(serverId, 10) + ".>"
 			s.natsCluster.SubscribeAll(subjServerId, s.dealNatsMsg)
 			logger.Log.Info().Str("subjServerId", subjTop).Msg("subscribe broadcast topic")
 		}
 	}
 }
 
-func (s *BaseService[CTX]) dealNatsMsg(msg *nats.Msg) {
+func (s *BaseService[CTX, T]) dealNatsMsg(msg *nats.Msg) {
 	msgName := msg.Subject
 	index := strings.LastIndexByte(msgName, '.')
 	if index == -1 {
 		return
 	}
-	msgName = msgName[index+1:]
+	if baseenv.GetConfig().ServerId != 0 {
+		index1 := strings.LastIndexByte(msg.Subject[:index], '.')
+		b := objectpool.GetBytes(len(msgName))
+		defer objectpool.PutBytes(b)
+		b.WriteString(msg.Subject[:index1])
+		b.WriteString(msg.Subject[index:])
+		msgName = b.String()
+	}
 	data := msg.Data
 	if len(data) < 2 {
 		return
 	}
 
 	traceSize := int(data[0]) | int(data[1])<<8
-	c := objectpool.GetElem[CTX]()
-	var ic ctx.IContext = c
+	c := objectpool.Get[T]()
+	var ca any = c
+	ic := ca.(ctx.IContext)
 	baseCtx := ic.MustBaseContext()
 	if traceSize > 0 {
 		traceCtx, ok := ic.(ctx.Trace)
@@ -266,19 +299,20 @@ func (s *BaseService[CTX]) dealNatsMsg(msg *nats.Msg) {
 	if elem.IsRPC() {
 		baseCtx.NatsMsg = msg
 	}
-	baseCtx.SetValue(handlerElemKey{}, elem)
 	if elem.IsSingle() {
-		s.PostEventloop(ic)
+		s.PostEventloop(c)
 	} else {
 		l := len(s.taskGroupHash)
 		hash := ic.ToHash()
 		if hash != 0 {
 			if l > 0 {
 				if elem.IsForce() {
-					s.taskGroupHash[hash&s.taskPoolMark].PutForce(c, nil)
+					s.taskGroupHash[hash&s.taskPoolMark].PutForce(ce[CTX, T]{Data: c, Elem: elem}, nil)
 				} else {
-					if !s.taskGroupHash[hash&s.taskPoolMark].Put(c, nil) {
+					if !s.taskGroupHash[hash&s.taskPoolMark].Put(ce[CTX, T]{Data: c, Elem: elem}, nil) {
 						ReplyTaskPoolFull(baseCtx)
+						ic.Release()
+						objectpool.Put[T](c)
 						logger.Log.Warn().Err(err).Msg("task group full")
 					}
 				}
@@ -286,22 +320,12 @@ func (s *BaseService[CTX]) dealNatsMsg(msg *nats.Msg) {
 				return
 			}
 			tg, _ := s.taskMap.GetOrCreate(
-				hash, func() *task_group.TaskGroup[CTX] {
-					tg := s.taskGroupPool.Get().(*task_group.TaskGroup[CTX])
-					tg.SetTaskFunc(
-						func(e task_group.TaskGroupElem[CTX]) {
-							defer safego.RecoverWithLogger(baseCtx.TraceLog)
-							if e.Data != nil {
-								s.handleCtx(e.Data)
-							}
-							if e.Func != nil {
-								e.Func()
-							}
-						},
-					)
+				hash, func() *task_group.TaskGroup[ce[CTX, T]] {
+					tg := s.taskGroupPool.Get().(*task_group.TaskGroup[ce[CTX, T]])
+					tg.SetTaskFunc(s.taskFunc)
 					tg.SetMaxCap(128)
 					tg.SetOnStop(
-						func(t *task_group.TaskGroup[CTX]) {
+						func(t *task_group.TaskGroup[ce[CTX, T]]) {
 							tg.SetOnStop(nil)
 							s.taskGroupPool.Put(tg)
 						},
@@ -310,10 +334,12 @@ func (s *BaseService[CTX]) dealNatsMsg(msg *nats.Msg) {
 				},
 			)
 			if elem.IsForce() {
-				tg.PutForce(c, nil)
+				tg.PutForce(ce[CTX, T]{Data: c, Elem: elem}, nil)
 			} else {
-				if !tg.Put(c, nil) {
+				if !tg.Put(ce[CTX, T]{Data: c, Elem: elem}, nil) {
 					ReplyTaskPoolFull(baseCtx)
+					ic.Release()
+					objectpool.Put[T](c)
 					logger.Log.Warn().Err(err).Msg("task group full")
 				}
 			}
@@ -323,16 +349,18 @@ func (s *BaseService[CTX]) dealNatsMsg(msg *nats.Msg) {
 			if elem.IsForce() {
 				s.taskPool.PutForce(
 					func() {
-						s.handleCtx(c)
+						s.handleCtx(c, elem)
 					},
 				)
 			} else {
-				if s.taskPool.Put(
+				if !s.taskPool.Put(
 					func() {
-						s.handleCtx(c)
+						s.handleCtx(c, elem)
 					},
 				) {
 					ReplyTaskPoolFull(baseCtx)
+					ic.Release()
+					objectpool.Put[T](c)
 					logger.Log.Warn().Err(err).Msg("task group full")
 				}
 			}
@@ -341,7 +369,7 @@ func (s *BaseService[CTX]) dealNatsMsg(msg *nats.Msg) {
 		safego.Go(
 			func() {
 				defer safego.RecoverWithLogger(baseCtx.TraceLog)
-				s.handleCtx(c)
+				s.handleCtx(c, elem)
 			},
 		)
 	}

@@ -61,7 +61,7 @@ type Config struct {
 var (
 	cfg = Config{
 		ServerType:      "ravinggo-game",
-		ServerId:        0,
+		ServerId:        10,
 		ConfType:        "consul",
 		ConfHosts:       "127.0.0.1:8500",
 		ConfPath:        "game/",

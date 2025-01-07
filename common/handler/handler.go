@@ -12,18 +12,19 @@ import (
 
 	"github.com/ravinggo/game/common/berror"
 	"github.com/ravinggo/game/common/ctx"
+	"github.com/ravinggo/game/common/define"
 	"github.com/ravinggo/game/common/objectpool"
 )
 
 type (
-	MiddleWare[CTX ctx.IContext]   func(HandleFunc[CTX]) HandleFunc[CTX]
-	HandleFunc[CTX ctx.IContext]   func(ctx CTX) *berror.ErrMsg
+	MiddleWare[CTX ctx.IContextPtr[T], T any]                func(HandleFunc[CTX, T]) HandleFunc[CTX, T]
+	HandleFunc[CTX ctx.IContextPtr[T], T any]                func(ctx CTX) *berror.ErrMsg
 )
 
-type Elem[CTX ctx.IContext] struct {
-	h        HandleFunc[CTX]
+type Elem[CTX ctx.IContextPtr[T], T any] struct {
+	h        HandleFunc[CTX, T]
 	desc     string
-	midS     []MiddleWare[CTX]
+	midS     []MiddleWare[CTX, T]
 	isRPC    bool
 	msgName  protoreflect.FullName
 	funcType string
@@ -33,43 +34,43 @@ type Elem[CTX ctx.IContext] struct {
 	respPool *sync.Pool
 }
 
-func (this_ *Elem[CTX]) IsForce() bool {
+func (this_ *Elem[CTX, T]) IsForce() bool {
 	return this_.isForce
 }
 
-func (this_ *Elem[CTX]) MsgName() string {
+func (this_ *Elem[CTX, T]) MsgName() string {
 	return string(this_.msgName)
 }
 
-func (this_ *Elem[CTX]) IsSingle() bool {
+func (this_ *Elem[CTX, T]) IsSingle() bool {
 	return this_.isSingle
 }
 
-func (this_ *Elem[CTX]) IsRPC() bool {
+func (this_ *Elem[CTX, T]) IsRPC() bool {
 	return this_.isRPC
 }
 
-func (this_ *Elem[CTX]) ReqPool() *sync.Pool {
+func (this_ *Elem[CTX, T]) ReqPool() *sync.Pool {
 	return this_.reqPool
 }
 
-func (this_ *Elem[CTX]) RespPool() *sync.Pool {
+func (this_ *Elem[CTX, T]) RespPool() *sync.Pool {
 	return this_.respPool
 }
 
-func (this_ *Elem[CTX]) String() string {
+func (this_ *Elem[CTX, T]) String() string {
 	if this_.isRPC {
 		return fmt.Sprintf("[%s] func: %s", this_.desc, this_.funcType)
 	}
 	return fmt.Sprintf("[%s] rpc: %s", this_.desc, this_.funcType)
 }
 
-func (this_ *Elem[CTX]) Call(c CTX) *berror.ErrMsg {
+func (this_ *Elem[CTX, T]) Call(c CTX) *berror.ErrMsg {
 	hf := this_.call(0, c)
 	return hf(c)
 }
 
-func (this_ *Elem[CTX]) call(i int, c CTX) HandleFunc[CTX] {
+func (this_ *Elem[CTX, T]) call(i int, c CTX) HandleFunc[CTX, T] {
 	if i == len(this_.midS) {
 		return this_.h
 	}
@@ -77,17 +78,17 @@ func (this_ *Elem[CTX]) call(i int, c CTX) HandleFunc[CTX] {
 	return this_.midS[i](hf)
 }
 
-type Handler[CTX ctx.IContext] struct {
-	handle         map[protoreflect.FullName]*Elem[CTX]
+type Handler[CTX ctx.IContextPtr[T], T any] struct {
+	handle         map[protoreflect.FullName]*Elem[CTX, T]
 	subjMap        map[string]struct{}
-	baseMiddleware []MiddleWare[CTX]
+	baseMiddleware []MiddleWare[CTX, T]
 	broadcastSubj  map[string]struct{}
 }
 
 // NewHandler create Router Handler
-func NewHandler[T ctx.IContext](middlewares ...MiddleWare[T]) *Handler[T] {
-	h := &Handler[T]{
-		handle:        map[protoreflect.FullName]*Elem[T]{},
+func NewHandler[CTX ctx.IContextPtr[T], T any](middlewares ...MiddleWare[CTX, T]) *Handler[CTX, T] {
+	h := &Handler[CTX, T]{
+		handle:        map[protoreflect.FullName]*Elem[CTX, T]{},
 		subjMap:       map[string]struct{}{},
 		broadcastSubj: map[string]struct{}{},
 	}
@@ -96,8 +97,8 @@ func NewHandler[T ctx.IContext](middlewares ...MiddleWare[T]) *Handler[T] {
 }
 
 // Group create a new Handler with same base middlewares
-func (h *Handler[CTX]) Group(middlewares ...MiddleWare[CTX]) *Handler[CTX] {
-	newH := &Handler[CTX]{
+func (h *Handler[CTX, T]) Group(middlewares ...MiddleWare[CTX, T]) *Handler[CTX, T] {
+	newH := &Handler[CTX, T]{
 		handle:  h.handle,
 		subjMap: h.subjMap,
 	}
@@ -107,31 +108,31 @@ func (h *Handler[CTX]) Group(middlewares ...MiddleWare[CTX]) *Handler[CTX] {
 }
 
 // GetHandler get Elem by msgName or nil
-func (h *Handler[CTX]) GetHandler(msgName string) (*Elem[CTX], bool) {
+func (h *Handler[CTX, T]) GetHandler(msgName string) (*Elem[CTX, T], bool) {
 	e, ok := h.handle[protoreflect.FullName(msgName)]
 	return e, ok
 }
 
 // GetQueueSubjInfo get all queue subj topic prefix
-func (h *Handler[CTX]) GetQueueSubjInfo() map[string]struct{} {
+func (h *Handler[CTX, T]) GetQueueSubjInfo() map[string]struct{} {
 	return h.subjMap
 }
 
 // GetBroadcastSubjInfo get all broadcast subj topic prefix
-func (h *Handler[CTX]) GetBroadcastSubjInfo() map[string]struct{} {
+func (h *Handler[CTX, T]) GetBroadcastSubjInfo() map[string]struct{} {
 	return h.broadcastSubj
 }
 
 // RegisterRPC RESP is out parameter and Call in many goroutines,just one sub will receive the event
-func RegisterRPC[T ctx.IContext, REQ, RESP proto.Message](
-	h *Handler[T], desc string, f func(T, REQ) (RESP, *berror.ErrMsg), middlewares ...MiddleWare[T],
+func RegisterRPC[CTX ctx.IContextPtr[T], REQ define.ProtoMessagePtr[T1], RESP define.ProtoMessagePtr[T2], T any, T1 any, T2 any](
+	h *Handler[CTX, T], desc string, f func(CTX, REQ) (RESP, *berror.ErrMsg), middlewares ...MiddleWare[CTX, T],
 ) {
 	registerRPC(h, desc, f, false, false, middlewares...)
 }
 
 // RegisterRPCSingle RESP is out parameter and Call on eventloop,just one sub will receive the event
-func RegisterRPCSingle[T ctx.IContext, REQ, RESP proto.Message](
-	h *Handler[T], desc string, f func(T, REQ) (RESP, *berror.ErrMsg), middlewares ...MiddleWare[T],
+func RegisterRPCSingle[CTX ctx.IContextPtr[T], REQ define.ProtoMessagePtr[T1], RESP define.ProtoMessagePtr[T2], T any, T1 any, T2 any](
+	h *Handler[CTX, T], desc string, f func(CTX, REQ) (RESP, *berror.ErrMsg), middlewares ...MiddleWare[CTX, T],
 ) {
 	registerRPC(h, desc, f, false, true, middlewares...)
 }
@@ -139,15 +140,15 @@ func RegisterRPCSingle[T ctx.IContext, REQ, RESP proto.Message](
 // RegisterRPCForce f is force handle when Server is busy many goroutines
 // it is only used for very important businesses, such as recharge-related interfaces, adding gold coins to players, etc.
 // just one sub will receive the event
-func RegisterRPCForce[T ctx.IContext, REQ, RESP proto.Message](
-	h *Handler[T], desc string, f func(T, REQ) (RESP, *berror.ErrMsg), middlewares ...MiddleWare[T],
+func RegisterRPCForce[CTX ctx.IContextPtr[T], REQ define.ProtoMessagePtr[T1], RESP define.ProtoMessagePtr[T2], T any, T1 any, T2 any](
+	h *Handler[CTX, T], desc string, f func(CTX, REQ) (RESP, *berror.ErrMsg), middlewares ...MiddleWare[CTX, T],
 ) {
 	registerRPC(h, desc, f, true, false, middlewares...)
 }
 
 // RegisterRPCForceSingle f is force handle when Server is busy on eventloop，just one sub will receive the event
-func RegisterRPCForceSingle[T ctx.IContext, REQ, RESP proto.Message](
-	h *Handler[T], desc string, f func(T, REQ) (RESP, *berror.ErrMsg), middlewares ...MiddleWare[T],
+func RegisterRPCForceSingle[CTX ctx.IContextPtr[T], REQ define.ProtoMessagePtr[T1], RESP define.ProtoMessagePtr[T2], T any, T1 any, T2 any](
+	h *Handler[CTX, T], desc string, f func(CTX, REQ) (RESP, *berror.ErrMsg), middlewares ...MiddleWare[CTX, T],
 ) {
 	registerRPC(h, desc, f, true, true, middlewares...)
 }
@@ -156,8 +157,8 @@ func getSubjPrefix(msgName string) string {
 	return msgName[:strings.LastIndexByte(msgName, '.')+1]
 }
 
-func registerRPC[T ctx.IContext, REQ, RESP proto.Message](
-	h *Handler[T], desc string, f func(T, REQ) (RESP, *berror.ErrMsg), isForceHandle, isSingle bool, middlewares ...MiddleWare[T],
+func registerRPC[CTX ctx.IContextPtr[T], REQ define.ProtoMessagePtr[T1], RESP define.ProtoMessagePtr[T2], T any, T1 any, T2 any](
+	h *Handler[CTX, T], desc string, f func(CTX, REQ) (RESP, *berror.ErrMsg), isForceHandle, isSingle bool, middlewares ...MiddleWare[CTX, T],
 ) {
 	var req REQ
 	msgName := proto.MessageName(req)
@@ -171,11 +172,11 @@ func registerRPC[T ctx.IContext, REQ, RESP proto.Message](
 		h.subjMap[subj] = struct{}{}
 	}
 
-	midS := make([]MiddleWare[T], 0, len(h.baseMiddleware)+len(middlewares))
+	midS := make([]MiddleWare[CTX, T], 0, len(h.baseMiddleware)+len(middlewares))
 	midS = append(midS, h.baseMiddleware...)
 	midS = append(midS, middlewares...)
-	h.handle[msgName] = &Elem[T]{
-		h: func(c T) *berror.ErrMsg {
+	h.handle[msgName] = &Elem[CTX, T]{
+		h: func(c CTX) *berror.ErrMsg {
 			bc := c.MustBaseContext()
 			ret, err := f(c, bc.Req.(REQ))
 			if err != nil {
@@ -191,21 +192,21 @@ func registerRPC[T ctx.IContext, REQ, RESP proto.Message](
 		isForce:  isForceHandle,
 		isSingle: isSingle,
 		funcType: " [" + runtime.FuncForPC(reflect.ValueOf(f).Pointer()).Name() + "] " + reflect.TypeOf(f).String(),
-		reqPool:  objectpool.GetTypeElemPool[REQ](),
-		respPool: objectpool.GetTypeElemPool[RESP](),
+		reqPool:  objectpool.GetTypePool[T1](),
+		respPool: objectpool.GetTypePool[T2](),
 	}
 }
 
 // RegisterRPCResp RESP is in parameter and Call in many goroutines，just one sub will receive the event
-func RegisterRPCResp[T ctx.IContext, REQ, RESP proto.Message](
-	h *Handler[T], desc string, f func(T, REQ, RESP) *berror.ErrMsg, middlewares ...MiddleWare[T],
+func RegisterRPCResp[CTX ctx.IContextPtr[T], REQ define.ProtoMessagePtr[T1], RESP define.ProtoMessagePtr[T2], T any, T1 any, T2 any](
+	h *Handler[CTX, T], desc string, f func(CTX, REQ, RESP) *berror.ErrMsg, middlewares ...MiddleWare[CTX, T],
 ) {
 	registerRPCResp(h, desc, f, false, false, middlewares...)
 }
 
 // RegisterRPCRespSingle RESP is in parameter and Call in eventloop，just one sub will receive the event
-func RegisterRPCRespSingle[T ctx.IContext, REQ, RESP proto.Message](
-	h *Handler[T], desc string, f func(T, REQ, RESP) *berror.ErrMsg, middlewares ...MiddleWare[T],
+func RegisterRPCRespSingle[CTX ctx.IContextPtr[T], REQ define.ProtoMessagePtr[T1], RESP define.ProtoMessagePtr[T2], T any, T1 any, T2 any](
+	h *Handler[CTX, T], desc string, f func(CTX, REQ, RESP) *berror.ErrMsg, middlewares ...MiddleWare[CTX, T],
 ) {
 	registerRPCResp(h, desc, f, false, true, middlewares...)
 }
@@ -213,21 +214,21 @@ func RegisterRPCRespSingle[T ctx.IContext, REQ, RESP proto.Message](
 // RegisterRPCRespForce f is force handle when Server is busy many goroutines
 // It is only used for very important businesses, such as recharge-related interfaces, adding gold coins to players, etc.
 // just one sub will receive the event
-func RegisterRPCRespForce[T ctx.IContext, REQ, RESP proto.Message](
-	h *Handler[T], desc string, f func(T, REQ, RESP) *berror.ErrMsg, middlewares ...MiddleWare[T],
+func RegisterRPCRespForce[CTX ctx.IContextPtr[T], REQ define.ProtoMessagePtr[T1], RESP define.ProtoMessagePtr[T2], T any, T1 any, T2 any](
+	h *Handler[CTX, T], desc string, f func(CTX, REQ, RESP) *berror.ErrMsg, middlewares ...MiddleWare[CTX, T],
 ) {
 	registerRPCResp(h, desc, f, true, false, middlewares...)
 }
 
 // RegisterRPCRespForceSingle f is force handle when Server is busy on eventloop，just one sub will receive the event
-func RegisterRPCRespForceSingle[T ctx.IContext, REQ, RESP proto.Message](
-	h *Handler[T], desc string, f func(T, REQ, RESP) *berror.ErrMsg, middlewares ...MiddleWare[T],
+func RegisterRPCRespForceSingle[CTX ctx.IContextPtr[T], REQ define.ProtoMessagePtr[T1], RESP define.ProtoMessagePtr[T2], T any, T1 any, T2 any](
+	h *Handler[CTX, T], desc string, f func(CTX, REQ, RESP) *berror.ErrMsg, middlewares ...MiddleWare[CTX, T],
 ) {
 	registerRPCResp(h, desc, f, true, true, middlewares...)
 }
 
-func registerRPCResp[T ctx.IContext, REQ, RESP proto.Message](
-	h *Handler[T], desc string, f func(T, REQ, RESP) *berror.ErrMsg, isForceHandle, isSingle bool, middlewares ...MiddleWare[T],
+func registerRPCResp[CTX ctx.IContextPtr[T], REQ define.ProtoMessagePtr[T1], RESP define.ProtoMessagePtr[T2], T any, T1 any, T2 any](
+	h *Handler[CTX, T], desc string, f func(CTX, REQ, RESP) *berror.ErrMsg, isForceHandle, isSingle bool, middlewares ...MiddleWare[CTX, T],
 ) {
 	var req REQ
 	msgName := proto.MessageName(req)
@@ -241,12 +242,12 @@ func registerRPCResp[T ctx.IContext, REQ, RESP proto.Message](
 		h.subjMap[subj] = struct{}{}
 	}
 
-	midS := make([]MiddleWare[T], 0, len(h.baseMiddleware)+len(middlewares))
+	midS := make([]MiddleWare[CTX, T], 0, len(h.baseMiddleware)+len(middlewares))
 	midS = append(midS, h.baseMiddleware...)
 	midS = append(midS, middlewares...)
-	respPool := objectpool.GetTypeElemPool[RESP]()
-	h.handle[msgName] = &Elem[T]{
-		h: func(c T) *berror.ErrMsg {
+	respPool := objectpool.GetTypePool[T2]()
+	h.handle[msgName] = &Elem[CTX, T]{
+		h: func(c CTX) *berror.ErrMsg {
 			bc := c.MustBaseContext()
 			resp := respPool.Get().(RESP)
 			err := f(c, bc.Req.(REQ), resp)
@@ -263,21 +264,21 @@ func registerRPCResp[T ctx.IContext, REQ, RESP proto.Message](
 		isForce:  isForceHandle,
 		isSingle: isSingle,
 		funcType: " [" + runtime.FuncForPC(reflect.ValueOf(f).Pointer()).Name() + "] " + reflect.TypeOf(f).String(),
-		reqPool:  objectpool.GetTypeElemPool[REQ](),
+		reqPool:  objectpool.GetTypePool[T1](),
 		respPool: respPool,
 	}
 }
 
 // RegisterEvent Call in many goroutines, just one sub will receive the event
-func RegisterEvent[T ctx.IContext, REQ proto.Message](
-	h *Handler[T], desc string, f func(T, REQ) *berror.ErrMsg, middlewares ...MiddleWare[T],
+func RegisterEvent[CTX ctx.IContextPtr[T], REQ define.ProtoMessagePtr[T1], T any, T1 any](
+	h *Handler[CTX, T], desc string, f func(CTX, REQ) *berror.ErrMsg, middlewares ...MiddleWare[CTX, T],
 ) {
 	registerEvent(h, desc, f, false, false, false, middlewares...)
 }
 
 // RegisterEventSingle Call in eventloop, just one sub will receive the event
-func RegisterEventSingle[T ctx.IContext, REQ proto.Message](
-	h *Handler[T], desc string, f func(T, REQ) *berror.ErrMsg, middlewares ...MiddleWare[T],
+func RegisterEventSingle[CTX ctx.IContextPtr[T], REQ define.ProtoMessagePtr[T1], T any, T1 any](
+	h *Handler[CTX, T], desc string, f func(CTX, REQ) *berror.ErrMsg, middlewares ...MiddleWare[CTX, T],
 ) {
 	registerEvent(h, desc, f, false, true, false, middlewares...)
 }
@@ -285,22 +286,22 @@ func RegisterEventSingle[T ctx.IContext, REQ proto.Message](
 // RegisterEventForce f is force handle when Server is busy many goroutines
 // it is only used for very important businesses, such as recharge-related interfaces, adding gold coins to players, etc.
 // just one sub will receive the event
-func RegisterEventForce[T ctx.IContext, REQ proto.Message](
-	h *Handler[T], desc string, f func(T, REQ) *berror.ErrMsg, middlewares ...MiddleWare[T],
+func RegisterEventForce[CTX ctx.IContextPtr[T], REQ define.ProtoMessagePtr[T1], T any, T1 any](
+	h *Handler[CTX, T], desc string, f func(CTX, REQ) *berror.ErrMsg, middlewares ...MiddleWare[CTX, T],
 ) {
 	registerEvent(h, desc, f, true, false, false, middlewares...)
 }
 
 // RegisterEventForceSingle f is force handle when Server is busy on eventloop
 // just one sub will receive the event
-func RegisterEventForceSingle[T ctx.IContext, REQ proto.Message](
-	h *Handler[T], desc string, f func(T, REQ) *berror.ErrMsg, middlewares ...MiddleWare[T],
+func RegisterEventForceSingle[CTX ctx.IContextPtr[T], REQ define.ProtoMessagePtr[T1], T any, T1 any](
+	h *Handler[CTX, T], desc string, f func(CTX, REQ) *berror.ErrMsg, middlewares ...MiddleWare[CTX, T],
 ) {
 	registerEvent(h, desc, f, true, true, false, middlewares...)
 }
 
-func registerEvent[T ctx.IContext, REQ proto.Message](
-	h *Handler[T], desc string, f func(T, REQ) *berror.ErrMsg, isForceHandle, isSingle, isBroadcast bool, middlewares ...MiddleWare[T],
+func registerEvent[CTX ctx.IContextPtr[T], REQ define.ProtoMessagePtr[T1], T any, T1 any](
+	h *Handler[CTX, T], desc string, f func(CTX, REQ) *berror.ErrMsg, isForceHandle, isSingle, isBroadcast bool, middlewares ...MiddleWare[CTX, T],
 ) {
 	var req REQ
 	msgName := proto.MessageName(req)
@@ -321,11 +322,11 @@ func registerEvent[T ctx.IContext, REQ proto.Message](
 		}
 	}
 
-	midS := make([]MiddleWare[T], 0, len(h.baseMiddleware)+len(middlewares))
+	midS := make([]MiddleWare[CTX, T], 0, len(h.baseMiddleware)+len(middlewares))
 	midS = append(midS, h.baseMiddleware...)
 	midS = append(midS, middlewares...)
-	h.handle[msgName] = &Elem[T]{
-		h: func(c T) *berror.ErrMsg {
+	h.handle[msgName] = &Elem[CTX, T]{
+		h: func(c CTX) *berror.ErrMsg {
 			bc := c.MustBaseContext()
 			return f(c, bc.Req.(REQ))
 		},
@@ -336,20 +337,20 @@ func registerEvent[T ctx.IContext, REQ proto.Message](
 		isForce:  isForceHandle,
 		isSingle: isSingle,
 		funcType: " [" + runtime.FuncForPC(reflect.ValueOf(f).Pointer()).Name() + "] " + reflect.TypeOf(f).String(),
-		reqPool:  objectpool.GetTypeElemPool[REQ](),
+		reqPool:  objectpool.GetTypePool[T1](),
 	}
 }
 
 // RegisterEventBroadcast Call in many goroutines,and all subscribers will receive
-func RegisterEventBroadcast[T ctx.IContext, REQ proto.Message](
-	h *Handler[T], desc string, f func(T, REQ) *berror.ErrMsg, middlewares ...MiddleWare[T],
+func RegisterEventBroadcast[CTX ctx.IContextPtr[T], REQ define.ProtoMessagePtr[T1], T any, T1 any](
+	h *Handler[CTX, T], desc string, f func(CTX, REQ) *berror.ErrMsg, middlewares ...MiddleWare[CTX, T],
 ) {
 	registerEvent(h, desc, f, false, false, true, middlewares...)
 }
 
 // RegisterEventSingleBroadcast Call in eventloop ,and all subscribers will receive
-func RegisterEventSingleBroadcast[T ctx.IContext, REQ proto.Message](
-	h *Handler[T], desc string, f func(T, REQ) *berror.ErrMsg, middlewares ...MiddleWare[T],
+func RegisterEventSingleBroadcast[CTX ctx.IContextPtr[T], REQ define.ProtoMessagePtr[T1], T any, T1 any](
+	h *Handler[CTX, T], desc string, f func(CTX, REQ) *berror.ErrMsg, middlewares ...MiddleWare[CTX, T],
 ) {
 	registerEvent(h, desc, f, false, true, true, middlewares...)
 }
@@ -357,16 +358,16 @@ func RegisterEventSingleBroadcast[T ctx.IContext, REQ proto.Message](
 // RegisterEventForceBroadcast f is force handle when Server is busy many goroutines
 // it is only used for very important businesses, such as recharge-related interfaces, adding gold coins to players, etc.
 // all subscribers will receive
-func RegisterEventForceBroadcast[T ctx.IContext, REQ proto.Message](
-	h *Handler[T], desc string, f func(T, REQ) *berror.ErrMsg, middlewares ...MiddleWare[T],
+func RegisterEventForceBroadcast[CTX ctx.IContextPtr[T], REQ define.ProtoMessagePtr[T1], T any, T1 any](
+	h *Handler[CTX, T], desc string, f func(CTX, REQ) *berror.ErrMsg, middlewares ...MiddleWare[CTX, T],
 ) {
 	registerEvent(h, desc, f, true, false, true, middlewares...)
 }
 
 // RegisterEventForceSingleBroadcast f is force handle when Server is busy on eventloop
 // all subscribers will receive
-func RegisterEventForceSingleBroadcast[T ctx.IContext, REQ proto.Message](
-	h *Handler[T], desc string, f func(T, REQ) *berror.ErrMsg, middlewares ...MiddleWare[T],
+func RegisterEventForceSingleBroadcast[CTX ctx.IContextPtr[T], REQ define.ProtoMessagePtr[T1], T any, T1 any](
+	h *Handler[CTX, T], desc string, f func(CTX, REQ) *berror.ErrMsg, middlewares ...MiddleWare[CTX, T],
 ) {
 	registerEvent(h, desc, f, true, true, true, middlewares...)
 }
