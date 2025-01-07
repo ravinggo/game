@@ -4,11 +4,13 @@ import (
 	"runtime"
 	"sync"
 	"sync/atomic"
+	"time"
+
+	"github.com/petermattis/goid"
 
 	"github.com/ravinggo/game/common/logger"
 	"github.com/ravinggo/game/common/safego"
-
-	"github.com/petermattis/goid"
+	"github.com/ravinggo/game/common/timer"
 )
 
 type DoubleBuffQueue struct {
@@ -105,6 +107,39 @@ func (this_ *DoubleBuffQueue) Stop() {
 	atomic.StoreInt32(&this_.stopped, 1)
 	this_.mu.Broadcast()
 	<-this_.over
+}
+func (this_ *DoubleBuffQueue) AfterFunc(duration time.Duration, f func()) {
+	timer.AfterFunc(
+		duration, func() {
+			this_.PostEventQueue(f)
+		},
+	)
+}
+
+func (this_ *DoubleBuffQueue) UntilFunc(t time.Time, f func()) {
+	timer.UntilFunc(
+		t, func() {
+			this_.PostEventQueue(f)
+		},
+	)
+}
+
+func (this_ *DoubleBuffQueue) Ticker(interval time.Duration, f func() bool) {
+	if atomic.LoadInt32(&this_.stopped) != 0 {
+		return
+	}
+	timer.AfterFunc(
+		interval, func() {
+			this_.PostEventQueue(
+				func() {
+					ok := f()
+					if ok {
+						this_.Ticker(interval, f)
+					}
+				},
+			)
+		},
+	)
 }
 
 func (this_ *DoubleBuffQueue) Stopped() bool {
