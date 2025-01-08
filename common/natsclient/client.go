@@ -16,6 +16,7 @@ import (
 	"github.com/ravinggo/game/common/berror"
 	"github.com/ravinggo/game/common/cmap"
 	"github.com/ravinggo/game/common/ctx"
+	"github.com/ravinggo/game/common/define"
 	"github.com/ravinggo/game/common/logger"
 	"github.com/ravinggo/game/common/objectpool"
 	"github.com/ravinggo/game/common/safego"
@@ -266,24 +267,36 @@ func (this_ *NatsClient) Request(c ctx.IContext, msg proto.Message, out proto.Me
 	return this_.RequestToServer(c, 0, msg, out)
 }
 
-type Request[T any] struct {
-	Ret T
+type Request[T, T1 any, REQ define.ProtoMessagePtr[T], RESP define.ProtoMessagePtr[T1]] struct {
+	Req  T
+	Resp T1
 }
 
-func (r *Request[T]) Request(nc *NatsClient, c ctx.IContext, msg proto.Message) *berror.ErrMsg {
-	var a any = &r.Ret
-	err := nc.Request(c, msg, a.(proto.Message))
+func (r *Request[T, T1, REQ, RESP]) Reset() {
+	var req REQ = &r.Req
+	var resp RESP = &r.Resp
+	proto.Reset(req)
+	proto.Reset(resp)
+}
+
+func (r *Request[T, T1, REQ, RESP]) Request(nc *NatsClient, c ctx.IContext) *berror.ErrMsg {
+	var req REQ = &r.Req
+	var resp RESP = &r.Resp
+	err := nc.Request(c, req, resp)
 	return err
 }
 
-func (r *Request[T]) RequestToServer(nc *NatsClient, c ctx.IContext, toServerId int64, msg proto.Message) *berror.ErrMsg {
-	var a any = &r.Ret
-	err := nc.RequestToServer(c, toServerId, msg, a.(proto.Message))
+func (r *Request[T, T1, REQ, RESP]) RequestToServer(nc *NatsClient, c ctx.IContext, toServerId int64) *berror.ErrMsg {
+	var req REQ = &r.Req
+	var resp RESP = &r.Resp
+	err := nc.RequestToServer(c, toServerId, req, resp)
 	return err
 }
 
-func (this_ *NatsClient) RequestToServer(c ctx.IContext, toServerId int64, msg proto.Message, out proto.Message) *berror.ErrMsg {
-	msgName := string(proto.MessageName(msg))
+// RequestToServer send rpc to specified server instance of toServerId
+// req,resp : Will definitely escape to the heap because proto.MessageName and proto.Marshal and proto.Unmarshal
+func (this_ *NatsClient) RequestToServer(c ctx.IContext, toServerId int64, req proto.Message, resp proto.Message) *berror.ErrMsg {
+	msgName := string(proto.MessageName(req))
 	msgNameSize := 21 + len(msgName)
 	traceSize := 0
 	var err error
@@ -298,7 +311,7 @@ func (this_ *NatsClient) RequestToServer(c ctx.IContext, toServerId int64, msg p
 			traceSize = traceCtx.TraceMarshalSize()
 		}
 	}
-	size := 2 + proto.Size(msg) + traceSize
+	size := 2 + proto.Size(req) + traceSize
 	if toServerId > 0 {
 		size += msgNameSize
 	}
@@ -328,7 +341,7 @@ func (this_ *NatsClient) RequestToServer(c ctx.IContext, toServerId int64, msg p
 	} else {
 		data = append(data, 0, 0)
 	}
-	data, err = proto.MarshalOptions{}.MarshalAppend(data, msg)
+	data, err = proto.MarshalOptions{}.MarshalAppend(data, req)
 	if err != nil {
 		return berror.NewProtocolErr(err)
 	}
@@ -337,7 +350,7 @@ func (this_ *NatsClient) RequestToServer(c ctx.IContext, toServerId int64, msg p
 	if err != nil {
 		return berror.NewProtocolErr(err)
 	}
-	return NatsUnmarshalResponseWithout(natsMsg.Data, out)
+	return NatsUnmarshalResponseWithout(natsMsg.Data, resp)
 }
 
 func natsUnmarshalResponse(data []byte) (string, []byte, *berror.ErrMsg) {
@@ -552,7 +565,7 @@ func (u *IntUserSubject) CreatePublishSize() int {
 }
 
 func (u *IntUserSubject) CreatePublish(bytes *objectpool.Bytes) {
-	bytes.Clear()
+	bytes.Reset()
 	bytes.WriteString(u.ServerType)
 	bytes.WriteBytes('/')
 	bytes.WriteInt(u.ServerId)
@@ -589,7 +602,7 @@ func (u *StringUserSubject) CreatePublishSize() int {
 }
 
 func (u *StringUserSubject) CreatePublish(bytes *objectpool.Bytes) {
-	bytes.Clear()
+	bytes.Reset()
 	bytes.WriteString(u.ServerType)
 	bytes.WriteBytes('/')
 	bytes.WriteInt(u.ServerId)

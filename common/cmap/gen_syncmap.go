@@ -21,7 +21,7 @@ func (m *Map[K, V]) Store(key K, value V) {
 	m.m.Store(key, value)
 }
 
-func (m *Map[K, V]) Clear() {
+func (m *Map[K, V]) Reset() {
 	m.m.Clear()
 }
 

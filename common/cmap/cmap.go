@@ -208,7 +208,7 @@ func (m ConcurrentMap[K, V]) IterBuffered() []Tuple[K, V] {
 }
 
 // Clear removes all items from map.
-func (m ConcurrentMap[K, V]) Clear() {
+func (m ConcurrentMap[K, V]) Reset() {
 	for i := 0; i < SHARD_COUNT; i++ {
 		shard := m.shards[i]
 		shard.RLock()

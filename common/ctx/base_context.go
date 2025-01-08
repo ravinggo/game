@@ -9,6 +9,7 @@ import (
 	"google.golang.org/protobuf/proto"
 
 	"github.com/ravinggo/game/common/basepb"
+	"github.com/ravinggo/game/common/define"
 	"github.com/ravinggo/game/common/logger"
 	"github.com/ravinggo/game/common/objectpool"
 	"github.com/ravinggo/game/common/utils"
@@ -16,10 +17,6 @@ import (
 
 type RoleIdType interface {
 	int64 | string
-}
-
-type Clear interface {
-	Clear()
 }
 
 type ToHash interface {
@@ -51,8 +48,7 @@ type IContextPtr[T any] interface {
 
 type IContext interface {
 	context.Context
-	Release()
-	Clear
+	define.Clear
 	ToHash
 	// MustBaseContext implementations of IContext must contain BaseContext
 	MustBaseContext() *BaseContext
@@ -74,11 +70,6 @@ func (c *BaseContext) MustBaseContext() *BaseContext {
 
 func (c *BaseContext) ToHash() uint64 {
 	return 0
-}
-
-func (c *BaseContext) reset() {
-	c.Context = context.TODO()
-	logger.Log.With()
 }
 
 func (c *BaseContext) Deadline() (deadline time.Time, ok bool) {
@@ -116,14 +107,10 @@ func (c *BaseContext) SetValue(key any, value any) {
 	c.Context = context.WithValue(c.Context, key, value)
 }
 
-func (c *BaseContext) Clear() {
+func (c *BaseContext) Reset() {
 	c.Context = context.Background()
 	clear(c.Resp)
 	c.Resp = c.Resp[:0]
-}
-
-func (c *BaseContext) Release() {
-	objectpool.Put(c)
 }
 
 var _ IContext = (*BaseContext)(nil)
@@ -161,19 +148,12 @@ func NewMarkCtx[TraceData any]() *TraceCtx[TraceData] {
 	return c
 }
 
-func (c *TraceCtx[TraceData]) Release() {
-	c.Clear()
-	c.TD = *new(TraceData)
-	objectpool.Put[TraceCtx[TraceData]](c)
-}
-
-func (c *TraceCtx[TraceData]) Clear() {
-	c.BaseContext.Clear()
-	var mark any = c.TD
-	if m, ok := mark.(Clear); ok {
-		m.Clear()
+func (c *TraceCtx[TraceData]) Reset() {
+	c.BaseContext.Reset()
+	var mark any = &c.TD
+	if m, ok := mark.(define.Clear); ok {
+		m.Reset()
 	}
-	c.reset()
 }
 
 type IntTrace struct {
@@ -227,6 +207,10 @@ func (i *StringTrace) ToHash() uint64 {
 	}
 
 	return 0
+}
+
+func (i *StringTrace) Reset() {
+	i.StringTrace.Reset()
 }
 
 func (i *StringTrace) TraceMarshalSize() int {

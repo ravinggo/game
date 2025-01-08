@@ -1,7 +1,6 @@
 package objectpool
 
 import (
-	"fmt"
 	"reflect"
 	"sync"
 	"testing"
@@ -22,28 +21,8 @@ type Struct2 struct {
 	b string
 }
 
-type Ptr[T any | *any] interface {
-}
-
-func Get1[T any]() *T {
-	var a interface{} = (*T)(nil)
-	c := reflect.TypeOf(a)
-	fmt.Println(c.String())
-	typPtr1 := **(**uintptr)(unsafe.Pointer(&c))
-	typPtr := *(*uintptr)(unsafe.Pointer(&a))
-	fmt.Println(typPtr1, typPtr)
-
-	var t1 T
-	to := reflect.TypeOf(t1)
-	fmt.Println(to.String())
-	typPtr3 := **(**uintptr)(unsafe.Pointer(&to))
-	fmt.Println(typPtr3)
-	return new(T)
-}
-
 func TestGet(t *testing.T) {
 	GetPtr[*Struct1]()
-	Get1[Struct1]()
 
 	s1 := Get[Struct1]()
 	Put(s1)
@@ -95,6 +74,40 @@ func TestGet(t *testing.T) {
 	m = GetMap[int, int]()
 	if len(m) != 0 {
 		t.Errorf("GetMap[int, int]() len is not %d", 0)
+	}
+	m1 := GetMap[string, string]()
+	m1["1"] = "1"
+	PutMap(m)
+	m1 = GetMap[string, string]()
+	if len(m) != 0 {
+		t.Errorf("GetMap[string, string]() len is not %d", 0)
+	}
+	ptrCheck := map[uintptr]struct{}{}
+	addSet(ptrCheck, GetMapPtr[int, int](), GetMapPtr[string, int]())
+	addSet(ptrCheck, GetMapPtr[string, string](), GetMapPtr[int, string](), GetMapPtr[int, Struct1]())
+	addSet(ptrCheck, GetMapPtr[Struct1, string](), GetMapPtr[string, Struct1](), GetMapPtr[Struct1, Struct1]())
+	addSet(ptrCheck, GetPtr[int](), GetPtr[string](), GetPtr[Struct1](), GetMapPtr[Struct1, *Struct1]())
+	addSet(ptrCheck, GetPtr[Struct](), GetPtr[*Struct](), GetPtr[*Struct1](), GetPtr[Slice[int]]())
+	addSet(ptrCheck, GetPtr[Slice[int64]](), GetPtr[int64](), GetPtr[*int64](), GetPtr[Slice[byte]]())
+	addSet(ptrCheck, GetPtr[Slice[*int64]](), GetPtr[uint64](), GetPtr[*uint64](), GetPtr[Slice[rune]]())
+
+	out := GetSlice[*Struct1](1)
+	to := reflect.TypeOf(out.Data)
+	if to.Kind() != reflect.Slice {
+		t.Errorf("GetSlice[*Struct1](1) is not slice")
+	}
+	if to.Elem().Kind() != reflect.Ptr {
+		t.Errorf("GetSlice[*Struct1](1).Data Type is not ptr")
+	}
+
+}
+
+func addSet(m map[uintptr]struct{}, keys ...uintptr) {
+	for _, key := range keys {
+		if _, ok := m[key]; ok {
+			panic("key already exist")
+		}
+		m[key] = struct{}{}
 	}
 }
 

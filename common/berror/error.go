@@ -55,7 +55,7 @@ func (this_ *ErrMsg) Error() string {
 	return b.String()
 }
 
-func (this_ *ErrMsg) Clear() {
+func (this_ *ErrMsg) Reset() {
 	this_.ErrCode = 0
 	this_.ErrMsg = ""
 	this_.ErrInternalInfo = ""

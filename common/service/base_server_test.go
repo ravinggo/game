@@ -25,7 +25,7 @@ type TestService struct {
 func NewTestService() *TestService {
 	t := &TestService{
 		svc: NewBaseService[*ctx.Int64TraceCtx](
-			[]string{"nats://127.0.0.1:4224"},
+			[]string{"nats://192.168.0.166:4222"},
 			false,
 			0, 0, time.Second*10,
 		),
@@ -35,7 +35,8 @@ func NewTestService() *TestService {
 }
 
 func (t *TestService) Router() {
-	handler.RegisterRPCRespSingle(t.svc.GetHandler(), "测试", t.Trace)
+	handler.RegisterRPCResp(t.svc.GetHandler(), "测试", t.Trace)
+	handler.RegisterRPCResp(t.svc.GetHandler(), "测试1", t.TraceString)
 }
 
 func (t *TestService) Start() {
@@ -55,36 +56,44 @@ func (t *TestService) Trace(c *ctx.Int64TraceCtx, req *basepb.IntTrace, resp *ba
 	return nil
 }
 
+func (t *TestService) TraceString(c *ctx.Int64TraceCtx, req *basepb.StringTrace, resp *basepb.StringTrace) *berror.ErrMsg {
+	resp.RoleId = req.RoleId
+	return nil
+}
+
 func (t *TestService) ReqTrace() {
-	resp := &basepb.IntTrace{}
 	c := objectpool.Get[ctx.Int64TraceCtx]()
 	defer objectpool.Put[ctx.Int64TraceCtx](c)
-	c.TD.TraceId = "xxx"
-	c.TD.RoleId = 20
-	err := t.svc.GetNatsCluster().RequestToServer(
-		c, baseenv.GetConfig().ServerId, &basepb.IntTrace{
-			RoleId:         1,
-			FromServerId:   2,
-			FromServerType: "3",
-			TraceId:        "4",
-		}, resp,
+	rpc := natsclient.NewClusterRequest[basepb.IntTrace, basepb.IntTrace]()
+	rpc.Req.RoleId = 2
+	rpc.Req.FromServerId = 2
+	rpc.Req.FromServerType = "3"
+	rpc.Req.TraceId = "4"
+	defer objectpool.Put(rpc)
+	// rpc := natsclient.ClusterRequest[basepb.IntTrace, *basepb.IntTrace]{}
+	err := rpc.RequestToServer(
+		t.svc.GetNatsCluster(), c, baseenv.GetConfig().ServerId,
 	)
 	if err != nil {
 		logger.Log.Panic().Err(err)
 	}
 
-	req := natsclient.ClusterRequest[basepb.IntTrace]{}
-	err = req.RequestToServer(
-		t.svc.GetNatsCluster(), c, baseenv.GetConfig().ServerId, &basepb.IntTrace{
-			RoleId:         2,
-			FromServerId:   2,
-			FromServerType: "3",
-			TraceId:        "4",
-		},
+	c = objectpool.Get[ctx.Int64TraceCtx]()
+	defer objectpool.Put[ctx.Int64TraceCtx](c)
+	rpc1 := natsclient.NewClusterRequest[basepb.StringTrace, basepb.StringTrace]()
+	rpc1.Req.RoleId = "x"
+	rpc1.Req.FromServerId = 2
+	rpc1.Req.FromServerType = "3"
+	rpc1.Req.TraceId = "4"
+	defer objectpool.Put(rpc1)
+	// rpc := natsclient.ClusterRequest[basepb.IntTrace, *basepb.IntTrace]{}
+	err = rpc.RequestToServer(
+		t.svc.GetNatsCluster(), c, baseenv.GetConfig().ServerId,
 	)
 	if err != nil {
 		logger.Log.Panic().Err(err)
 	}
+
 	atomic.AddInt64(&count, 2)
 }
 
@@ -96,7 +105,7 @@ func TestBaseService(t *testing.T) {
 	}()
 	svc := NewTestService()
 	svc.Start()
-	for i := 0; i < 2000; i++ {
+	for i := 0; i < 4000; i++ {
 		go func() {
 			for {
 				svc.ReqTrace()

@@ -9,6 +9,8 @@ import (
 
 	"github.com/ravinggo/game/common/berror"
 	"github.com/ravinggo/game/common/ctx"
+	"github.com/ravinggo/game/common/define"
+	"github.com/ravinggo/game/common/objectpool"
 )
 
 type ClusterClient struct {
@@ -106,19 +108,33 @@ func (this_ *ClusterClient) Request(c ctx.IContext, msg proto.Message, out proto
 	return this_.getClient(c).Request(c, msg, out)
 }
 
-type ClusterRequest[T any] struct {
-	Ret T
+type ClusterRequest[T, T1 any, REQ define.ProtoMessagePtr[T], RESP define.ProtoMessagePtr[T1]] struct {
+	Req  T
+	Resp T1
 }
 
-func (r *ClusterRequest[T]) Request(cnc *ClusterClient, c ctx.IContext, msg proto.Message) *berror.ErrMsg {
-	var a any = &r.Ret
-	err := cnc.Request(c, msg, a.(proto.Message))
+func NewClusterRequest[T, T1 any, REQ define.ProtoMessagePtr[T], RESP define.ProtoMessagePtr[T1]]() *ClusterRequest[T, T1, REQ, RESP] {
+	return objectpool.Get[ClusterRequest[T, T1, REQ, RESP]]()
+}
+
+func (r *ClusterRequest[T, T1, REQ, RESP]) Reset() {
+	var req REQ = &r.Req
+	var resp RESP = &r.Resp
+	proto.Reset(req)
+	proto.Reset(resp)
+}
+
+func (r *ClusterRequest[T, T1, REQ, RESP]) Request(cnc *ClusterClient, c ctx.IContext) *berror.ErrMsg {
+	var req REQ = &r.Req
+	var resp RESP = &r.Resp
+	err := cnc.Request(c, req, resp)
 	return err
 }
 
-func (r *ClusterRequest[T]) RequestToServer(nc *ClusterClient, c ctx.IContext, toServerId int64, msg proto.Message) *berror.ErrMsg {
-	var a any = &r.Ret
-	err := nc.RequestToServer(c, toServerId, msg, a.(proto.Message))
+func (r *ClusterRequest[T, T1, REQ, RESP]) RequestToServer(cnc *ClusterClient, c ctx.IContext, toServerId int64) *berror.ErrMsg {
+	var req REQ = &r.Req
+	var resp RESP = &r.Resp
+	err := cnc.RequestToServer(c, toServerId, req, resp)
 	return err
 }
 

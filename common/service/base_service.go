@@ -163,7 +163,7 @@ func (s *BaseService[CTX, T]) handleCtx(c CTX, e *handler.Elem[CTX, T]) {
 		proto.Reset(baseCtx.Resp[last])
 		e.RespPool().Put(baseCtx.Resp[last])
 	}
-	c.Release()
+	objectpool.Put[T](c)
 }
 
 func (s *BaseService[CTX, T]) call(c CTX, e *handler.Elem[CTX, T]) {
@@ -311,7 +311,6 @@ func (s *BaseService[CTX, T]) dealNatsMsg(msg *nats.Msg) {
 				} else {
 					if !s.taskGroupHash[hash&s.taskPoolMark].Put(ce[CTX, T]{Data: c, Elem: elem}, nil) {
 						ReplyTaskPoolFull(baseCtx)
-						ic.Release()
 						objectpool.Put[T](c)
 						logger.Log.Warn().Err(err).Msg("task group full")
 					}
@@ -338,7 +337,6 @@ func (s *BaseService[CTX, T]) dealNatsMsg(msg *nats.Msg) {
 			} else {
 				if !tg.Put(ce[CTX, T]{Data: c, Elem: elem}, nil) {
 					ReplyTaskPoolFull(baseCtx)
-					ic.Release()
 					objectpool.Put[T](c)
 					logger.Log.Warn().Err(err).Msg("task group full")
 				}
@@ -359,7 +357,6 @@ func (s *BaseService[CTX, T]) dealNatsMsg(msg *nats.Msg) {
 					},
 				) {
 					ReplyTaskPoolFull(baseCtx)
-					ic.Release()
 					objectpool.Put[T](c)
 					logger.Log.Warn().Err(err).Msg("task group full")
 				}

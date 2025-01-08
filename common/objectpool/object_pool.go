@@ -8,6 +8,7 @@ import (
 	"sync"
 	"unsafe"
 
+	"github.com/ravinggo/game/common/define"
 	"github.com/ravinggo/game/common/utils"
 )
 
@@ -45,6 +46,19 @@ type Type struct {
 	PtrToThis   int32
 }
 
+type MapType struct {
+	Type
+	Key    *Type
+	Elem   *Type
+	Bucket *Type // internal type representing a hash bucket
+	// function for hashing keys (ptr to key, seed) -> hash
+	Hasher     func(unsafe.Pointer, uintptr) uintptr
+	KeySize    uint8  // size of key slot
+	ValueSize  uint8  // size of elem slot
+	BucketSize uint16 // size of bucket
+	Flags      uint32
+}
+
 // PtrType copy from abi.PtrType
 type PtrType struct {
 	Type
@@ -57,6 +71,12 @@ func GetPtr[T any]() uintptr {
 	if t.Kind_&KindMask == uint8(reflect.Pointer) {
 		t = (*PtrType)(unsafe.Pointer(t)).Elem
 	}
+	return (uintptr)(unsafe.Pointer(t))
+}
+
+func GetMapPtr[K comparable, V any]() uintptr {
+	var a any = (map[K]V)(nil)
+	t := *(**Type)(unsafe.Pointer(&a))
 	return (uintptr)(unsafe.Pointer(t))
 }
 
@@ -106,6 +126,38 @@ func get[T any](o *objectPool, p uintptr) *sync.Pool {
 	return pu.singlePool
 }
 
+func getMap[K comparable, V any](o *objectPool, p uintptr) *sync.Pool {
+	index := (p >> 6) & maxIndex
+
+	ss := o.m[index]
+	for _, s := range ss {
+		if s.uintptr == p {
+			return s.singlePool
+		}
+	}
+
+	// lock for index conflict,
+	o.ml[index].Lock()
+	for _, s := range o.m[index] {
+		if s.uintptr == p {
+			o.ml[index].Unlock()
+			return s.singlePool
+		}
+	}
+	pu := &poolUintptr{
+		uintptr: p,
+		singlePool: &sync.Pool{
+			New: func() any {
+
+				return map[K]V{}
+			},
+		},
+	}
+	o.m[index] = append(o.m[index], pu)
+	o.ml[index].Unlock()
+	return pu.singlePool
+}
+
 func (o *objectPool) getSlice(p uintptr) *slicePool {
 	index := (p >> 6) & maxIndex
 
@@ -140,6 +192,10 @@ func Get[T any]() *T {
 
 // Put put a object to object pool with T
 func Put[T any](t *T) {
+	var a any = t
+	if c, ok := a.(define.Clear); ok {
+		c.Reset()
+	}
 	get[T](&op, GetPtr[T]()).Put(t)
 }
 
@@ -244,15 +300,17 @@ func PutSliceClear[T any](t *Slice[T]) {
 	putSlicePool(s, t)
 }
 
+type Map[K comparable, V any] map[K]V
+
 // GetMap  get a map from object pool with K and V
 func GetMap[K comparable, V any]() map[K]V {
-	return get[map[K]V](&op, GetPtr[map[K]V]()).Get().(map[K]V)
+	return getMap[K, V](&op, GetMapPtr[K, V]()).Get().(map[K]V)
 }
 
 // PutMap put a map to object pool with K and V
 func PutMap[K comparable, V any](t map[K]V) {
 	clear(t)
-	get[map[K]V](&op, GetPtr[map[K]V]()).Put(t)
+	getMap[K, V](&op, GetMapPtr[K, V]()).Put(t)
 }
 
 type Bytes Slice[byte]
@@ -303,7 +361,7 @@ func (b *Bytes) Bytes() []byte {
 	return b.Data
 }
 
-func (b *Bytes) Clear() {
+func (b *Bytes) Reset() {
 	b.Data = b.Data[:0]
 }
 
