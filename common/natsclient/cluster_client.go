@@ -172,7 +172,7 @@ func (this_ *ClusterClient) SubscribeOneUser(
 		panic("nats client is empty")
 	}
 
-	client := this_.natsClients[us.RoleIdInt()%int64(nsl)]
+	client := this_.natsClients[us.ToHash()%int64(nsl)]
 	client.SubscribeUser(us, queue)
 }
 
@@ -194,7 +194,7 @@ func (this_ *ClusterClient) UnsubscribeOneUser(us UserSubject) {
 		panic("nats client is empty")
 	}
 
-	client := this_.natsClients[us.RoleIdInt()%int64(nsl)]
+	client := this_.natsClients[us.ToHash()%int64(nsl)]
 	client.UnsubscribeUser(us)
 }
 
@@ -214,7 +214,7 @@ func (this_ *ClusterClient) PublishUser(c ctx.IContext, us UserSubject, msg prot
 		panic("nats client is empty")
 	}
 
-	client := this_.natsClients[us.RoleIdInt()%int64(nsl)]
+	client := this_.natsClients[us.ToHash()%int64(nsl)]
 	return client.PublishUser(c, us, msg)
 }
 
@@ -224,7 +224,7 @@ func (this_ *ClusterClient) RequestUser(c ctx.IContext, us UserSubject, msg prot
 		panic("nats client is empty")
 	}
 
-	client := this_.natsClients[us.RoleIdInt()%int64(nsl)]
+	client := this_.natsClients[us.ToHash()%int64(nsl)]
 	return client.RequestUser(c, us, msg, out)
 }
 

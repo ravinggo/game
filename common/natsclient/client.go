@@ -549,7 +549,7 @@ func (this_ *NatsClient) RequestRaw(c ctx.IContext, toServerId int64, reqMsgName
 }
 
 type UserSubject interface {
-	RoleIdInt() int64
+	ToHash() int64
 	CreateSubj() string
 	CreatePublishSize() int
 	CreatePublish(bytes *objectpool.Bytes)
@@ -572,7 +572,7 @@ func (u *IntUserSubject) CreateSubj() string {
 	b.WriteString(".>")
 	return b.String()
 }
-func (u *IntUserSubject) RoleIdInt() int64 {
+func (u *IntUserSubject) ToHash() int64 {
 	return u.RoleId
 }
 
@@ -609,7 +609,7 @@ func (u *StringUserSubject) CreateSubj() string {
 	return b.String()
 }
 
-func (u *StringUserSubject) RoleIdInt() int64 {
+func (u *StringUserSubject) ToHash() int64 {
 	return int64(crc32.ChecksumIEEE(utils.StringToBytes(u.RoleId)))
 }
 
