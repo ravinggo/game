@@ -181,7 +181,7 @@ func (this_ *NatsClient) PublishToServer(c ctx.IContext, toServerId int64, msg p
 
 	data := b.Data
 	if toServerId > 0 {
-		data = b.Data[msgNameSize:]
+		data = b.Data[msgNameSize : cap(b.Data)-msgNameSize][:0]
 		index := strings.LastIndexByte(msgName, '.')
 		b.Data = append(b.Data, msgName[:index]...) // index != -1
 		b.Data = append(b.Data, '.')

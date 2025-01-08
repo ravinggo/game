@@ -90,6 +90,28 @@ func (this_ *ClusterClient) getClientToServerId(c ctx.IContext, toServerId int64
 	return this_.natsClients[rand.IntN(nsl)]
 }
 
+type ClusterPublish[T any, PUB define.ProtoMessagePtr[T]] struct {
+	Pub T
+}
+
+func NewClusterPublish[T any, PUB define.ProtoMessagePtr[T]]() *ClusterPublish[T, PUB] {
+	return objectpool.Get[ClusterPublish[T, PUB]]()
+}
+
+func (r *ClusterPublish[T, PUB]) Reset() {
+	proto.Reset((PUB)(&r.Pub))
+}
+
+func (r *ClusterPublish[T, PUB]) Publish(cnc *ClusterClient, c ctx.IContext) *berror.ErrMsg {
+	err := cnc.Publish(c, (PUB)(&r.Pub))
+	return err
+}
+
+func (r *ClusterPublish[T, PUB]) PublishToServer(cnc *ClusterClient, c ctx.IContext, toServerId int64) *berror.ErrMsg {
+	err := cnc.PublishToServer(c, toServerId, (PUB)(&r.Pub))
+	return err
+}
+
 func (this_ *ClusterClient) Publish(c ctx.IContext, msg proto.Message) *berror.ErrMsg {
 	return this_.getClient(c).Publish(c, msg)
 }
@@ -118,23 +140,17 @@ func NewClusterRequest[T, T1 any, REQ define.ProtoMessagePtr[T], RESP define.Pro
 }
 
 func (r *ClusterRequest[T, T1, REQ, RESP]) Reset() {
-	var req REQ = &r.Req
-	var resp RESP = &r.Resp
-	proto.Reset(req)
-	proto.Reset(resp)
+	proto.Reset((REQ)(&r.Req))
+	proto.Reset((RESP)(&r.Resp))
 }
 
 func (r *ClusterRequest[T, T1, REQ, RESP]) Request(cnc *ClusterClient, c ctx.IContext) *berror.ErrMsg {
-	var req REQ = &r.Req
-	var resp RESP = &r.Resp
-	err := cnc.Request(c, req, resp)
+	err := cnc.Request(c, (REQ)(&r.Req), (RESP)(&r.Resp))
 	return err
 }
 
 func (r *ClusterRequest[T, T1, REQ, RESP]) RequestToServer(cnc *ClusterClient, c ctx.IContext, toServerId int64) *berror.ErrMsg {
-	var req REQ = &r.Req
-	var resp RESP = &r.Resp
-	err := cnc.RequestToServer(c, toServerId, req, resp)
+	err := cnc.RequestToServer(c, toServerId, (REQ)(&r.Req), (RESP)(&r.Resp))
 	return err
 }
 
