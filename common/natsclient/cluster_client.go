@@ -112,22 +112,22 @@ func (r *ClusterPublish[T, PUB]) PublishToServer(cnc *ClusterClient, c ctx.ICont
 	return err
 }
 
-func (this_ *ClusterClient) Publish(c ctx.IContext, msg proto.Message) *berror.ErrMsg {
-	return this_.getClient(c).Publish(c, msg)
+func (this_ *ClusterClient) Publish(c ctx.IContext, pubMsg proto.Message) *berror.ErrMsg {
+	return this_.getClient(c).Publish(c, pubMsg)
 }
 
-func (this_ *ClusterClient) PublishToServer(c ctx.IContext, toServerId int64, msg proto.Message) *berror.ErrMsg {
+func (this_ *ClusterClient) PublishToServer(c ctx.IContext, toServerId int64, pubMsg proto.Message) *berror.ErrMsg {
 	nc := this_.getClientToServerId(c, toServerId)
-	return nc.PublishToServer(c, toServerId, msg)
+	return nc.PublishToServer(c, toServerId, pubMsg)
 }
 
-func (this_ *ClusterClient) PublishRawData(c ctx.IContext, toServerId int64, msgName string, msgData []byte) *berror.ErrMsg {
+func (this_ *ClusterClient) PublishRawData(c ctx.IContext, toServerId int64, pubMsgName string, pubMsgData []byte) *berror.ErrMsg {
 	nc := this_.getClientToServerId(c, toServerId)
-	return nc.PublishRawData(c, toServerId, msgName, msgData)
+	return nc.PublishRawData(c, toServerId, pubMsgName, pubMsgData)
 }
 
-func (this_ *ClusterClient) Request(c ctx.IContext, msg proto.Message, out proto.Message) *berror.ErrMsg {
-	return this_.getClient(c).Request(c, msg, out)
+func (this_ *ClusterClient) Request(c ctx.IContext, reqMsg proto.Message, respMsg proto.Message) *berror.ErrMsg {
+	return this_.getClient(c).Request(c, reqMsg, respMsg)
 }
 
 type ClusterRequest[T, T1 any, REQ define.ProtoMessagePtr[T], RESP define.ProtoMessagePtr[T1]] struct {
@@ -154,14 +154,14 @@ func (r *ClusterRequest[T, T1, REQ, RESP]) RequestToServer(cnc *ClusterClient, c
 	return err
 }
 
-func (this_ *ClusterClient) RequestToServer(c ctx.IContext, toServerId int64, msg proto.Message, out proto.Message) *berror.ErrMsg {
+func (this_ *ClusterClient) RequestToServer(c ctx.IContext, toServerId int64, reqMsg proto.Message, respMsg proto.Message) *berror.ErrMsg {
 	nc := this_.getClientToServerId(c, toServerId)
-	return nc.RequestToServer(c, toServerId, msg, out)
+	return nc.RequestToServer(c, toServerId, reqMsg, respMsg)
 }
 
-func (this_ *ClusterClient) RequestRaw(c ctx.IContext, toServerId int64, msgName string, msgData []byte) ([]byte, *berror.ErrMsg) {
+func (this_ *ClusterClient) RequestRaw(c ctx.IContext, toServerId int64, reqMsgName string, reqMsgData []byte) ([]byte, *berror.ErrMsg) {
 	nc := this_.getClientToServerId(c, toServerId)
-	return nc.RequestRaw(c, toServerId, msgName, msgData)
+	return nc.RequestRaw(c, toServerId, reqMsgName, reqMsgData)
 }
 
 func (this_ *ClusterClient) SubscribeOneUser(
