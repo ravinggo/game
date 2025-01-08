@@ -39,6 +39,11 @@ type NatsClient struct {
 	timeout  time.Duration
 }
 
+// NewNatsClient one nats cluster client
+// encapsulates the calling design of the entire framework
+// param name Usually the server name ( baseenv.Config.ServerType )
+// param urls a nats cluster urls
+// param timeout for request
 func NewNatsClient(name string, urls string, timeout time.Duration) *NatsClient {
 	if timeout <= 0 {
 		timeout = time.Second * 10
@@ -78,7 +83,7 @@ func NewNatsClient(name string, urls string, timeout time.Duration) *NatsClient 
 	return nc
 }
 
-// Close 关闭nats
+// Close just Drain all subscriptions
 func (this_ *NatsClient) Close() {
 	this_.subs.IterCb(
 		func(key string, v *nats.Subscription) bool {
@@ -101,7 +106,7 @@ func (this_ *NatsClient) Close() {
 	)
 }
 
-// Shutdown 关闭NATS
+// Shutdown flush all subscriptions and close connection
 func (this_ *NatsClient) Shutdown() {
 	if atomic.CompareAndSwapInt32(&this_.closed, 0, 1) {
 		_ = this_.conn.FlushTimeout(time.Second * 3)
@@ -109,75 +114,109 @@ func (this_ *NatsClient) Shutdown() {
 	}
 }
 
-// Subscribe 订阅主题
+// Subscribe topic
 func (this_ *NatsClient) Subscribe(subj string, h nats.MsgHandler) {
-	if _, ok := this_.subs.Get(subj); ok {
+	if _, ok := this_.subs.GetOrCreate(
+		subj, func() *nats.Subscription {
+			sub, err := this_.conn.Subscribe(subj, h)
+			if err != nil {
+				logger.Log.Panic().Err(err).Str("subj", subj).Msg("Subscribe error")
+			}
+			return sub
+		},
+	); ok {
 		logger.Log.Panic().Str("subj", subj).Msg("subj had Subscribed")
+	} else {
+		logger.Log.Info().Str("urls", this_.urls).Str("subj", subj).Msg("Subscribe")
 	}
-	logger.Log.Info().Str("urls", this_.urls).Str("subj", subj).Msg("Subscribe")
-	sub, err := this_.conn.Subscribe(subj, h)
-	if err != nil {
-		logger.Log.Panic().Err(err).Str("subj", subj).Msg("Subscribe error")
-	}
-	this_.subs.Set(subj, sub)
 }
 
-// QueueSubscribe 订阅Topic for queue
+// QueueSubscribe queue subscribe
 func (this_ *NatsClient) QueueSubscribe(subj string, h nats.MsgHandler) {
-	if _, ok := this_.subs.Get(subj); ok {
-		logger.Log.Panic().Str("subj", subj).Msg("subj had Subscribed")
+	if _, ok := this_.subs.GetOrCreate(
+		subj, func() *nats.Subscription {
+			group := strings.ReplaceAll(subj, ">", "group")
+			sub, err := this_.conn.QueueSubscribe(subj, group, h)
+			if err != nil {
+				logger.Log.Panic().Err(err).Str("subj", subj).Msg("Subscribe error")
+			}
+			return sub
+		},
+	); ok {
+		logger.Log.Error().Str("subj", subj).Msg("subj had Subscribed")
+		return
+	} else {
+		logger.Log.Info().Str("urls", this_.urls).Str("subj", subj).Msg("SubscribeHandler")
 	}
-	group := strings.ReplaceAll(subj, ">", "group")
-	logger.Log.Info().Str("urls", this_.urls).Str("subj", subj).Str("group", group).Msg("SubscribeHandler")
-
-	cb := this_.f
-	if h != nil {
-		cb = h
-	}
-	sub, err := this_.conn.QueueSubscribe(subj, group, cb)
-	if err != nil {
-		logger.Log.Panic().Err(err).Str("subj", subj).Msg("Subscribe error")
-	}
-	this_.subs.Set(subj, sub)
 }
 
-// Unsubscribe 解除订阅
+// Unsubscribe topic
 func (this_ *NatsClient) Unsubscribe(subj string) {
-	if s, ok := this_.subs.Get(subj); ok {
+	if s, ok := this_.subs.GetAndRemove(subj); ok {
 		logger.Log.Info().Str("subj", subj).Msg("Unsubscribe")
 		_ = s.Unsubscribe()
-		this_.subs.Remove(subj)
 	}
 }
 
+// ClientPublish Generic Implementation : publish for topic
+// designed to use objectpool, because Pub will always escape to heap
+// for more information, see NatsClient.Publish and NatsClient.PublishToServer
+// create use NewClientPublish
 type ClientPublish[T any, PUB define.ProtoMessagePtr[T]] struct {
-	Pub T
+	Pub    T
+	used   uint32
+	forNew uint32
+	define.DoNotCopy
 }
 
+// NewClientPublish create a ClientPublish from objectpool
 func NewClientPublish[T any, PUB define.ProtoMessagePtr[T]]() *ClientPublish[T, PUB] {
-	return objectpool.Get[ClientPublish[T, PUB]]()
+	c := objectpool.Get[ClientPublish[T, PUB]]()
+	c.forNew = 1
+	return c
 }
 
+// Reset implement define.Clear
 func (r *ClientPublish[T, PUB]) Reset() {
-	proto.Reset((PUB)(&r.Pub))
+	*r = ClientPublish[T, PUB]{}
 }
 
+// Publish msg to serverId is 0 or a cluster server node
+// more information, see NatsClient.Publish and NatsClient.PublishToServer
 func (r *ClientPublish[T, PUB]) Publish(nc *NatsClient, c ctx.IContext) *berror.ErrMsg {
-	err := nc.Publish(c, (PUB)(&r.Pub))
-	return err
-}
-
-func (r *ClientPublish[T, PUB]) PublishToServer(nc *NatsClient, c ctx.IContext, toServerId int64) *berror.ErrMsg {
-	err := nc.PublishToServer(c, toServerId, (PUB)(&r.Pub))
-	return err
-}
-
-// Publish  msg to any one instance of the server
-func (this_ *NatsClient) Publish(c ctx.IContext, msg proto.Message) *berror.ErrMsg {
-	return this_.PublishToServer(c, 0, msg)
+	if r.forNew != 1 {
+		panic("ClientPublish is not created by NewClientPublish")
+	}
+	if atomic.LoadInt32(&nc.closed) != 0 {
+		defer objectpool.Put(r)
+		return nc.Publish(c, (PUB)(&r.Pub))
+	}
+	panic("ClientPublish used")
 }
 
 // PublishToServer publish msg to specified server instance of toServerId
+// more information, see NatsClient.Publish and NatsClient.PublishToServer
+func (r *ClientPublish[T, PUB]) PublishToServer(nc *NatsClient, c ctx.IContext, toServerId int64) *berror.ErrMsg {
+	if r.forNew != 1 {
+		panic("ClientPublish is not created by NewClientPublish")
+	}
+	if atomic.LoadInt32(&nc.closed) != 0 {
+		defer objectpool.Put(r)
+		return nc.PublishToServer(c, toServerId, (PUB)(&r.Pub))
+	}
+	panic("ClientPublish used")
+}
+
+// Publish msg to serverId is 0 or a cluster server node
+// param pubMsg escapes to heap
+// recommended use ClientPublish.Publish
+func (this_ *NatsClient) Publish(c ctx.IContext, pubMsg proto.Message) *berror.ErrMsg {
+	return this_.PublishToServer(c, 0, pubMsg)
+}
+
+// PublishToServer publish msg to specified server instance of toServerId
+// if toServerId == 0, PublishToServer == Publish
+// // recommended use ClientPublish.PublishToServer
 func (this_ *NatsClient) PublishToServer(c ctx.IContext, toServerId int64, pubMsg proto.Message) *berror.ErrMsg {
 	msgName := string(proto.MessageName(pubMsg))
 	msgNameSize := 21 + len(msgName)
@@ -233,6 +272,10 @@ func (this_ *NatsClient) PublishToServer(c ctx.IContext, toServerId int64, pubMs
 	return berror.NewProtocolErr(err)
 }
 
+// PublishRawData publish raw data to specified server instance of toServerId
+// msgName is proto message name
+// msgData is proto message data
+// if toServerId == 0, PublishToServer == Publish
 func (this_ *NatsClient) PublishRawData(c ctx.IContext, toServerId int64, msgName string, msgData []byte) *berror.ErrMsg {
 	msgNameSize := 21 + len(msgName)
 	traceSize := 0
@@ -285,34 +328,67 @@ func (this_ *NatsClient) PublishRawData(c ctx.IContext, toServerId int64, msgNam
 	return berror.NewProtocolErr(err)
 }
 
+// Request call rpc with serverId is 0 or a cluster server node
+// respMsg is response message
+// param reqMsg,respMsg escapes to heap
+// recommended use ClientRequest.Request
 func (this_ *NatsClient) Request(c ctx.IContext, reqMsg proto.Message, respMsg proto.Message) *berror.ErrMsg {
 	return this_.RequestToServer(c, 0, reqMsg, respMsg)
 }
 
-type Request[T, T1 any, REQ define.ProtoMessagePtr[T], RESP define.ProtoMessagePtr[T1]] struct {
-	Req  T
-	Resp T1
+// ClientRequest Generic Implementation : rpc for topic
+// designed to use objectpool, because Req, Resp will always escape to heap
+// for more information, see NatsClient.Request
+// create use NewClientRequest
+type ClientRequest[T, T1 any, REQ define.ProtoMessagePtr[T], RESP define.ProtoMessagePtr[T1]] struct {
+	Req    T
+	Resp   T1
+	used   uint32
+	forNew uint32
+	define.DoNotCopy
 }
 
-func (r *Request[T, T1, REQ, RESP]) Reset() {
-	proto.Reset((REQ)(&r.Req))
-	proto.Reset((RESP)(&r.Resp))
+// NewClientRequest create ClientRequest for objectpool
+func NewClientRequest[T, T1 any, REQ define.ProtoMessagePtr[T], RESP define.ProtoMessagePtr[T1]]() *ClientRequest[T, T1, REQ, RESP] {
+	c := objectpool.Get[ClientRequest[T, T1, REQ, RESP]]()
+	c.forNew = 1
+	return c
 }
 
-func (r *Request[T, T1, REQ, RESP]) Request(nc *NatsClient, c ctx.IContext) *berror.ErrMsg {
-	err := nc.Request(c, (REQ)(&r.Req), (RESP)(&r.Resp))
-	return err
+// Reset implement define.Clear
+func (r *ClientRequest[T, T1, REQ, RESP]) Reset() {
+	*r = ClientRequest[T, T1, REQ, RESP]{}
 }
 
-func (r *Request[T, T1, REQ, RESP]) RequestToServer(nc *NatsClient, c ctx.IContext, toServerId int64) *berror.ErrMsg {
-	err := nc.RequestToServer(c, toServerId, (REQ)(&r.Req), (RESP)(&r.Resp))
-	return err
+// Request more info see NatsClient.Request
+func (r *ClientRequest[T, T1, REQ, RESP]) Request(nc *NatsClient, c ctx.IContext) *berror.ErrMsg {
+	if r.forNew != 1 {
+		panic("create ClientRequest please use NewClientRequest")
+	}
+	if atomic.CompareAndSwapUint32(&r.used, 0, 1) {
+		defer objectpool.Put(r)
+		return nc.Request(c, (REQ)(&r.Req), (RESP)(&r.Resp))
+	}
+	panic("ClientRequest used")
+}
+
+// RequestToServer more info see NatsClient.RequestToServer
+func (r *ClientRequest[T, T1, REQ, RESP]) RequestToServer(nc *NatsClient, c ctx.IContext, toServerId int64) *berror.ErrMsg {
+	if r.forNew != 1 {
+		panic("create ClientRequest please use NewClientRequest")
+	}
+	if atomic.CompareAndSwapUint32(&r.used, 0, 1) {
+		defer objectpool.Put(r)
+		return nc.RequestToServer(c, toServerId, (REQ)(&r.Req), (RESP)(&r.Resp))
+	}
+	panic("ClientRequest used")
 }
 
 // RequestToServer send rpc to specified server instance of toServerId
+// if toServerId == 0, RequestToServer == Request
 // req,resp : Will definitely escape to the heap because proto.MessageName and proto.Marshal and proto.Unmarshal
-func (this_ *NatsClient) RequestToServer(c ctx.IContext, toServerId int64, req proto.Message, resp proto.Message) *berror.ErrMsg {
-	msgName := string(proto.MessageName(req))
+func (this_ *NatsClient) RequestToServer(c ctx.IContext, toServerId int64, reqMsg proto.Message, respMsg proto.Message) *berror.ErrMsg {
+	msgName := string(proto.MessageName(reqMsg))
 	msgNameSize := 21 + len(msgName)
 	traceSize := 0
 	var err error
@@ -327,7 +403,7 @@ func (this_ *NatsClient) RequestToServer(c ctx.IContext, toServerId int64, req p
 			traceSize = traceCtx.TraceMarshalSize()
 		}
 	}
-	size := 2 + proto.Size(req) + traceSize
+	size := 2 + proto.Size(reqMsg) + traceSize
 	if toServerId > 0 {
 		size += msgNameSize
 	}
@@ -357,7 +433,7 @@ func (this_ *NatsClient) RequestToServer(c ctx.IContext, toServerId int64, req p
 	} else {
 		data = append(data, 0, 0)
 	}
-	data, err = proto.MarshalOptions{}.MarshalAppend(data, req)
+	data, err = proto.MarshalOptions{}.MarshalAppend(data, reqMsg)
 	if err != nil {
 		return berror.NewProtocolErr(err)
 	}
@@ -366,7 +442,7 @@ func (this_ *NatsClient) RequestToServer(c ctx.IContext, toServerId int64, req p
 	if err != nil {
 		return berror.NewProtocolErr(err)
 	}
-	return NatsUnmarshalResponseWithout(natsMsg.Data, resp)
+	return NatsUnmarshalResponseWithout(natsMsg.Data, respMsg)
 }
 
 func natsUnmarshalResponse(data []byte) (string, []byte, *berror.ErrMsg) {
@@ -386,6 +462,7 @@ func natsUnmarshalResponse(data []byte) (string, []byte, *berror.ErrMsg) {
 	return msgName, data[dataIndex:], nil
 }
 
+// NatsUnmarshalResponseWithout Unmarshal response data from nats.Msg.Data
 func NatsUnmarshalResponseWithout(d []byte, respMsg proto.Message) *berror.ErrMsg {
 	msgName, data, err := natsUnmarshalResponse(d)
 	if err != nil {
@@ -410,6 +487,7 @@ func NatsUnmarshalResponseWithout(d []byte, respMsg proto.Message) *berror.ErrMs
 	return nil
 }
 
+// NatsMsgReplyError Reply to nats.Msg for an *berror.ErrMsg
 func NatsMsgReplyError(reply *nats.Msg, err *berror.ErrMsg) *berror.ErrMsg {
 	if err == nil {
 		return nil
@@ -417,6 +495,7 @@ func NatsMsgReplyError(reply *nats.Msg, err *berror.ErrMsg) *berror.ErrMsg {
 	return natsMsgReplyOne(reply, (*basepb.ErrorMessage)(err))
 }
 
+// NatsMsgReply Reply to nats.Msg for respMsgS
 func NatsMsgReply(reply *nats.Msg, respMsgS ...proto.Message) *berror.ErrMsg {
 	if len(respMsgS) == 0 {
 		return nil
@@ -494,6 +573,11 @@ func natsMarshalAppendResponse(b *objectpool.Bytes, respMsg proto.Message) *berr
 	return nil
 }
 
+// RequestRaw send rpc to server
+// if toServerId == 0, Receiver serverId is 0 or a cluster server node
+// param reqMsgName is proto message name.
+// param reqMsgData is proto message data.
+// return nats.Msg.Data and berror.ErrMsg.
 func (this_ *NatsClient) RequestRaw(c ctx.IContext, toServerId int64, reqMsgName string, reqMsgData []byte) ([]byte, *berror.ErrMsg) {
 	msgNameSize := 21 + len(reqMsgName)
 	traceSize := 0
@@ -549,10 +633,23 @@ func (this_ *NatsClient) RequestRaw(c ctx.IContext, toServerId int64, reqMsgName
 }
 
 type UserSubject interface {
+	// ToHash for switch one NatsClient
 	ToHash() int64
-	CreateSubj() string
-	CreatePublishSize() int
-	CreatePublish(bytes *objectpool.Bytes)
+
+	// CreateSubj create subj for NatsClient.SubscribeUser
+	// param b from objectpool.GetBytes
+	CreateSubj(*objectpool.Bytes)
+
+	// CreateSubjForCallSize calculate size of CreateSubjForCall
+	CreateSubjForCallSize() int
+
+	// CreateSubjForCall create subj for NatsClient.PublishUser and NatsClient.RequestUser
+	CreateSubjForCall(*objectpool.Bytes)
+}
+
+type UserSubjectPtr[T any] interface {
+	UserSubject
+	*T
 }
 
 type IntUserSubject struct {
@@ -562,15 +659,13 @@ type IntUserSubject struct {
 	MsgName    string
 }
 
-func (u *IntUserSubject) CreateSubj() string {
-	b := utils.NewStringBuilder(256)
+func (u *IntUserSubject) CreateSubj(b *objectpool.Bytes) {
 	b.WriteString(u.ServerType)
-	b.WriteByte('/')
+	b.WriteBytes('/')
 	b.WriteInt(u.ServerId)
-	b.WriteByte('/')
+	b.WriteBytes('/')
 	b.WriteInt(u.RoleId)
 	b.WriteString(".>")
-	return b.String()
 }
 func (u *IntUserSubject) ToHash() int64 {
 	return u.RoleId
@@ -580,7 +675,7 @@ func (u *IntUserSubject) CreatePublishSize() int {
 	return len(u.ServerType) + utils.CountIntByte(u.ServerId) + utils.CountIntByte(u.RoleId) + len(u.MsgName) + 3
 }
 
-func (u *IntUserSubject) CreatePublish(bytes *objectpool.Bytes) {
+func (u *IntUserSubject) CreateSubjForCall(bytes *objectpool.Bytes) {
 	bytes.Reset()
 	bytes.WriteString(u.ServerType)
 	bytes.WriteBytes('/')
@@ -598,15 +693,13 @@ type StringUserSubject struct {
 	MsgName    string
 }
 
-func (u *StringUserSubject) CreateSubj() string {
-	b := utils.NewStringBuilder(256)
+func (u *StringUserSubject) CreateSubj(b *objectpool.Bytes) {
 	b.WriteString(u.ServerType)
-	b.WriteByte('/')
+	b.WriteBytes('/')
 	b.WriteInt(u.ServerId)
-	b.WriteByte('/')
+	b.WriteBytes('/')
 	b.WriteString(u.RoleId)
 	b.WriteString(".>")
-	return b.String()
 }
 
 func (u *StringUserSubject) ToHash() int64 {
@@ -628,24 +721,116 @@ func (u *StringUserSubject) CreatePublish(bytes *objectpool.Bytes) {
 	bytes.WriteString(u.MsgName)
 }
 
+// ClientSubscribeUser Generic Implementation : subscribe user topic
+// param us not escapes to heap
+func ClientSubscribeUser[US UserSubjectPtr[T], T any](nc *NatsClient, us US, handler nats.MsgHandler) {
+	b := objectpool.GetBytes(0)
+	defer objectpool.PutBytes(b)
+	us.CreateSubj(b)
+	subj := b.String()
+	if _, ok := nc.subs.Get(subj); ok {
+		return
+	}
+	logger.Log.Info().Str("subj", subj).Msg("ClientQueueSubscribeUser")
+	sub, err := nc.conn.Subscribe(subj, handler)
+	if err != nil {
+		logger.Log.Error().Err(err).Str("subj", subj).Msg("ClientQueueSubscribeUser")
+	}
+	nc.subs.Set(subj, sub)
+}
+
+// ClientQueueSubscribeUser Generic Implementation : queue subscribe user topic
+// param us not escapes to heap
+func ClientQueueSubscribeUser[US UserSubjectPtr[T], T any](nc *NatsClient, us US, handler nats.MsgHandler) {
+	b := objectpool.GetBytes(0)
+	defer objectpool.PutBytes(b)
+	us.CreateSubj(b)
+	subj := b.String()
+	if _, ok := nc.subs.Get(subj); ok {
+		return
+	}
+	logger.Log.Info().Str("subj", subj).Msg("ClientQueueSubscribeUser")
+	sub, err := nc.conn.QueueSubscribe(subj, subj[:len(subj)-2], handler)
+	if err != nil {
+		logger.Log.Error().Err(err).Str("subj", subj).Msg("ClientQueueSubscribeUser")
+	}
+	nc.subs.Set(subj, sub)
+}
+
+// ClientUnsubscribeUser Generic Implementation : unsubscribe user topic
+// param us not escapes to heap
+func ClientUnsubscribeUser[US UserSubjectPtr[T], T any](nc *NatsClient, us US) {
+	b := objectpool.GetBytes(0)
+	defer objectpool.PutBytes(b)
+	us.CreateSubj(b)
+	subj := b.String()
+	if v, ok := nc.subs.GetAndRemove(subj); ok {
+		safego.Go(
+			func() {
+				if v.IsValid() {
+					err := v.Drain()
+					if err != nil {
+						logger.Log.Error().Err(err).Str("subj", subj).Msg("Client[Un]subscribeUser Drain error")
+					}
+				}
+				for i := 0; i < 10; i++ {
+					if !v.IsValid() {
+						break
+					}
+				}
+			},
+		)
+		logger.Log.Info().Str("subj", subj).Msg("Client[Un]subscribeUser")
+	}
+}
+
 // SubscribeUser Subscribe user topic
-func (this_ *NatsClient) SubscribeUser(us UserSubject, queue chan *nats.Msg) {
-	subj := us.CreateSubj()
+// param us escapes to heap
+// recommended use ClientSubscribeUser
+func (this_ *NatsClient) SubscribeUser(us UserSubject, handler nats.MsgHandler) {
+	b := objectpool.GetBytes(0)
+	defer objectpool.PutBytes(b)
+	us.CreateSubj(b)
+	subj := b.String()
+	if _, ok := this_.subs.Get(subj); ok {
+		return
+	}
+	logger.Log.Info().Str("subj", subj).Msg("SubscribeUser")
+	sub, err := this_.conn.Subscribe(subj, handler)
+	if err != nil {
+		logger.Log.Error().Err(err).Str("subj", subj).Msg("SubscribeUser")
+	}
+	this_.subs.Set(subj, sub)
+}
+
+// QueueSubscribeUser QueueSubscribe user topic
+// param us escapes to heap
+// recommended use ClientQueueSubscribeUser
+func (this_ *NatsClient) QueueSubscribeUser(us UserSubject, handler nats.MsgHandler) {
+	b := objectpool.GetBytes(0)
+	defer objectpool.PutBytes(b)
+	us.CreateSubj(b)
+	subj := b.String()
 	if _, ok := this_.subs.Get(subj); ok {
 		return
 	}
 	logger.Log.Info().Str("subj", subj).Msg("QueueSubscribeUser")
-	sub, err := this_.conn.ChanSubscribe(subj, queue)
+	sub, err := this_.conn.QueueSubscribe(subj, subj[:len(subj)-2], handler)
 	if err != nil {
 		logger.Log.Error().Err(err).Str("subj", subj).Msg("QueueSubscribeUser")
 	}
 	this_.subs.Set(subj, sub)
 }
 
+// UnsubscribeUser Unsubscribe user topic
+// param us escapes to heap
+// recommended use ClientUnsubscribeUser
 func (this_ *NatsClient) UnsubscribeUser(us UserSubject) {
-	subj := us.CreateSubj()
-	if v, ok := this_.subs.Get(subj); ok {
-		this_.subs.Remove(subj)
+	b := objectpool.GetBytes(0)
+	defer objectpool.PutBytes(b)
+	us.CreateSubj(b)
+	subj := b.String()
+	if v, ok := this_.subs.GetAndRemove(subj); ok {
 		safego.Go(
 			func() {
 				if v.IsValid() {
@@ -665,6 +850,9 @@ func (this_ *NatsClient) UnsubscribeUser(us UserSubject) {
 	}
 }
 
+// PublishUser Generic Implementation : publish user topic
+// param us,pubMsg escapes to heap
+// recommended use ClientPublishUser
 func (this_ *NatsClient) PublishUser(c ctx.IContext, us UserSubject, pubMsg proto.Message) *berror.ErrMsg {
 	traceSize := 0
 	var err error
@@ -682,17 +870,19 @@ func (this_ *NatsClient) PublishUser(c ctx.IContext, us UserSubject, pubMsg prot
 	if traceSize > math.MaxUint16 {
 		return berror.NewProtocolStr("trace data too long,max size is 65535")
 	}
-	size := us.CreatePublishSize()
+	size := us.CreateSubjForCallSize()
 	msgSize := proto.Size(pubMsg)
 	b := objectpool.GetBytes(size + 2 + traceSize + msgSize)
 	defer objectpool.PutBytes(b)
-	us.CreatePublish(b)
+	us.CreateSubjForCall(b)
 	if traceSize > 0 {
 		b.Data = append(b.Data, byte(traceSize), byte(traceSize>>8))
 		b.Data, err = traceCtx.TraceMarshalAppend(b.Data)
 		if err != nil {
 			return berror.NewProtocolErr(err)
 		}
+	} else {
+		b.Data = append(b.Data, 0, 0)
 	}
 	_, err = proto.MarshalOptions{}.MarshalAppend(b.Data, pubMsg)
 	if err != nil {
@@ -703,6 +893,9 @@ func (this_ *NatsClient) PublishUser(c ctx.IContext, us UserSubject, pubMsg prot
 	return berror.NewProtocolErr(err)
 }
 
+// RequestUser user topic rpc
+// us,reqMsg,out escapes to heap
+// recommended use ClientRequestUser
 func (this_ *NatsClient) RequestUser(c ctx.IContext, us UserSubject, reqMsg proto.Message, out proto.Message) *berror.ErrMsg {
 	traceSize := 0
 	var err error
@@ -721,11 +914,11 @@ func (this_ *NatsClient) RequestUser(c ctx.IContext, us UserSubject, reqMsg prot
 		return berror.NewProtocolStr("trace data too long,max size is 65535")
 	}
 
-	size := us.CreatePublishSize()
+	size := us.CreateSubjForCallSize()
 	msgSize := proto.Size(reqMsg)
 	b := objectpool.GetBytes(size + 2 + traceSize + msgSize)
 	defer objectpool.PutBytes(b)
-	us.CreatePublish(b)
+	us.CreateSubjForCall(b)
 	if traceSize > 0 {
 		b.Data = append(b.Data, byte(traceSize), byte(traceSize>>8))
 		b.Data, err = traceCtx.TraceMarshalAppend(b.Data)
@@ -747,13 +940,76 @@ func (this_ *NatsClient) RequestUser(c ctx.IContext, us UserSubject, reqMsg prot
 	return NatsUnmarshalResponseWithout(outMsg.Data, out)
 }
 
-type RequestUser[T any] struct {
-	Ret T
-	US  UserSubject
+// ClientPublishUser Generic Implementation : publish user topic
+// designed to use objectpool, because Pub,Us will always escape to heap
+// for more information, see NatsClient.PublishUser
+// create use NewClientPublishUser
+type ClientPublishUser[T, T1 any, US UserSubjectPtr[T], PUB define.ProtoMessagePtr[T1]] struct {
+	Pub    T1
+	Us     T
+	used   uint32
+	forNew uint32
+	define.DoNotCopy
 }
 
-func (r *RequestUser[T]) Request(nc *NatsClient, c ctx.IContext, reqMsg proto.Message) *berror.ErrMsg {
-	var a any = &r.Ret
-	err := nc.RequestUser(c, r.US, reqMsg, a.(proto.Message))
-	return err
+// Reset implement define.Clear
+func (r *ClientPublishUser[T, T1, US, PUB]) Reset() {
+	*r = ClientPublishUser[T, T1, US, PUB]{}
+}
+
+// NewClientPublishUser create ClientPublishUser for objectpool
+func NewClientPublishUser[T, T1 any, US UserSubjectPtr[T], PUB define.ProtoMessagePtr[T1]]() *ClientPublishUser[T, T1, US, PUB] {
+	c := objectpool.Get[ClientPublishUser[T, T1, US, PUB]]()
+	c.forNew = 1
+	return c
+}
+
+// Publish more info see NatsClient.PublishUser
+func (r *ClientPublishUser[T, T1, US, PUB]) Publish(nc *NatsClient, c ctx.IContext) *berror.ErrMsg {
+	if r.forNew != 1 {
+		panic("create ClientPublishUser please use NewClientPublishUser")
+	}
+	if atomic.CompareAndSwapUint32(&r.used, 0, 1) {
+		defer objectpool.Put(r)
+		return nc.PublishUser(c, (US)(&r.Us), (PUB)(&r.Pub))
+	}
+	panic("ClientPublishUser used")
+}
+
+// ClientRequestUser Generic Implementation : rpc user topic
+// designed to use objectpool, because Pub,Us will always escape to heap
+// for more information, see NatsClient.RequestUser
+// create use NewClientRequestUser
+type ClientRequestUser[T, T1, T2 any, US UserSubjectPtr[T], REQ define.ProtoMessagePtr[T1], RESP define.ProtoMessagePtr[T2]] struct {
+	Req    T1
+	Resp   T2
+	Us     T
+	used   uint32
+	forNew uint32
+	define.DoNotCopy
+}
+
+// Reset implement define.Clear
+func (r *ClientRequestUser[T, T1, T2, US, REQ, RESP]) Reset() {
+	*r = ClientRequestUser[T, T1, T2, US, REQ, RESP]{}
+}
+
+// NewClientRequestUser create ClientRequestUser for objectpool
+func NewClientRequestUser[T, T1, T2 any, US UserSubjectPtr[T], REQ define.ProtoMessagePtr[T1], RESP define.ProtoMessagePtr[T2]](
+) *ClientRequestUser[T, T1, T2, US, REQ, RESP] {
+	c := objectpool.Get[ClientRequestUser[T, T1, T2, US, REQ, RESP]]()
+	c.forNew = 1
+	return c
+}
+
+// Request more info see NatsClient.Request
+func (r *ClientRequestUser[T, T1, T2, US, REQ, RESP]) Request(nc *NatsClient, c ctx.IContext) *berror.ErrMsg {
+	if r.forNew != 1 {
+		panic("create ClientRequestUser please use NewClientRequestUser")
+	}
+	if atomic.CompareAndSwapUint32(&r.used, 0, 1) {
+		defer objectpool.Put(r)
+		return nc.RequestUser(c, (US)(&r.Us), (REQ)(&r.Req), (RESP)(&r.Resp))
+	}
+	panic("ClientRequestUser used")
 }

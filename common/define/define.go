@@ -1,6 +1,8 @@
 package define
 
 import (
+	"sync"
+
 	"google.golang.org/protobuf/proto"
 )
 
@@ -26,3 +28,5 @@ func GetProtoMessage[PB ProtoMessagePtr[T], T any](t *T) PB {
 type Clear interface {
 	Reset()
 }
+
+type DoNotCopy [0]sync.Mutex

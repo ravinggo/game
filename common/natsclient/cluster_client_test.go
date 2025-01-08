@@ -60,5 +60,6 @@ func TestNatsClient(t *testing.T) {
 			panic(err)
 		}
 	}()
+
 	wg.Wait()
 }

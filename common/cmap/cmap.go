@@ -5,7 +5,7 @@ import (
 	"sync"
 )
 
-const SHARD_COUNT = 32
+const ShardCount = 32
 
 type Stringer interface {
 	fmt.Stringer
@@ -26,9 +26,9 @@ type ConcurrentMapShared[K comparable, V any] struct {
 func create[K comparable, V any](sharding func(key K) uint32) ConcurrentMap[K, V] {
 	m := ConcurrentMap[K, V]{
 		sharding: sharding,
-		shards:   make([]*ConcurrentMapShared[K, V], SHARD_COUNT),
+		shards:   make([]*ConcurrentMapShared[K, V], ShardCount),
 	}
-	for i := 0; i < SHARD_COUNT; i++ {
+	for i := 0; i < ShardCount; i++ {
 		m.shards[i] = &ConcurrentMapShared[K, V]{items: make(map[K]V)}
 	}
 	return m
@@ -46,7 +46,7 @@ func NewWithCustomShardingFunction[K comparable, V any](sharding func(key K) uin
 
 // GetShard returns shard under given key
 func (m ConcurrentMap[K, V]) GetShard(key K) *ConcurrentMapShared[K, V] {
-	return m.shards[uint(m.sharding(key))%uint(SHARD_COUNT)]
+	return m.shards[uint(m.sharding(key))%uint(ShardCount)]
 }
 
 // MSet set multiple keys/values under given
@@ -103,17 +103,30 @@ func (m ConcurrentMap[K, V]) Get(key K) (V, bool) {
 	return val, ok
 }
 
+func (m ConcurrentMap[K, V]) GetAndRemove(key K) (V, bool) {
+	// Get shard
+	shard := m.GetShard(key)
+	shard.RLock()
+	// Get item from shard.
+	val, ok := shard.items[key]
+	if ok {
+		delete(shard.items, key)
+	}
+	shard.RUnlock()
+	return val, ok
+}
+
 func (m ConcurrentMap[K, V]) GetOrCreate(key K, new func() V) (V, bool) {
 	// Get shard
 	shard := m.GetShard(key)
 	shard.Lock()
+	defer shard.Unlock()
 	// Get item from shard.
 	val, ok := shard.items[key]
 	if !ok {
 		val = new()
 		shard.items[key] = val
 	}
-	shard.Unlock()
 	return val, ok
 
 }
@@ -121,7 +134,7 @@ func (m ConcurrentMap[K, V]) GetOrCreate(key K, new func() V) (V, bool) {
 // Count returns the number of elements within the map.
 func (m ConcurrentMap[K, V]) Count() int {
 	count := 0
-	for i := 0; i < SHARD_COUNT; i++ {
+	for i := 0; i < ShardCount; i++ {
 		shard := m.shards[i]
 		shard.RLock()
 		count += len(shard.items)
@@ -196,7 +209,7 @@ type Tuple[K comparable, V any] struct {
 func (m ConcurrentMap[K, V]) IterBuffered() []Tuple[K, V] {
 	tempCount := m.Count()
 	buff := make([]Tuple[K, V], 0, tempCount+8)
-	for i := 0; i < SHARD_COUNT; i++ {
+	for i := 0; i < ShardCount; i++ {
 		shard := m.shards[i]
 		shard.RLock()
 		for k, v := range shard.items {
@@ -207,9 +220,9 @@ func (m ConcurrentMap[K, V]) IterBuffered() []Tuple[K, V] {
 	return buff
 }
 
-// Clear removes all items from map.
+// Reset removes all items from map.
 func (m ConcurrentMap[K, V]) Reset() {
-	for i := 0; i < SHARD_COUNT; i++ {
+	for i := 0; i < ShardCount; i++ {
 		shard := m.shards[i]
 		shard.RLock()
 		clear(shard.items)
@@ -239,9 +252,9 @@ func (m ConcurrentMap[K, V]) IterCb(fn IterCb[K, V]) {
 	}
 }
 
-func strfnv32[K fmt.Stringer](key K) uint32 {
-	return fnv32(key.String())
-}
+// func strfnv32[K fmt.Stringer](key K) uint32 {
+// 	return fnv32(key.String())
+// }
 
 func fnv32(key string) uint32 {
 	hash := uint32(2166136261)

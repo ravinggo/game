@@ -24,8 +24,6 @@ import (
 	"github.com/ravinggo/game/common/task_group"
 )
 
-type handlerElemKey struct{}
-
 type BaseService[CTX ctx.IContextPtr[T], T any] struct {
 	h             *handler.Handler[CTX, T]
 	natsCluster   *natsclient.ClusterClient
@@ -47,7 +45,9 @@ const (
 type TaskRunMode int
 
 const (
-	TaskPool     TaskRunMode = 0
+	// TaskPool all task run in task_group.TaskPool
+	TaskPool TaskRunMode = 0
+	// OneTaskOneGo one task one goroutine
 	OneTaskOneGo TaskRunMode = 1
 )
 

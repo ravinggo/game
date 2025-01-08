@@ -185,12 +185,12 @@ func (o *objectPool) getSlice(p uintptr) *slicePool {
 	return pu.slicePool
 }
 
-// Get get a object from object pool with T
+// Get a object from object pool with T
 func Get[T any]() *T {
 	return get[T](&op, GetPtr[T]()).Get().(*T)
 }
 
-// Put put a object to object pool with T
+// Put a object to object pool with T
 func Put[T any](t *T) {
 	var a any = t
 	if c, ok := a.(define.Clear); ok {
@@ -349,6 +349,14 @@ func (b *Bytes) WriteFloat(f float64) {
 	b.Data = strconv.AppendFloat(b.Data, f, 'g', -1, 64)
 }
 
+func (b *Bytes) WriteBool(v bool) {
+	if v {
+		b.WriteBytes('T')
+	} else {
+		b.WriteBytes('F')
+	}
+}
+
 func (b *Bytes) Len() int {
 	return len(b.Data)
 }
@@ -363,8 +371,4 @@ func (b *Bytes) Bytes() []byte {
 
 func (b *Bytes) Reset() {
 	b.Data = b.Data[:0]
-}
-
-func (b *Bytes) Free() {
-	Put((*Slice[byte])(b))
 }
