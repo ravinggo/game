@@ -229,11 +229,11 @@ func (this_ *ClusterClient) RequestRaw(c ctx.IContext, toServerId int64, reqMsgN
 // param us not escapes to heap.
 // more info see ClusterClient.SubscribeOneUser
 func ClusterSubscribeOneUser[US UserSubjectPtr[T], T any](cnc *ClusterClient, us US, handler nats.MsgHandler) {
-	nsl := len(cnc.natsClients)
+	nsl := uint64(len(cnc.natsClients))
 	if nsl == 0 {
 		panic("nats client is empty")
 	}
-	client := cnc.natsClients[us.ToHash()%int64(nsl)]
+	client := cnc.natsClients[us.ToHash()%nsl]
 	ClientSubscribeUser(client, us, handler)
 }
 
@@ -268,12 +268,12 @@ func ClusterUnsubscribeUser[US UserSubjectPtr[T], T any](cnc *ClusterClient, us 
 func (this_ *ClusterClient) SubscribeOneUser(
 	us UserSubject, handler nats.MsgHandler,
 ) {
-	nsl := len(this_.natsClients)
+	nsl := uint64(len(this_.natsClients))
 	if nsl == 0 {
 		panic("nats client is empty")
 	}
 
-	client := this_.natsClients[us.ToHash()%int64(nsl)]
+	client := this_.natsClients[us.ToHash()%nsl]
 	client.SubscribeUser(us, handler)
 }
 
@@ -309,12 +309,12 @@ func (this_ *ClusterClient) UnsubscribeUser(us UserSubject) {
 // param us,pubMsg escapes to heap.
 // recommended use ClusterPublishUser
 func (this_ *ClusterClient) PublishUser(c ctx.IContext, us UserSubject, pubMsg proto.Message) *berror.ErrMsg {
-	nsl := len(this_.natsClients)
+	nsl := uint64(len(this_.natsClients))
 	if nsl == 0 {
 		panic("nats client is empty")
 	}
 
-	client := this_.natsClients[us.ToHash()%int64(nsl)]
+	client := this_.natsClients[us.ToHash()%nsl]
 	return client.PublishUser(c, us, pubMsg)
 }
 
@@ -322,12 +322,12 @@ func (this_ *ClusterClient) PublishUser(c ctx.IContext, us UserSubject, pubMsg p
 // param us, reqMsg, respMsg escapes to heap.
 // recommended use ClusterRequestUser
 func (this_ *ClusterClient) RequestUser(c ctx.IContext, us UserSubject, reqMsg proto.Message, respMsg proto.Message) *berror.ErrMsg {
-	nsl := len(this_.natsClients)
+	nsl := uint64(len(this_.natsClients))
 	if nsl == 0 {
 		panic("nats client is empty")
 	}
 
-	client := this_.natsClients[us.ToHash()%int64(nsl)]
+	client := this_.natsClients[us.ToHash()%nsl]
 	return client.RequestUser(c, us, reqMsg, respMsg)
 }
 

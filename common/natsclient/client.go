@@ -1,7 +1,7 @@
 package natsclient
 
 import (
-	"hash/crc32"
+	"hash/crc64"
 	"math"
 	"strconv"
 	"strings"
@@ -115,39 +115,49 @@ func (this_ *NatsClient) Shutdown() {
 }
 
 // Subscribe topic
-func (this_ *NatsClient) Subscribe(subj string, h nats.MsgHandler) {
-	if _, ok := this_.subs.GetOrCreate(
-		subj, func() *nats.Subscription {
-			sub, err := this_.conn.Subscribe(subj, h)
-			if err != nil {
-				logger.Log.Panic().Err(err).Str("subj", subj).Msg("Subscribe error")
-			}
-			return sub
-		},
-	); ok {
-		logger.Log.Panic().Str("subj", subj).Msg("subj had Subscribed")
-	} else {
-		logger.Log.Info().Str("urls", this_.urls).Str("subj", subj).Msg("Subscribe")
+func (this_ *NatsClient) Subscribe(subj string, h nats.MsgHandler) bool {
+	if _, ok := this_.subs.Get(subj); ok {
+		logger.Log.Error().Str("subj", subj).Msg("subj had Subscribed")
+		return false
 	}
+	sub, err := this_.conn.Subscribe(subj, h)
+	if err != nil {
+		logger.Log.Panic().Err(err).Str("subj", subj).Msg("Subscribe error")
+		return false
+	}
+
+	if !this_.subs.SetIfAbsent(subj, sub) {
+		err = sub.Unsubscribe()
+		if err != nil {
+			logger.Log.Error().Err(err).Str("subj", subj).Msg("Subscribe for Unsubscribe")
+		}
+		return false
+	}
+	logger.Log.Info().Str("urls", this_.urls).Str("subj", subj).Msg("Subscribe")
+	return true
 }
 
 // QueueSubscribe queue subscribe
-func (this_ *NatsClient) QueueSubscribe(subj string, h nats.MsgHandler) {
-	if _, ok := this_.subs.GetOrCreate(
-		subj, func() *nats.Subscription {
-			group := strings.ReplaceAll(subj, ">", "group")
-			sub, err := this_.conn.QueueSubscribe(subj, group, h)
-			if err != nil {
-				logger.Log.Panic().Err(err).Str("subj", subj).Msg("Subscribe error")
-			}
-			return sub
-		},
-	); ok {
+func (this_ *NatsClient) QueueSubscribe(subj string, h nats.MsgHandler) bool {
+	if _, ok := this_.subs.Get(subj); ok {
 		logger.Log.Error().Str("subj", subj).Msg("subj had Subscribed")
-		return
-	} else {
-		logger.Log.Info().Str("urls", this_.urls).Str("subj", subj).Msg("SubscribeHandler")
+		return false
 	}
+	group := strings.ReplaceAll(subj, ">", "group")
+	sub, err := this_.conn.QueueSubscribe(subj, group, h)
+	if err != nil {
+		logger.Log.Panic().Err(err).Str("subj", subj).Msg("Subscribe error")
+		return false
+	}
+	if !this_.subs.SetIfAbsent(subj, sub) {
+		err = sub.Unsubscribe()
+		if err != nil {
+			logger.Log.Error().Err(err).Str("subj", subj).Msg("QueueSubscribe for Unsubscribe")
+		}
+		return false
+	}
+	logger.Log.Info().Str("urls", this_.urls).Str("subj", subj).Msg("QueueSubscribe")
+	return true
 }
 
 // Unsubscribe topic
@@ -634,7 +644,7 @@ func (this_ *NatsClient) RequestRaw(c ctx.IContext, toServerId int64, reqMsgName
 
 type UserSubject interface {
 	// ToHash for switch one NatsClient
-	ToHash() int64
+	ToHash() uint64
 
 	// CreateSubj create subj for NatsClient.SubscribeUser
 	// param b from objectpool.GetBytes
@@ -667,8 +677,8 @@ func (u *IntUserSubject) CreateSubj(b *objectpool.Bytes) {
 	b.WriteInt(u.RoleId)
 	b.WriteString(".>")
 }
-func (u *IntUserSubject) ToHash() int64 {
-	return u.RoleId
+func (u *IntUserSubject) ToHash() uint64 {
+	return uint64(u.RoleId)
 }
 
 func (u *IntUserSubject) CreatePublishSize() int {
@@ -702,8 +712,8 @@ func (u *StringUserSubject) CreateSubj(b *objectpool.Bytes) {
 	b.WriteString(".>")
 }
 
-func (u *StringUserSubject) ToHash() int64 {
-	return int64(crc32.ChecksumIEEE(utils.StringToBytes(u.RoleId)))
+func (u *StringUserSubject) ToHash() uint64 {
+	return crc64.Checksum(utils.StringToBytes(u.RoleId), crc64.MakeTable(crc64.ECMA))
 }
 
 func (u *StringUserSubject) CreatePublishSize() int {
@@ -723,38 +733,53 @@ func (u *StringUserSubject) CreatePublish(bytes *objectpool.Bytes) {
 
 // ClientSubscribeUser Generic Implementation : subscribe user topic
 // param us not escapes to heap
-func ClientSubscribeUser[US UserSubjectPtr[T], T any](nc *NatsClient, us US, handler nats.MsgHandler) {
+func ClientSubscribeUser[US UserSubjectPtr[T], T any](nc *NatsClient, us US, handler nats.MsgHandler) bool {
 	b := objectpool.GetBytes(0)
 	defer objectpool.PutBytes(b)
 	us.CreateSubj(b)
 	subj := b.String()
 	if _, ok := nc.subs.Get(subj); ok {
-		return
+		return false
 	}
-	logger.Log.Info().Str("subj", subj).Msg("ClientQueueSubscribeUser")
 	sub, err := nc.conn.Subscribe(subj, handler)
 	if err != nil {
-		logger.Log.Error().Err(err).Str("subj", subj).Msg("ClientQueueSubscribeUser")
+		logger.Log.Error().Err(err).Str("subj", subj).Msg("ClientSubscribeUser")
 	}
-	nc.subs.Set(subj, sub)
+	if !nc.subs.SetIfAbsent(subj, sub) {
+		err := sub.Unsubscribe()
+		if err != nil {
+			logger.Log.Error().Err(err).Str("subj", subj).Msg("ClientSubscribeUser for Unsubscribe")
+		}
+		return false
+	}
+	logger.Log.Info().Str("subj", subj).Msg("ClientSubscribeUser")
+	return true
 }
 
 // ClientQueueSubscribeUser Generic Implementation : queue subscribe user topic
 // param us not escapes to heap
-func ClientQueueSubscribeUser[US UserSubjectPtr[T], T any](nc *NatsClient, us US, handler nats.MsgHandler) {
+func ClientQueueSubscribeUser[US UserSubjectPtr[T], T any](nc *NatsClient, us US, handler nats.MsgHandler) bool {
 	b := objectpool.GetBytes(0)
 	defer objectpool.PutBytes(b)
 	us.CreateSubj(b)
 	subj := b.String()
 	if _, ok := nc.subs.Get(subj); ok {
-		return
+		return false
 	}
-	logger.Log.Info().Str("subj", subj).Msg("ClientQueueSubscribeUser")
-	sub, err := nc.conn.QueueSubscribe(subj, subj[:len(subj)-2], handler)
+	group := subj[:len(subj)-2]
+	sub, err := nc.conn.QueueSubscribe(subj, group, handler)
 	if err != nil {
-		logger.Log.Error().Err(err).Str("subj", subj).Msg("ClientQueueSubscribeUser")
+		logger.Log.Error().Err(err).Str("subj", subj).Str("group", group).Msg("ClientQueueSubscribeUser")
 	}
-	nc.subs.Set(subj, sub)
+	if !nc.subs.SetIfAbsent(subj, sub) {
+		err := sub.Unsubscribe()
+		if err != nil {
+			logger.Log.Error().Err(err).Str("subj", subj).Str("group", group).Msg("QueueSubscribeUser for Unsubscribe")
+		}
+		return false
+	}
+	logger.Log.Info().Str("subj", subj).Str("group", group).Msg("ClientQueueSubscribeUser")
+	return true
 }
 
 // ClientUnsubscribeUser Generic Implementation : unsubscribe user topic
@@ -787,39 +812,54 @@ func ClientUnsubscribeUser[US UserSubjectPtr[T], T any](nc *NatsClient, us US) {
 // SubscribeUser Subscribe user topic
 // param us escapes to heap
 // recommended use ClientSubscribeUser
-func (this_ *NatsClient) SubscribeUser(us UserSubject, handler nats.MsgHandler) {
+func (this_ *NatsClient) SubscribeUser(us UserSubject, handler nats.MsgHandler) bool {
 	b := objectpool.GetBytes(0)
 	defer objectpool.PutBytes(b)
 	us.CreateSubj(b)
 	subj := b.String()
 	if _, ok := this_.subs.Get(subj); ok {
-		return
+		return false
 	}
-	logger.Log.Info().Str("subj", subj).Msg("SubscribeUser")
 	sub, err := this_.conn.Subscribe(subj, handler)
 	if err != nil {
 		logger.Log.Error().Err(err).Str("subj", subj).Msg("SubscribeUser")
 	}
-	this_.subs.Set(subj, sub)
+	if !this_.subs.SetIfAbsent(subj, sub) {
+		err := sub.Unsubscribe()
+		if err != nil {
+			logger.Log.Error().Err(err).Str("subj", subj).Msg("SubscribeUser for Unsubscribe")
+		}
+		return false
+	}
+	logger.Log.Info().Str("subj", subj).Msg("SubscribeUser")
+	return true
 }
 
 // QueueSubscribeUser QueueSubscribe user topic
 // param us escapes to heap
 // recommended use ClientQueueSubscribeUser
-func (this_ *NatsClient) QueueSubscribeUser(us UserSubject, handler nats.MsgHandler) {
+func (this_ *NatsClient) QueueSubscribeUser(us UserSubject, handler nats.MsgHandler) bool {
 	b := objectpool.GetBytes(0)
 	defer objectpool.PutBytes(b)
 	us.CreateSubj(b)
 	subj := b.String()
 	if _, ok := this_.subs.Get(subj); ok {
-		return
+		return false
 	}
-	logger.Log.Info().Str("subj", subj).Msg("QueueSubscribeUser")
-	sub, err := this_.conn.QueueSubscribe(subj, subj[:len(subj)-2], handler)
+	group := subj[:len(subj)-2]
+	sub, err := this_.conn.QueueSubscribe(subj, group, handler)
 	if err != nil {
-		logger.Log.Error().Err(err).Str("subj", subj).Msg("QueueSubscribeUser")
+		logger.Log.Error().Err(err).Str("subj", subj).Str("group", group).Msg("QueueSubscribeUser")
 	}
-	this_.subs.Set(subj, sub)
+	if !this_.subs.SetIfAbsent(subj, sub) {
+		err := sub.Unsubscribe()
+		if err != nil {
+			logger.Log.Error().Err(err).Str("subj", subj).Str("group", group).Msg("QueueSubscribeUser for Unsubscribe")
+		}
+		return false
+	}
+	logger.Log.Info().Str("subj", subj).Str("group", group).Msg("QueueSubscribeUser")
+	return true
 }
 
 // UnsubscribeUser Unsubscribe user topic

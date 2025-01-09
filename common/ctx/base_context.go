@@ -2,7 +2,7 @@ package ctx
 
 import (
 	"context"
-	"hash/crc32"
+	"hash/crc64"
 	"time"
 
 	"github.com/nats-io/nats.go"
@@ -203,7 +203,7 @@ type StringTrace struct {
 
 func (i *StringTrace) ToHash() uint64 {
 	if i.RoleId != "" {
-		return uint64(crc32.ChecksumIEEE(utils.StringToBytes(i.RoleId)))
+		return crc64.Checksum(utils.StringToBytes(i.RoleId), crc64.MakeTable(crc64.ECMA))
 	}
 
 	return 0

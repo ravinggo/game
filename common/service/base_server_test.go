@@ -69,7 +69,6 @@ func (t *TestService) ReqTrace() {
 	rpc.Req.FromServerId = 2
 	rpc.Req.FromServerType = "3"
 	rpc.Req.TraceId = "4"
-	defer objectpool.Put(rpc)
 	// rpc := natsclient.ClusterRequest[basepb.IntTrace, *basepb.IntTrace]{}
 	err := rpc.RequestToServer(
 		t.svc.GetNatsCluster(), c, baseenv.GetConfig().ServerId,
@@ -81,7 +80,6 @@ func (t *TestService) ReqTrace() {
 	c = objectpool.Get[ctx.Int64TraceCtx]()
 	defer objectpool.Put[ctx.Int64TraceCtx](c)
 	rpc1 := natsclient.NewClusterPublish[basepb.StringTrace]()
-	defer objectpool.Put(rpc1)
 
 	rpc1.Pub.RoleId = "x"
 	rpc1.Pub.FromServerId = 2
