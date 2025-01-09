@@ -95,6 +95,7 @@ func (t *TestService) ReqTrace() {
 }
 
 var count int64
+var userCount int64
 
 func TestBaseService(t *testing.T) {
 	go func() {
@@ -102,14 +103,14 @@ func TestBaseService(t *testing.T) {
 	}()
 	svc := NewTestService()
 	svc.Start()
-	for i := 0; i < 4000; i++ {
+	for i := 0; i < 1000; i++ {
 		go func() {
 			for {
 				svc.ReqTrace()
 			}
 		}()
-
 	}
+
 	oldCount := int64(0)
 	for {
 		time.Sleep(time.Second)

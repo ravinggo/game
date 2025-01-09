@@ -238,6 +238,10 @@ func (s *BaseService[CTX, T]) subscribe() {
 	}
 }
 
+func (s *BaseService[CTX, T]) dealServerUserNatsMsg(msg *nats.Msg) {
+
+}
+
 func (s *BaseService[CTX, T]) dealNatsMsg(msg *nats.Msg) {
 	msgName := msg.Subject
 	index := strings.LastIndexByte(msgName, '.')
