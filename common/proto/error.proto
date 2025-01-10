@@ -1,6 +1,6 @@
 syntax = "proto3";
 
-package login;
+package basepb;
 option go_package = "./basepb";
 import "google/protobuf/descriptor.proto";
 

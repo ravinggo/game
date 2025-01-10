@@ -106,13 +106,13 @@ func (m ConcurrentMap[K, V]) Get(key K) (V, bool) {
 func (m ConcurrentMap[K, V]) GetAndRemove(key K) (V, bool) {
 	// Get shard
 	shard := m.GetShard(key)
-	shard.RLock()
+	shard.Lock()
 	// Get item from shard.
 	val, ok := shard.items[key]
 	if ok {
 		delete(shard.items, key)
 	}
-	shard.RUnlock()
+	shard.Unlock()
 	return val, ok
 }
 

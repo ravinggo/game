@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/nats-io/nats.go"
+	"github.com/rs/zerolog"
 	"google.golang.org/protobuf/proto"
 
 	baseenv "github.com/ravinggo/game/common/base-env"
@@ -24,7 +25,7 @@ import (
 	"github.com/ravinggo/game/common/task_group"
 )
 
-type BaseService[CTX ctx.IContextPtr[T], T any] struct {
+type BaseService[T any, CTX ctx.IContextPtr[T]] struct {
 	h             *handler.Handler[CTX, T]
 	natsCluster   *natsclient.ClusterClient
 	el            *eventloop.DoubleBuffQueue
@@ -56,14 +57,14 @@ type ce[CTX ctx.IContextPtr[T], T any] struct {
 	Elem *handler.Elem[CTX, T]
 }
 
-func NewBaseService[CTX ctx.IContextPtr[T], T any](
+func NewBaseService[T any, CTX ctx.IContextPtr[T]](
 	natsUrls []string,
 	lockQueueThread bool,
 	hashMode HashRunMode,
 	taskMode TaskRunMode,
 	rpcTimeout time.Duration,
-) *BaseService[CTX, T] {
-	s := &BaseService[CTX, T]{
+) *BaseService[T, CTX] {
+	s := &BaseService[T, CTX]{
 		h:           handler.NewHandler[CTX](),
 		natsCluster: natsclient.NewClusterClient(baseenv.GetConfig().ServerType, natsUrls, rpcTimeout),
 		el:          eventloop.NewDoubleBuffQueue(lockQueueThread),
@@ -105,7 +106,7 @@ func NewBaseService[CTX ctx.IContextPtr[T], T any](
 	return s
 }
 
-func (s *BaseService[CTX, T]) taskFunc(e task_group.TaskGroupElem[ce[CTX, T]]) {
+func (s *BaseService[T, CTX]) taskFunc(e task_group.TaskGroupElem[ce[CTX, T]]) {
 	defer safego.Recover()
 	if e.Data.Data != nil {
 		s.handleCtx(e.Data.Data, e.Data.Elem)
@@ -115,19 +116,19 @@ func (s *BaseService[CTX, T]) taskFunc(e task_group.TaskGroupElem[ce[CTX, T]]) {
 	}
 }
 
-func (s *BaseService[CTX, T]) GetHandler() *handler.Handler[CTX, T] {
+func (s *BaseService[T, CTX]) GetHandler() *handler.Handler[CTX, T] {
 	return s.h
 }
 
-func (s *BaseService[CTX, T]) GetNatsCluster() *natsclient.ClusterClient {
+func (s *BaseService[T, CTX]) GetNatsCluster() *natsclient.ClusterClient {
 	return s.natsCluster
 }
 
-func (s *BaseService[CTX, T]) PostEventloop(e any) {
+func (s *BaseService[T, CTX]) PostEventloop(e any) {
 	s.el.PostEventQueue(e)
 }
 
-func (s *BaseService[CTX, T]) Start(f func(any)) {
+func (s *BaseService[T, CTX]) Start(f func(any)) {
 	if f == nil {
 		f = func(e any) {
 			logger.Log.Warn().Str("type", reflect.TypeOf(e).String()).Any("data", e).Msg("unknown event")
@@ -150,7 +151,7 @@ func (s *BaseService[CTX, T]) Start(f func(any)) {
 	)
 }
 
-func (s *BaseService[CTX, T]) handleCtx(c CTX, e *handler.Elem[CTX, T]) {
+func (s *BaseService[T, CTX]) handleCtx(c CTX, e *handler.Elem[CTX, T]) {
 	s.call(c, e)
 	baseCtx := c.MustBaseContext()
 	if baseCtx.Req != nil {
@@ -166,7 +167,7 @@ func (s *BaseService[CTX, T]) handleCtx(c CTX, e *handler.Elem[CTX, T]) {
 	objectpool.Put[T](c)
 }
 
-func (s *BaseService[CTX, T]) call(c CTX, e *handler.Elem[CTX, T]) {
+func (s *BaseService[T, CTX]) call(c CTX, e *handler.Elem[CTX, T]) {
 	var err *berror.ErrMsg
 	start := time.Now()
 	baseCtx := c.MustBaseContext()
@@ -203,13 +204,13 @@ func (s *BaseService[CTX, T]) call(c CTX, e *handler.Elem[CTX, T]) {
 	}
 }
 
-func (s *BaseService[CTX, T]) Stop() {
+func (s *BaseService[T, CTX]) Stop() {
 	s.natsCluster.Close()
 	s.el.Stop()
 	s.natsCluster.Shutdown()
 }
 
-func (s *BaseService[CTX, T]) subscribe() {
+func (s *BaseService[T, CTX]) subscribe() {
 	subjInfo := s.h.GetQueueSubjInfo()
 	serverId := baseenv.GetConfig().ServerId
 	for subj := range subjInfo {
@@ -238,16 +239,13 @@ func (s *BaseService[CTX, T]) subscribe() {
 	}
 }
 
-func (s *BaseService[CTX, T]) dealServerUserNatsMsg(msg *nats.Msg) {
-
-}
-
-func (s *BaseService[CTX, T]) dealNatsMsg(msg *nats.Msg) {
+func (s *BaseService[T, CTX]) dealNatsMsg(msg *nats.Msg) {
 	msgName := msg.Subject
 	index := strings.LastIndexByte(msgName, '.')
 	if index == -1 {
 		return
 	}
+
 	if baseenv.GetConfig().ServerId != 0 {
 		index1 := strings.LastIndexByte(msg.Subject[:index], '.')
 		b := objectpool.GetBytes(len(msgName))
@@ -256,6 +254,13 @@ func (s *BaseService[CTX, T]) dealNatsMsg(msg *nats.Msg) {
 		b.WriteString(msg.Subject[index:])
 		msgName = b.String()
 	}
+
+	elem, ok := s.h.GetHandler(msgName)
+	if !ok {
+		logger.Log.Info().Str("msgName", msgName).Str("subj", msg.Subject).Msg("msg not registered")
+		return
+	}
+
 	data := msg.Data
 	if len(data) < 2 {
 		return
@@ -279,14 +284,12 @@ func (s *BaseService[CTX, T]) dealNatsMsg(msg *nats.Msg) {
 				}
 				return
 			}
-			baseCtx.TraceLog.UpdateContext(traceCtx.TraceLogField)
+			baseCtx.TraceLog.UpdateContext(
+				func(c zerolog.Context) zerolog.Context {
+					return traceCtx.TraceLogField(c.Reset())
+				},
+			)
 		}
-	}
-
-	elem, ok := s.h.GetHandler(msgName)
-	if !ok {
-		logger.Log.Info().Str("msgName", msgName).Str("subj", msg.Subject).Msg("msg not registered")
-		return
 	}
 
 	baseCtx.Req = elem.ReqPool().Get().(proto.Message)
@@ -376,9 +379,9 @@ func (s *BaseService[CTX, T]) dealNatsMsg(msg *nats.Msg) {
 	}
 }
 
-func ReplyTaskPoolFull(ctx *ctx.BaseContext) {
-	if ctx.NatsMsg != nil && ctx.NatsMsg.Reply != "" {
-		err := natsclient.NatsMsgReplyError(ctx.NatsMsg, berror.NewProtocolStr("task pool full"))
+func ReplyTaskPoolFull(c *ctx.BaseContext) {
+	if c.NatsMsg != nil && c.NatsMsg.Reply != "" {
+		err := natsclient.NatsMsgReplyError(c.NatsMsg, berror.NewProtocolStr("task pool full"))
 		if err != nil {
 			logger.Log.Error().Err(err).Msg("nats reply error")
 		}

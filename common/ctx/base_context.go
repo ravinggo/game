@@ -41,6 +41,11 @@ type Trace interface {
 	SetServerIdAndType(int64, string)
 }
 
+type TracePtr[T any] interface {
+	Trace
+	*T
+}
+
 type IContextPtr[T any] interface {
 	IContext
 	*T
@@ -130,30 +135,54 @@ func Value[K comparable, V any](c IContext, key K) (V, bool) {
 
 // TraceCtx is a context with a trace data,
 // trace data can be roleID,or roleInfo, or other
-type TraceCtx[TraceData any] struct {
+type TraceCtx[TraceData any, TP TracePtr[TraceData]] struct {
 	BaseContext
 	TD TraceData
 }
 
 // NewMarkCtxWithMark create a new TraceCtx
-func NewMarkCtxWithMark[TraceData any](traceData TraceData) *TraceCtx[TraceData] {
-	c := objectpool.Get[TraceCtx[TraceData]]()
+func NewMarkCtxWithMark[TraceData any, TP TracePtr[TraceData]](traceData TraceData) *TraceCtx[TraceData, TP] {
+	c := objectpool.Get[TraceCtx[TraceData, TP]]()
 	c.TD = traceData
 	return c
 }
 
 // NewMarkCtx create a new TraceCtx
-func NewMarkCtx[TraceData any]() *TraceCtx[TraceData] {
-	c := objectpool.Get[TraceCtx[TraceData]]()
+func NewMarkCtx[TraceData any, TP TracePtr[TraceData]]() *TraceCtx[TraceData, TP] {
+	c := objectpool.Get[TraceCtx[TraceData, TP]]()
 	return c
 }
 
-func (c *TraceCtx[TraceData]) Reset() {
+func (c *TraceCtx[TraceData, TP]) Reset() {
 	c.BaseContext.Reset()
 	var mark any = &c.TD
 	if m, ok := mark.(define.Clear); ok {
 		m.Reset()
 	}
+}
+
+func (c *TraceCtx[TraceData, TP]) TraceMarshalSize() int {
+	return (TP)(&c.TD).TraceMarshalSize()
+}
+
+func (c *TraceCtx[TraceData, TP]) TraceMarshalAppend(b []byte) ([]byte, error) {
+	return (TP)(&c.TD).TraceMarshalAppend(b)
+}
+
+func (c *TraceCtx[TraceData, TP]) TraceMarshalFrom(b []byte) error {
+	return (TP)(&c.TD).TraceMarshalFrom(b)
+}
+
+func (c *TraceCtx[TraceData, TP]) GetServerIdAndType() (int64, string) {
+	return (TP)(&c.TD).GetServerIdAndType()
+}
+
+func (c *TraceCtx[TraceData, TP]) SetServerIdAndType(serverId int64, serverType string) {
+	(TP)(&c.TD).SetServerIdAndType(serverId, serverType)
+}
+
+func (c *TraceCtx[TraceData, TP]) TraceLogField(zc logger.Context) logger.Context {
+	return (TP)(&c.TD).TraceLogField(zc)
 }
 
 type IntTrace struct {
@@ -235,12 +264,13 @@ func (i *StringTrace) SetServerIdAndType(serverId int64, serverType string) {
 }
 
 func (i *StringTrace) TraceLogField(zc logger.Context) logger.Context {
+	zc.Reset()
 	return zc.Str("traceId", i.TraceId).Int64("fromServerId", i.FromServerId).
 		Str("fromServerType", i.FromServerType).Str("roleId", i.RoleId)
 }
 
-type Int64TraceCtx = TraceCtx[IntTrace]
-type StringTraceCtx = TraceCtx[StringTrace]
+type Int64TraceCtx = TraceCtx[IntTrace, *IntTrace]
+type StringTraceCtx = TraceCtx[StringTrace, *StringTrace]
 
 var (
 	_ ToHash = (*IntTrace)(nil)
