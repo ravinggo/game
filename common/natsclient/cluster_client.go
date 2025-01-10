@@ -112,7 +112,9 @@ type ClusterPublish[T any, PUB define.ProtoMessagePtr[T]] struct {
 // NewClusterPublish create a ClusterPublish use objectpool
 // ClusterPublish just can only be used once
 func NewClusterPublish[T any, PUB define.ProtoMessagePtr[T]]() *ClusterPublish[T, PUB] {
-	return objectpool.Get[ClusterPublish[T, PUB]]()
+	c := objectpool.Get[ClusterPublish[T, PUB]]()
+	c.forNew = 1
+	return c
 }
 
 // Reset implement define.Clear
@@ -122,14 +124,29 @@ func (r *ClusterPublish[T, PUB]) Reset() {
 
 // Publish more info see ClusterClient.Publish
 func (r *ClusterPublish[T, PUB]) Publish(cnc *ClusterClient, c ctx.IContext) *berror.ErrMsg {
-	err := cnc.Publish(c, (PUB)(&r.Pub))
-	return err
+	if r.forNew != 1 {
+		panic("ClusterPublish is not created by NewClusterPublish")
+	}
+	if atomic.CompareAndSwapUint32(&r.used, 0, 1) {
+		err := cnc.Publish(c, (PUB)(&r.Pub))
+		objectpool.Put(r)
+		return err
+	}
+	panic("ClusterRequest is used")
 }
 
 // PublishToServer more info see ClusterClient.PublishToServer
 func (r *ClusterPublish[T, PUB]) PublishToServer(cnc *ClusterClient, c ctx.IContext, toServerId int64) *berror.ErrMsg {
-	err := cnc.PublishToServer(c, toServerId, (PUB)(&r.Pub))
-	return err
+	if r.forNew != 1 {
+		panic("ClusterPublish is not created by NewClusterPublish")
+	}
+	if atomic.CompareAndSwapUint32(&r.used, 0, 1) {
+		err := cnc.PublishToServer(c, toServerId, (PUB)(&r.Pub))
+		objectpool.Put(r)
+		return err
+	}
+	panic("ClusterPublish is used")
+
 }
 
 // Publish more info see NatsClient.Publish
@@ -187,8 +204,9 @@ func (r *ClusterRequest[T, T1, REQ, RESP]) Request(cnc *ClusterClient, c ctx.ICo
 		panic("ClusterRequest is not created by NewClusterRequest")
 	}
 	if atomic.CompareAndSwapUint32(&r.used, 0, 1) {
-		defer objectpool.Put(r)
-		return cnc.Request(c, (REQ)(&r.Req), (RESP)(&r.Resp))
+		err := cnc.Request(c, (REQ)(&r.Req), (RESP)(&r.Resp))
+		objectpool.Put(r)
+		return err
 	}
 	panic("ClusterRequest is used")
 }
@@ -199,8 +217,9 @@ func (r *ClusterRequest[T, T1, REQ, RESP]) RequestToServer(cnc *ClusterClient, c
 		panic("ClusterRequest is not created by NewClusterRequest")
 	}
 	if atomic.CompareAndSwapUint32(&r.used, 0, 1) {
-		defer objectpool.Put(r)
-		return cnc.RequestToServer(c, toServerId, (REQ)(&r.Req), (RESP)(&r.Resp))
+		err := cnc.RequestToServer(c, toServerId, (REQ)(&r.Req), (RESP)(&r.Resp))
+		objectpool.Put(r)
+		return err
 	}
 	panic("ClusterRequest is used")
 }

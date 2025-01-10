@@ -353,8 +353,9 @@ func (r *ClientPublishServerUser[T, T1, US, PUB]) Publish(nc *ServerUserNatsClie
 		panic("create ClientPublishServerUser please use NewSUClientPublishUser")
 	}
 	if atomic.CompareAndSwapUint32(&r.used, 0, 1) {
-		defer objectpool.Put(r)
-		return nc.PublishUser(c, (US)(&r.Us), (PUB)(&r.Pub))
+		err := nc.PublishUser(c, (US)(&r.Us), (PUB)(&r.Pub))
+		objectpool.Put(r)
+		return err
 	}
 	panic("ClientPublishServerUser used")
 }
@@ -391,8 +392,9 @@ func (r *ClientRequestServerUser[T, T1, T2, US, REQ, RESP]) Request(nc *ServerUs
 		panic("create ClientRequestServerUser please use NewClientRequestServerUser")
 	}
 	if atomic.CompareAndSwapUint32(&r.used, 0, 1) {
-		defer objectpool.Put(r)
-		return nc.RequestUser(c, (US)(&r.Us), (REQ)(&r.Req), (RESP)(&r.Resp))
+		err := nc.RequestUser(c, (US)(&r.Us), (REQ)(&r.Req), (RESP)(&r.Resp))
+		objectpool.Put(r)
+		return err
 	}
 	panic("ClientRequestServerUser used")
 }

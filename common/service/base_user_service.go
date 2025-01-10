@@ -99,7 +99,11 @@ func (s *ServerUserService[T1, T, CTX, US]) dealServerUserNatsMsg(msg *nats.Msg)
 				}
 				return
 			}
-			baseCtx.TraceLog.UpdateContext(traceCtx.TraceLogField)
+			baseCtx.TraceLog.UpdateContext(
+				func(c logger.Context) logger.Context {
+					return traceCtx.TraceLogField(c.Reset())
+				},
+			)
 		}
 	}
 

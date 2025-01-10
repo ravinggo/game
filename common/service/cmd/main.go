@@ -104,8 +104,8 @@ func (t *TestService) ReqTrace(roleId int64) {
 
 	c = objectpool.Get[ctx.Int64TraceCtx]()
 	defer objectpool.Put[ctx.Int64TraceCtx](c)
-	rpc1 := natsclient.NewClusterPublish[basepb.StringTrace]()
 
+	rpc1 := natsclient.NewClusterPublish[basepb.StringTrace]()
 	rpc1.Pub.RoleId = "x"
 	rpc1.Pub.FromServerId = 2
 	rpc1.Pub.FromServerType = "3"
@@ -122,15 +122,10 @@ func (t *TestService) ReqUser(roleId int64) {
 	c := objectpool.Get[ctx.Int64TraceCtx]()
 	defer objectpool.Put[ctx.Int64TraceCtx](c)
 	c.TD.RoleId = roleId
-	us := &natsclient.ServerIntUserSubject{
-		ServerType: "test",
-		ServerId:   0,
-		RoleId:     roleId,
-	}
 	req := natsclient.NewClusterPublishServerUser[natsclient.ServerIntUserSubject, basepb.ErrorMessage]()
-	err := req.Publish(
-		t.svc.GetUserNatsCluster(), us, c,
-	)
+	req.Us.ServerType = "test"
+	req.Us.RoleId = roleId
+	err := req.Publish(t.svc.GetUserNatsCluster(), c)
 
 	if err != nil {
 		logger.Log.Panic().Err(err)

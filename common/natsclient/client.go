@@ -205,8 +205,9 @@ func (r *ClientPublish[T, PUB]) Publish(nc *NatsClient, c ctx.IContext) *berror.
 		panic("ClientPublish is not created by NewClientPublish")
 	}
 	if atomic.LoadInt32(&nc.closed) != 0 {
-		defer objectpool.Put(r)
-		return nc.Publish(c, (PUB)(&r.Pub))
+		err := nc.Publish(c, (PUB)(&r.Pub))
+		objectpool.Put(r)
+		return err
 	}
 	panic("ClientPublish used")
 }
@@ -218,8 +219,9 @@ func (r *ClientPublish[T, PUB]) PublishToServer(nc *NatsClient, c ctx.IContext, 
 		panic("ClientPublish is not created by NewClientPublish")
 	}
 	if atomic.LoadInt32(&nc.closed) != 0 {
-		defer objectpool.Put(r)
-		return nc.PublishToServer(c, toServerId, (PUB)(&r.Pub))
+		err := nc.PublishToServer(c, toServerId, (PUB)(&r.Pub))
+		objectpool.Put(r)
+		return err
 	}
 	panic("ClientPublish used")
 }
@@ -383,8 +385,9 @@ func (r *ClientRequest[T, T1, REQ, RESP]) Request(nc *NatsClient, c ctx.IContext
 		panic("create ClientRequest please use NewClientRequest")
 	}
 	if atomic.CompareAndSwapUint32(&r.used, 0, 1) {
-		defer objectpool.Put(r)
-		return nc.Request(c, (REQ)(&r.Req), (RESP)(&r.Resp))
+		err := nc.Request(c, (REQ)(&r.Req), (RESP)(&r.Resp))
+		objectpool.Put(r)
+		return err
 	}
 	panic("ClientRequest used")
 }
@@ -395,8 +398,9 @@ func (r *ClientRequest[T, T1, REQ, RESP]) RequestToServer(nc *NatsClient, c ctx.
 		panic("create ClientRequest please use NewClientRequest")
 	}
 	if atomic.CompareAndSwapUint32(&r.used, 0, 1) {
-		defer objectpool.Put(r)
-		return nc.RequestToServer(c, toServerId, (REQ)(&r.Req), (RESP)(&r.Resp))
+		err := nc.RequestToServer(c, toServerId, (REQ)(&r.Req), (RESP)(&r.Resp))
+		objectpool.Put(r)
+		return err
 	}
 	panic("ClientRequest used")
 }

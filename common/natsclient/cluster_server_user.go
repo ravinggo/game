@@ -112,6 +112,7 @@ func (cnc *ClusterClientServerUser[T, US]) RequestUser(c ctx.IContext, us US, re
 // create use NewPublishUser
 type ClusterPublishServerUser[T, T1 any, US ServerUserSubjectPtr[T], PUB define.ProtoMessagePtr[T1]] struct {
 	Pub    T1
+	Us     T
 	used   uint32
 	forNew uint32
 	define.DoNotCopy
@@ -130,15 +131,16 @@ func NewClusterPublishServerUser[T, T1 any, US ServerUserSubjectPtr[T], PUB defi
 }
 
 // Publish more info see ClusterClientServerUser.PublishUser
-func (r *ClusterPublishServerUser[T, T1, US, PUB]) Publish(cnc *ClusterClientServerUser[T, US], us US, c ctx.IContext) *berror.ErrMsg {
+func (r *ClusterPublishServerUser[T, T1, US, PUB]) Publish(cnc *ClusterClientServerUser[T, US], c ctx.IContext) *berror.ErrMsg {
 	if r.forNew != 1 {
 		panic("create ClusterPublishServerUser please use NewClusterPublishServerUser")
 	}
 	if atomic.CompareAndSwapUint32(&r.used, 0, 1) {
-		defer objectpool.Put(r)
-		return cnc.PublishUser(c, us, (PUB)(&r.Pub))
+		err := cnc.PublishUser(c, (US)(&r.Us), (PUB)(&r.Pub))
+		objectpool.Put(r)
+		return err
 	}
-	panic("ClusterPublishServerUser used")
+	panic("ClusterPublishServerUser is used")
 }
 
 // ClusterRequestServerUser Generic Implementation : rpc user topic
@@ -176,8 +178,9 @@ func (r *ClusterRequestServerUser[T1, T2, T, US, REQ, RESP]) Request(
 		panic("create ClusterRequestServerUser please use NewClusterRequestServerUser")
 	}
 	if atomic.CompareAndSwapUint32(&r.used, 0, 1) {
-		defer objectpool.Put(r)
-		return cnc.RequestUser(c, us, (REQ)(&r.Req), (RESP)(&r.Resp))
+		err := cnc.RequestUser(c, us, (REQ)(&r.Req), (RESP)(&r.Resp))
+		objectpool.Put(r)
+		return err
 	}
 	panic("ClusterRequestServerUser used")
 }

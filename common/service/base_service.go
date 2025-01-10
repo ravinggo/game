@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"github.com/nats-io/nats.go"
-	"github.com/rs/zerolog"
 	"google.golang.org/protobuf/proto"
 
 	baseenv "github.com/ravinggo/game/common/base-env"
@@ -285,7 +284,7 @@ func (s *BaseService[T, CTX]) dealNatsMsg(msg *nats.Msg) {
 				return
 			}
 			baseCtx.TraceLog.UpdateContext(
-				func(c zerolog.Context) zerolog.Context {
+				func(c logger.Context) logger.Context {
 					return traceCtx.TraceLogField(c.Reset())
 				},
 			)
