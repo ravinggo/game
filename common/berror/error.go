@@ -20,6 +20,13 @@ const (
 
 var (
 	ErrMsgName = string(proto.MessageName(&basepb.ErrorMessage{}))
+	errPool    = objectpool.GetTypePool[ErrMsg]()
+	getErr     = func() *ErrMsg {
+		return errPool.Get().(*ErrMsg)
+	}
+	PutErr = func(e *ErrMsg) {
+		errPool.Put(e)
+	}
 )
 
 func isOpenStack() bool {
@@ -107,7 +114,7 @@ func (this_ *ErrMsg) IsErrorNoAuth() bool {
 }
 
 func NewNormalInternalStr(str string) *ErrMsg {
-	e := objectpool.Get[ErrMsg]()
+	e := getErr()
 	e.ErrCode = basepb.ErrorType_ETNormal
 	e.ErrMsg = ServerInternalErrorStr
 	e.ErrInternalInfo = str
@@ -118,7 +125,7 @@ func NewNormalInternalStr(str string) *ErrMsg {
 }
 
 func NewNormalStr(errMsg string, str string) *ErrMsg {
-	e := objectpool.Get[ErrMsg]()
+	e := getErr()
 	e.ErrCode = basepb.ErrorType_ETNormal
 	e.ErrMsg = errMsg
 	e.ErrInternalInfo = str
@@ -142,7 +149,7 @@ func NewNormalErr(errMsg string, err error) *ErrMsg {
 }
 
 func NewProtocolStr(str string) *ErrMsg {
-	e := objectpool.Get[ErrMsg]()
+	e := getErr()
 	e.ErrCode = basepb.ErrorType_ETProtocol
 	e.ErrMsg = ServerInternalErrorStr
 	e.ErrInternalInfo = str
@@ -165,7 +172,7 @@ func NewProtocolErr(err error) *ErrMsg {
 }
 
 func NewPanicStr(str string) *ErrMsg {
-	e := objectpool.Get[ErrMsg]()
+	e := getErr()
 	e.ErrCode = basepb.ErrorType_ETPanic
 	e.ErrMsg = ServerInternalErrorStr
 	e.ErrInternalInfo = str
@@ -188,7 +195,7 @@ func NewPanicErr(err error) *ErrMsg {
 }
 
 func NewDatabaseStr(str string) *ErrMsg {
-	e := objectpool.Get[ErrMsg]()
+	e := getErr()
 	e.ErrCode = basepb.ErrorType_ETDataBase
 	e.ErrMsg = ServerInternalErrorStr
 	e.ErrInternalInfo = str
@@ -211,7 +218,7 @@ func NewDatabaseErr(err error) *ErrMsg {
 }
 
 func NewNoAuthStr(str string) *ErrMsg {
-	e := objectpool.Get[ErrMsg]()
+	e := getErr()
 	e.ErrCode = basepb.ErrorType_ETNoAuth
 	e.ErrMsg = ServerInternalErrorStr
 	e.ErrInternalInfo = str

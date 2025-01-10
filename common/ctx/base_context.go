@@ -57,6 +57,7 @@ type IContext interface {
 	ToHash
 	// MustBaseContext implementations of IContext must contain BaseContext
 	MustBaseContext() *BaseContext
+	GetTrace() Trace
 }
 
 type BaseContext struct {
@@ -67,6 +68,10 @@ type BaseContext struct {
 
 	// for rpc reply
 	NatsMsg *nats.Msg
+}
+
+func (c *BaseContext) GetTrace() Trace {
+	return nil
 }
 
 func (c *BaseContext) MustBaseContext() *BaseContext {
@@ -161,29 +166,34 @@ func (c *TraceCtx[TraceData, TP]) Reset() {
 	}
 }
 
-func (c *TraceCtx[TraceData, TP]) TraceMarshalSize() int {
-	return (TP)(&c.TD).TraceMarshalSize()
+func (c *TraceCtx[TraceData, TP]) GetTrace() Trace {
+	return (TP)(&c.TD)
 }
 
-func (c *TraceCtx[TraceData, TP]) TraceMarshalAppend(b []byte) ([]byte, error) {
-	return (TP)(&c.TD).TraceMarshalAppend(b)
-}
-
-func (c *TraceCtx[TraceData, TP]) TraceMarshalFrom(b []byte) error {
-	return (TP)(&c.TD).TraceMarshalFrom(b)
-}
-
-func (c *TraceCtx[TraceData, TP]) GetServerIdAndType() (int64, string) {
-	return (TP)(&c.TD).GetServerIdAndType()
-}
-
-func (c *TraceCtx[TraceData, TP]) SetServerIdAndType(serverId int64, serverType string) {
-	(TP)(&c.TD).SetServerIdAndType(serverId, serverType)
-}
-
-func (c *TraceCtx[TraceData, TP]) TraceLogField(zc logger.Context) logger.Context {
-	return (TP)(&c.TD).TraceLogField(zc)
-}
+//
+// func (c *TraceCtx[TraceData, TP]) TraceMarshalSize() int {
+// 	return (TP)(&c.TD).TraceMarshalSize()
+// }
+//
+// func (c *TraceCtx[TraceData, TP]) TraceMarshalAppend(b []byte) ([]byte, error) {
+// 	return (TP)(&c.TD).TraceMarshalAppend(b)
+// }
+//
+// func (c *TraceCtx[TraceData, TP]) TraceMarshalFrom(b []byte) error {
+// 	return (TP)(&c.TD).TraceMarshalFrom(b)
+// }
+//
+// func (c *TraceCtx[TraceData, TP]) GetServerIdAndType() (int64, string) {
+// 	return (TP)(&c.TD).GetServerIdAndType()
+// }
+//
+// func (c *TraceCtx[TraceData, TP]) SetServerIdAndType(serverId int64, serverType string) {
+// 	(TP)(&c.TD).SetServerIdAndType(serverId, serverType)
+// }
+//
+// func (c *TraceCtx[TraceData, TP]) TraceLogField(zc logger.Context) logger.Context {
+// 	return (TP)(&c.TD).TraceLogField(zc)
+// }
 
 type IntTrace struct {
 	basepb.IntTrace

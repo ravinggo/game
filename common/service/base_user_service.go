@@ -69,8 +69,8 @@ func (s *ServerUserService[T1, T, CTX, US]) dealServerUserNatsMsg(msg *nats.Msg)
 		logger.Log.Info().Str("msgName", msgName).Str("subj", msg.Subject).Msg("msg not registered")
 		return
 	}
-	var t T1
-	us := (US)(&t)
+	us := (US)(objectpool.Get[T1]())
+	defer objectpool.Put[T1](us)
 	err := us.ParseSubjForCall(msg.Subject[:index])
 	if err != nil {
 		return
@@ -82,13 +82,11 @@ func (s *ServerUserService[T1, T, CTX, US]) dealServerUserNatsMsg(msg *nats.Msg)
 	}
 
 	traceSize := int(data[0]) | int(data[1])<<8
-	c := objectpool.Get[T]()
-	var ca any = c
-	ic := ca.(ctx.IContext)
-	baseCtx := ic.MustBaseContext()
+	c := (CTX)(objectpool.Get[T]())
+	baseCtx := c.MustBaseContext()
 	if traceSize > 0 {
-		traceCtx, ok := ic.(ctx.Trace)
-		if ok {
+		traceCtx := c.GetTrace()
+		if traceCtx != nil {
 			err := traceCtx.TraceMarshalFrom(msg.Data[2 : 2+traceSize])
 			if err != nil {
 				if msg.Reply == "" {
@@ -128,7 +126,7 @@ func (s *ServerUserService[T1, T, CTX, US]) dealServerUserNatsMsg(msg *nats.Msg)
 		l := len(s.taskGroupHash)
 		hash := us.ToHash()
 		if hash == 0 {
-			hash = ic.ToHash()
+			hash = c.ToHash()
 		}
 		if hash != 0 {
 			if l > 0 {
