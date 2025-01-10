@@ -222,15 +222,6 @@ func (nc *ServerUserNatsClient[T, US]) UnsubscribeUser(us US) {
 						logger.Log.Error().Err(err).Str("subj", subj).Msg("Client[Un]subscribeUser Drain error")
 					}
 				}
-				for i := 0; i < 10; i++ {
-					if !v.IsValid() {
-						break
-					}
-				}
-				err := v.Unsubscribe()
-				if err != nil {
-					logger.Log.Error().Err(err).Str("subj", subj).Msg("Client[Un]subscribeUser Drain error")
-				}
 			},
 		)
 		logger.Log.Debug().Str("subj", subj).Msg("Client[Un]subscribeUser")

@@ -18,6 +18,7 @@ import (
 	"github.com/ravinggo/game/common/define"
 	"github.com/ravinggo/game/common/logger"
 	"github.com/ravinggo/game/common/objectpool"
+	"github.com/ravinggo/game/common/safego"
 	"github.com/ravinggo/game/common/utils"
 )
 
@@ -160,9 +161,17 @@ func (this_ *NatsClient) QueueSubscribe(subj string, h nats.MsgHandler) bool {
 
 // Unsubscribe topic
 func (this_ *NatsClient) Unsubscribe(subj string) {
-	if s, ok := this_.subs.GetAndRemove(subj); ok {
+	if v, ok := this_.subs.GetAndRemove(subj); ok {
 		logger.Log.Info().Str("subj", subj).Msg("Unsubscribe")
-		_ = s.Unsubscribe()
+		go func() {
+			defer safego.Recover()
+			if v.IsValid() {
+				err := v.Drain()
+				if err != nil {
+					logger.Log.Error().Err(err).Str("subj", subj).Msg("Client[Un]subscribeUser Drain error")
+				}
+			}
+		}()
 	}
 }
 
