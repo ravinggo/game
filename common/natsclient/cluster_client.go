@@ -2,7 +2,6 @@ package natsclient
 
 import (
 	"math/rand/v2"
-	"sync/atomic"
 	"time"
 
 	"github.com/nats-io/nats.go"
@@ -76,9 +75,12 @@ func (this_ *ClusterClient) getClient(c ctx.IContext) *NatsClient {
 	if nsl == 1 {
 		return this_.natsClients[0]
 	}
-	hashCtx, ok := c.(ctx.ToHash)
-	if ok {
-		return this_.natsClients[hashCtx.ToHash()%uint64(nsl)]
+	traceCtx := c.GetTrace()
+	if traceCtx != nil {
+		hash := traceCtx.ToHash()
+		if hash != 0 {
+			return this_.natsClients[hash%uint64(nsl)]
+		}
 	}
 	return this_.natsClients[rand.IntN(nsl)]
 }
@@ -91,10 +93,14 @@ func (this_ *ClusterClient) getClientToServerId(c ctx.IContext, toServerId int64
 	if nsl == 1 {
 		return this_.natsClients[0]
 	}
-	hashCtx, ok := c.(ctx.ToHash)
-	if ok {
-		return this_.natsClients[hashCtx.ToHash()%uint64(nsl)]
+	traceCtx := c.GetTrace()
+	if traceCtx != nil {
+		hash := traceCtx.ToHash()
+		if hash != 0 {
+			return this_.natsClients[hash%uint64(nsl)]
+		}
 	}
+
 	if toServerId > 0 {
 		return this_.natsClients[toServerId%int64(nsl)]
 	}
@@ -103,9 +109,7 @@ func (this_ *ClusterClient) getClientToServerId(c ctx.IContext, toServerId int64
 
 // ClusterPublish publish message with ClusterClient.
 type ClusterPublish[T any, PUB define.ProtoMessagePtr[T]] struct {
-	Pub    T
-	used   uint32
-	forNew uint32
+	Pub T
 	define.DoNotCopy
 }
 
@@ -113,7 +117,6 @@ type ClusterPublish[T any, PUB define.ProtoMessagePtr[T]] struct {
 // ClusterPublish just can only be used once
 func NewClusterPublish[T any, PUB define.ProtoMessagePtr[T]]() *ClusterPublish[T, PUB] {
 	c := objectpool.Get[ClusterPublish[T, PUB]]()
-	c.forNew = 1
 	return c
 }
 
@@ -124,28 +127,17 @@ func (r *ClusterPublish[T, PUB]) Reset() {
 
 // Publish more info see ClusterClient.Publish
 func (r *ClusterPublish[T, PUB]) Publish(cnc *ClusterClient, c ctx.IContext) *berror.ErrMsg {
-	if r.forNew != 1 {
-		panic("ClusterPublish is not created by NewClusterPublish")
-	}
-	if atomic.CompareAndSwapUint32(&r.used, 0, 1) {
-		err := cnc.Publish(c, (PUB)(&r.Pub))
-		objectpool.Put(r)
-		return err
-	}
-	panic("ClusterRequest is used")
+	err := cnc.Publish(c, (PUB)(&r.Pub))
+	return err
+}
+func (r *ClusterPublish[T, PUB]) Free() {
+	objectpool.Put(r)
 }
 
 // PublishToServer more info see ClusterClient.PublishToServer
 func (r *ClusterPublish[T, PUB]) PublishToServer(cnc *ClusterClient, c ctx.IContext, toServerId int64) *berror.ErrMsg {
-	if r.forNew != 1 {
-		panic("ClusterPublish is not created by NewClusterPublish")
-	}
-	if atomic.CompareAndSwapUint32(&r.used, 0, 1) {
-		err := cnc.PublishToServer(c, toServerId, (PUB)(&r.Pub))
-		objectpool.Put(r)
-		return err
-	}
-	panic("ClusterPublish is used")
+	err := cnc.PublishToServer(c, toServerId, (PUB)(&r.Pub))
+	return err
 
 }
 
@@ -178,10 +170,8 @@ func (this_ *ClusterClient) Request(c ctx.IContext, reqMsg proto.Message, respMs
 
 // ClusterRequest rpc with ClusterClient.
 type ClusterRequest[T, T1 any, REQ define.ProtoMessagePtr[T], RESP define.ProtoMessagePtr[T1]] struct {
-	Req    T
-	Resp   T1
-	used   uint32
-	forNew uint32
+	Req  T
+	Resp T1
 	define.DoNotCopy
 }
 
@@ -189,7 +179,6 @@ type ClusterRequest[T, T1 any, REQ define.ProtoMessagePtr[T], RESP define.ProtoM
 // ClusterRequest just can only be used once
 func NewClusterRequest[T, T1 any, REQ define.ProtoMessagePtr[T], RESP define.ProtoMessagePtr[T1]]() *ClusterRequest[T, T1, REQ, RESP] {
 	c := objectpool.Get[ClusterRequest[T, T1, REQ, RESP]]()
-	c.forNew = 1
 	return c
 }
 
@@ -200,28 +189,18 @@ func (r *ClusterRequest[T, T1, REQ, RESP]) Reset() {
 
 // Request more info see ClusterClient.Request
 func (r *ClusterRequest[T, T1, REQ, RESP]) Request(cnc *ClusterClient, c ctx.IContext) *berror.ErrMsg {
-	if r.forNew != 1 {
-		panic("ClusterRequest is not created by NewClusterRequest")
-	}
-	if atomic.CompareAndSwapUint32(&r.used, 0, 1) {
-		err := cnc.Request(c, (REQ)(&r.Req), (RESP)(&r.Resp))
-		objectpool.Put(r)
-		return err
-	}
-	panic("ClusterRequest is used")
+	err := cnc.Request(c, (REQ)(&r.Req), (RESP)(&r.Resp))
+	return err
+}
+
+func (r *ClusterRequest[T, T1, REQ, RESP]) Free() {
+	objectpool.Put(r)
 }
 
 // RequestToServer more info see ClusterClient.RequestToServer
 func (r *ClusterRequest[T, T1, REQ, RESP]) RequestToServer(cnc *ClusterClient, c ctx.IContext, toServerId int64) *berror.ErrMsg {
-	if r.forNew != 1 {
-		panic("ClusterRequest is not created by NewClusterRequest")
-	}
-	if atomic.CompareAndSwapUint32(&r.used, 0, 1) {
-		err := cnc.RequestToServer(c, toServerId, (REQ)(&r.Req), (RESP)(&r.Resp))
-		objectpool.Put(r)
-		return err
-	}
-	panic("ClusterRequest is used")
+	err := cnc.RequestToServer(c, toServerId, (REQ)(&r.Req), (RESP)(&r.Resp))
+	return err
 }
 
 // RequestToServer rpc with raw data for one NatsClient.

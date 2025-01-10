@@ -185,16 +185,13 @@ func (this_ *NatsClient) Unsubscribe(subj string) {
 // for more information, see NatsClient.Publish and NatsClient.PublishToServer
 // create use NewClientPublish
 type ClientPublish[T any, PUB define.ProtoMessagePtr[T]] struct {
-	Pub    T
-	used   uint32
-	forNew uint32
+	Pub T
 	define.DoNotCopy
 }
 
 // NewClientPublish create a ClientPublish from objectpool
 func NewClientPublish[T any, PUB define.ProtoMessagePtr[T]]() *ClientPublish[T, PUB] {
 	c := objectpool.Get[ClientPublish[T, PUB]]()
-	c.forNew = 1
 	return c
 }
 
@@ -206,29 +203,19 @@ func (r *ClientPublish[T, PUB]) Reset() {
 // Publish msg to serverId is 0 or a cluster server node
 // more information, see NatsClient.Publish and NatsClient.PublishToServer
 func (r *ClientPublish[T, PUB]) Publish(nc *NatsClient, c ctx.IContext) *berror.ErrMsg {
-	if r.forNew != 1 {
-		panic("ClientPublish is not created by NewClientPublish")
-	}
-	if atomic.LoadInt32(&nc.closed) != 0 {
-		err := nc.Publish(c, (PUB)(&r.Pub))
-		objectpool.Put(r)
-		return err
-	}
-	panic("ClientPublish used")
+	err := nc.Publish(c, (PUB)(&r.Pub))
+	return err
+}
+
+func (r *ClientPublish[T, PUB]) Free() {
+	objectpool.Put(r)
 }
 
 // PublishToServer publish msg to specified server instance of toServerId
 // more information, see NatsClient.Publish and NatsClient.PublishToServer
 func (r *ClientPublish[T, PUB]) PublishToServer(nc *NatsClient, c ctx.IContext, toServerId int64) *berror.ErrMsg {
-	if r.forNew != 1 {
-		panic("ClientPublish is not created by NewClientPublish")
-	}
-	if atomic.LoadInt32(&nc.closed) != 0 {
-		err := nc.PublishToServer(c, toServerId, (PUB)(&r.Pub))
-		objectpool.Put(r)
-		return err
-	}
-	panic("ClientPublish used")
+	err := nc.PublishToServer(c, toServerId, (PUB)(&r.Pub))
+	return err
 }
 
 // Publish msg to serverId is 0 or a cluster server node
@@ -248,9 +235,8 @@ func (this_ *NatsClient) PublishToServer(c ctx.IContext, toServerId int64, pubMs
 	var err error
 	var traceCtx ctx.Trace
 	if c != nil {
-		var ok bool
-		traceCtx, ok = c.(ctx.Trace)
-		if ok {
+		traceCtx = c.GetTrace()
+		if traceCtx != nil {
 			oldServerId, oldServerType := traceCtx.GetServerIdAndType()
 			traceCtx.SetServerIdAndType(baseenv.GetConfig().ServerId, baseenv.GetConfig().ServerType)
 			defer traceCtx.SetServerIdAndType(oldServerId, oldServerType)
@@ -306,9 +292,8 @@ func (this_ *NatsClient) PublishRawData(c ctx.IContext, toServerId int64, msgNam
 	var err error
 	var traceCtx ctx.Trace
 	if c != nil {
-		var ok bool
-		traceCtx, ok = c.(ctx.Trace)
-		if ok {
+		traceCtx = c.GetTrace()
+		if traceCtx != nil {
 			oldServerId, oldServerType := traceCtx.GetServerIdAndType()
 			traceCtx.SetServerIdAndType(baseenv.GetConfig().ServerId, baseenv.GetConfig().ServerType)
 			defer traceCtx.SetServerIdAndType(oldServerId, oldServerType)
@@ -365,17 +350,14 @@ func (this_ *NatsClient) Request(c ctx.IContext, reqMsg proto.Message, respMsg p
 // for more information, see NatsClient.Request
 // create use NewClientRequest
 type ClientRequest[T, T1 any, REQ define.ProtoMessagePtr[T], RESP define.ProtoMessagePtr[T1]] struct {
-	Req    T
-	Resp   T1
-	used   uint32
-	forNew uint32
+	Req  T
+	Resp T1
 	define.DoNotCopy
 }
 
 // NewClientRequest create ClientRequest for objectpool
 func NewClientRequest[T, T1 any, REQ define.ProtoMessagePtr[T], RESP define.ProtoMessagePtr[T1]]() *ClientRequest[T, T1, REQ, RESP] {
 	c := objectpool.Get[ClientRequest[T, T1, REQ, RESP]]()
-	c.forNew = 1
 	return c
 }
 
@@ -386,28 +368,18 @@ func (r *ClientRequest[T, T1, REQ, RESP]) Reset() {
 
 // Request more info see NatsClient.Request
 func (r *ClientRequest[T, T1, REQ, RESP]) Request(nc *NatsClient, c ctx.IContext) *berror.ErrMsg {
-	if r.forNew != 1 {
-		panic("create ClientRequest please use NewClientRequest")
-	}
-	if atomic.CompareAndSwapUint32(&r.used, 0, 1) {
-		err := nc.Request(c, (REQ)(&r.Req), (RESP)(&r.Resp))
-		objectpool.Put(r)
-		return err
-	}
-	panic("ClientRequest used")
+	err := nc.Request(c, (REQ)(&r.Req), (RESP)(&r.Resp))
+	return err
+}
+
+func (r *ClientRequest[T, T1, REQ, RESP]) Free() {
+	objectpool.Put(r)
 }
 
 // RequestToServer more info see NatsClient.RequestToServer
 func (r *ClientRequest[T, T1, REQ, RESP]) RequestToServer(nc *NatsClient, c ctx.IContext, toServerId int64) *berror.ErrMsg {
-	if r.forNew != 1 {
-		panic("create ClientRequest please use NewClientRequest")
-	}
-	if atomic.CompareAndSwapUint32(&r.used, 0, 1) {
-		err := nc.RequestToServer(c, toServerId, (REQ)(&r.Req), (RESP)(&r.Resp))
-		objectpool.Put(r)
-		return err
-	}
-	panic("ClientRequest used")
+	err := nc.RequestToServer(c, toServerId, (REQ)(&r.Req), (RESP)(&r.Resp))
+	return err
 }
 
 // RequestToServer send rpc to specified server instance of toServerId
@@ -420,9 +392,8 @@ func (this_ *NatsClient) RequestToServer(c ctx.IContext, toServerId int64, reqMs
 	var err error
 	var traceCtx ctx.Trace
 	if c != nil {
-		var ok bool
-		traceCtx, ok = c.(ctx.Trace)
-		if ok {
+		traceCtx = c.GetTrace()
+		if traceCtx != nil {
 			oldServerId, oldServerType := traceCtx.GetServerIdAndType()
 			traceCtx.SetServerIdAndType(baseenv.GetConfig().ServerId, baseenv.GetConfig().ServerType)
 			defer traceCtx.SetServerIdAndType(oldServerId, oldServerType)
@@ -610,9 +581,8 @@ func (this_ *NatsClient) RequestRaw(c ctx.IContext, toServerId int64, reqMsgName
 	var err error
 	var traceCtx ctx.Trace
 	if c != nil {
-		var ok bool
-		traceCtx, ok = c.(ctx.Trace)
-		if ok {
+		traceCtx = c.GetTrace()
+		if traceCtx != nil {
 			oldServerId, oldServerType := traceCtx.GetServerIdAndType()
 			traceCtx.SetServerIdAndType(baseenv.GetConfig().ServerId, baseenv.GetConfig().ServerType)
 			defer traceCtx.SetServerIdAndType(oldServerId, oldServerType)

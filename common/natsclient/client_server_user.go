@@ -6,7 +6,6 @@ import (
 	"math"
 	"strconv"
 	"strings"
-	"sync/atomic"
 	"time"
 
 	"github.com/nats-io/nats.go"
@@ -18,7 +17,6 @@ import (
 	"github.com/ravinggo/game/common/define"
 	"github.com/ravinggo/game/common/logger"
 	"github.com/ravinggo/game/common/objectpool"
-	"github.com/ravinggo/game/common/safego"
 	"github.com/ravinggo/game/common/utils"
 )
 
@@ -214,16 +212,12 @@ func (nc *ServerUserNatsClient[T, US]) UnsubscribeUser(us US) {
 	us.CreateSubj(b)
 	subj := b.String()
 	if v, ok := nc.subs.GetAndRemove(subj); ok {
-		safego.Go(
-			func() {
-				if v.IsValid() {
-					err := v.Drain()
-					if err != nil {
-						logger.Log.Error().Err(err).Str("subj", subj).Msg("Client[Un]subscribeUser Drain error")
-					}
-				}
-			},
-		)
+		if v.IsValid() {
+			err := v.Drain()
+			if err != nil {
+				logger.Log.Error().Err(err).Str("subj", subj).Msg("Client[Un]subscribeUser Drain error")
+			}
+		}
 		logger.Log.Debug().Str("subj", subj).Msg("Client[Un]subscribeUser")
 	}
 }
@@ -236,9 +230,8 @@ func (nc *ServerUserNatsClient[T, US]) PublishUser(c ctx.IContext, us US, pubMsg
 	var err error
 	var traceCtx ctx.Trace
 	if c != nil {
-		var ok bool
-		traceCtx, ok = c.(ctx.Trace)
-		if ok {
+		traceCtx = c.GetTrace()
+		if traceCtx != nil {
 			oldServerId, oldServerType := traceCtx.GetServerIdAndType()
 			traceCtx.SetServerIdAndType(baseenv.GetConfig().ServerId, baseenv.GetConfig().ServerType)
 			defer traceCtx.SetServerIdAndType(oldServerId, oldServerType)
@@ -282,9 +275,8 @@ func (nc *ServerUserNatsClient[T, US]) RequestUser(c ctx.IContext, us US, reqMsg
 	var err error
 	var traceCtx ctx.Trace
 	if c != nil {
-		var ok bool
-		traceCtx, ok = c.(ctx.Trace)
-		if ok {
+		traceCtx = c.GetTrace()
+		if traceCtx != nil {
 			oldServerId, oldServerType := traceCtx.GetServerIdAndType()
 			traceCtx.SetServerIdAndType(baseenv.GetConfig().ServerId, baseenv.GetConfig().ServerType)
 			defer traceCtx.SetServerIdAndType(oldServerId, oldServerType)
@@ -317,7 +309,7 @@ func (nc *ServerUserNatsClient[T, US]) RequestUser(c ctx.IContext, us US, reqMsg
 	}
 	outMsg, err := nc.conn.Request(utils.BytesToString(b.Data[:size]), b.Data[size:], nc.timeout)
 	if err != nil {
-		return berror.NewProtocolErr(err)
+		return berror.NewProtocolStr(utils.BytesToString(b.Data[:size]) + ":" + nc.conn.ConnectedAddr() + ":" + err.Error())
 	}
 
 	return NatsUnmarshalResponseWithout(outMsg.Data, out)
@@ -328,10 +320,8 @@ func (nc *ServerUserNatsClient[T, US]) RequestUser(c ctx.IContext, us US, reqMsg
 // for more information, see NatsClient.PublishServerUser
 // create use NewSUClientPublishUser
 type ClientPublishServerUser[T, T1 any, US ServerUserSubjectPtr[T], PUB define.ProtoMessagePtr[T1]] struct {
-	Pub    T1
-	Us     T
-	used   uint32
-	forNew uint32
+	Pub T1
+	Us  T
 	define.DoNotCopy
 }
 
@@ -343,21 +333,17 @@ func (r *ClientPublishServerUser[T, T1, US, PUB]) Reset() {
 // NewSUClientPublishUser create ClientPublishServerUser for objectpool
 func NewSUClientPublishUser[T, T1 any, US ServerUserSubjectPtr[T], PUB define.ProtoMessagePtr[T1]]() *ClientPublishServerUser[T, T1, US, PUB] {
 	c := objectpool.Get[ClientPublishServerUser[T, T1, US, PUB]]()
-	c.forNew = 1
 	return c
 }
 
 // Publish more info see NatsClient.PublishServerUser
 func (r *ClientPublishServerUser[T, T1, US, PUB]) Publish(nc *ServerUserNatsClient[T, US], c ctx.IContext) *berror.ErrMsg {
-	if r.forNew != 1 {
-		panic("create ClientPublishServerUser please use NewSUClientPublishUser")
-	}
-	if atomic.CompareAndSwapUint32(&r.used, 0, 1) {
-		err := nc.PublishUser(c, (US)(&r.Us), (PUB)(&r.Pub))
-		objectpool.Put(r)
-		return err
-	}
-	panic("ClientPublishServerUser used")
+	err := nc.PublishUser(c, (US)(&r.Us), (PUB)(&r.Pub))
+	return err
+}
+
+func (r *ClientPublishServerUser[T, T1, US, PUB]) Free() {
+	objectpool.Put(r)
 }
 
 // ClientRequestServerUser Generic Implementation : rpc user topic
@@ -365,11 +351,9 @@ func (r *ClientPublishServerUser[T, T1, US, PUB]) Publish(nc *ServerUserNatsClie
 // for more information, see NatsClient.RequestUser
 // create use NewClientRequestServerUser
 type ClientRequestServerUser[T, T1, T2 any, US ServerUserSubjectPtr[T], REQ define.ProtoMessagePtr[T1], RESP define.ProtoMessagePtr[T2]] struct {
-	Req    T1
-	Resp   T2
-	Us     T
-	used   uint32
-	forNew uint32
+	Req  T1
+	Resp T2
+	Us   T
 	define.DoNotCopy
 }
 
@@ -382,19 +366,15 @@ func (r *ClientRequestServerUser[T, T1, T2, US, REQ, RESP]) Reset() {
 func NewClientRequestServerUser[T, T1, T2 any, US ServerUserSubjectPtr[T], REQ define.ProtoMessagePtr[T1], RESP define.ProtoMessagePtr[T2]](
 ) *ClientRequestServerUser[T, T1, T2, US, REQ, RESP] {
 	c := objectpool.Get[ClientRequestServerUser[T, T1, T2, US, REQ, RESP]]()
-	c.forNew = 1
 	return c
 }
 
 // Request more info see NatsClient.Request
 func (r *ClientRequestServerUser[T, T1, T2, US, REQ, RESP]) Request(nc *ServerUserNatsClient[T, US], c ctx.IContext) *berror.ErrMsg {
-	if r.forNew != 1 {
-		panic("create ClientRequestServerUser please use NewClientRequestServerUser")
-	}
-	if atomic.CompareAndSwapUint32(&r.used, 0, 1) {
-		err := nc.RequestUser(c, (US)(&r.Us), (REQ)(&r.Req), (RESP)(&r.Resp))
-		objectpool.Put(r)
-		return err
-	}
-	panic("ClientRequestServerUser used")
+	err := nc.RequestUser(c, (US)(&r.Us), (REQ)(&r.Req), (RESP)(&r.Resp))
+	return err
+}
+
+func (r *ClientRequestServerUser[T, T1, T2, US, REQ, RESP]) Free() {
+	objectpool.Put(r)
 }

@@ -84,25 +84,23 @@ func (s *ServerUserService[T1, T, CTX, US]) dealServerUserNatsMsg(msg *nats.Msg)
 	traceSize := int(data[0]) | int(data[1])<<8
 	c := (CTX)(objectpool.Get[T]())
 	baseCtx := c.MustBaseContext()
-	if traceSize > 0 {
-		traceCtx := c.GetTrace()
-		if traceCtx != nil {
-			err := traceCtx.TraceMarshalFrom(msg.Data[2 : 2+traceSize])
-			if err != nil {
-				if msg.Reply == "" {
-					e := natsclient.NatsMsgReplyError(msg, berror.NewProtocolErr(err))
-					if e != nil {
-						logger.Log.Error().Err(e).Msg("nats reply error")
-					}
+	traceCtx := c.GetTrace()
+	if traceSize > 0 && traceCtx != nil {
+		err := traceCtx.TraceMarshalFrom(msg.Data[2 : 2+traceSize])
+		if err != nil {
+			if msg.Reply == "" {
+				e := natsclient.NatsMsgReplyError(msg, berror.NewProtocolErr(err))
+				if e != nil {
+					logger.Log.Error().Err(e).Msg("nats reply error")
 				}
-				return
 			}
-			baseCtx.TraceLog.UpdateContext(
-				func(c logger.Context) logger.Context {
-					return traceCtx.TraceLogField(c.Reset())
-				},
-			)
+			return
 		}
+		baseCtx.TraceLog.UpdateContext(
+			func(c logger.Context) logger.Context {
+				return traceCtx.TraceLogField(c.Reset())
+			},
+		)
 	}
 
 	baseCtx.Req = elem.ReqPool().Get().(proto.Message)
@@ -125,8 +123,8 @@ func (s *ServerUserService[T1, T, CTX, US]) dealServerUserNatsMsg(msg *nats.Msg)
 	} else {
 		l := len(s.taskGroupHash)
 		hash := us.ToHash()
-		if hash == 0 {
-			hash = c.ToHash()
+		if hash == 0 && traceCtx != nil {
+			hash = traceCtx.ToHash()
 		}
 		if hash != 0 {
 			if l > 0 {

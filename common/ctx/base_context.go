@@ -27,18 +27,21 @@ type ToHash interface {
 }
 
 type Trace interface {
-	TraceMarshalSize() int
+	ToHash() uint64
 
+	TraceMarshalSize() int
 	// TraceMarshalAppend marshal the object to byte slice
 	TraceMarshalAppend([]byte) ([]byte, error)
-
 	// TraceMarshalFrom unmarshal the object from byte slice
 	TraceMarshalFrom([]byte) error
 
 	TraceLogField(logger.Context) logger.Context
 
 	GetServerIdAndType() (int64, string)
+
 	SetServerIdAndType(int64, string)
+
+	Reset()
 }
 
 type TracePtr[T any] interface {
@@ -54,7 +57,6 @@ type IContextPtr[T any] interface {
 type IContext interface {
 	context.Context
 	define.Clear
-	ToHash
 	// MustBaseContext implementations of IContext must contain BaseContext
 	MustBaseContext() *BaseContext
 	GetTrace() Trace
@@ -76,10 +78,6 @@ func (c *BaseContext) GetTrace() Trace {
 
 func (c *BaseContext) MustBaseContext() *BaseContext {
 	return c
-}
-
-func (c *BaseContext) ToHash() uint64 {
-	return 0
 }
 
 func (c *BaseContext) Deadline() (deadline time.Time, ok bool) {
@@ -160,10 +158,7 @@ func NewMarkCtx[TraceData any, TP TracePtr[TraceData]]() *TraceCtx[TraceData, TP
 
 func (c *TraceCtx[TraceData, TP]) Reset() {
 	c.BaseContext.Reset()
-	var mark any = &c.TD
-	if m, ok := mark.(define.Clear); ok {
-		m.Reset()
-	}
+	(TP)(&c.TD).Reset()
 }
 
 func (c *TraceCtx[TraceData, TP]) GetTrace() Trace {

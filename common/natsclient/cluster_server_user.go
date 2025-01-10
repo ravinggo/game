@@ -1,7 +1,6 @@
 package natsclient
 
 import (
-	"sync/atomic"
 	"time"
 
 	"github.com/nats-io/nats.go"
@@ -52,7 +51,8 @@ func (cnc *ClusterClientServerUser[T, US]) UserSubscribeOne(us US, handler nats.
 	if nsl == 0 {
 		panic("nats client is empty")
 	}
-	client := cnc.natsClients[us.ToHash()%nsl]
+	hash := us.ToHash()
+	client := cnc.natsClients[hash%nsl]
 	client.SubscribeUser(us, handler)
 }
 
@@ -111,10 +111,8 @@ func (cnc *ClusterClientServerUser[T, US]) RequestUser(c ctx.IContext, us US, re
 // for more information, see ClusterClientServerUser.PublishUser
 // create use NewPublishUser
 type ClusterPublishServerUser[T, T1 any, US ServerUserSubjectPtr[T], PUB define.ProtoMessagePtr[T1]] struct {
-	Pub    T1
-	Us     T
-	used   uint32
-	forNew uint32
+	Pub T1
+	Us  T
 	define.DoNotCopy
 }
 
@@ -126,21 +124,17 @@ func (r *ClusterPublishServerUser[T, T1, US, PUB]) Reset() {
 // NewClusterPublishServerUser create ClusterPublishServerUser use objectpool
 func NewClusterPublishServerUser[T, T1 any, US ServerUserSubjectPtr[T], PUB define.ProtoMessagePtr[T1]]() *ClusterPublishServerUser[T, T1, US, PUB] {
 	c := objectpool.Get[ClusterPublishServerUser[T, T1, US, PUB]]()
-	c.forNew = 1
 	return c
 }
 
 // Publish more info see ClusterClientServerUser.PublishUser
 func (r *ClusterPublishServerUser[T, T1, US, PUB]) Publish(cnc *ClusterClientServerUser[T, US], c ctx.IContext) *berror.ErrMsg {
-	if r.forNew != 1 {
-		panic("create ClusterPublishServerUser please use NewClusterPublishServerUser")
-	}
-	if atomic.CompareAndSwapUint32(&r.used, 0, 1) {
-		err := cnc.PublishUser(c, (US)(&r.Us), (PUB)(&r.Pub))
-		objectpool.Put(r)
-		return err
-	}
-	panic("ClusterPublishServerUser is used")
+	err := cnc.PublishUser(c, (US)(&r.Us), (PUB)(&r.Pub))
+	return err
+}
+
+func (r *ClusterPublishServerUser[T, T1, US, PUB]) Free() {
+	objectpool.Put(r)
 }
 
 // ClusterRequestServerUser Generic Implementation : rpc user topic
@@ -148,11 +142,9 @@ func (r *ClusterPublishServerUser[T, T1, US, PUB]) Publish(cnc *ClusterClientSer
 // for more information, see ClusterClientServerUser.RequestUser
 // create use NewPublishUser
 type ClusterRequestServerUser[T1, T2, T any, US ServerUserSubjectPtr[T], REQ define.ProtoMessagePtr[T1], RESP define.ProtoMessagePtr[T2]] struct {
-	Req    T1
-	Resp   T2
-	Us     T
-	used   uint32
-	forNew uint32
+	Req  T1
+	Resp T2
+	Us   T
 	define.DoNotCopy
 }
 
@@ -165,7 +157,6 @@ func (r *ClusterRequestServerUser[T1, T2, T, US, REQ, RESP]) Reset() {
 func NewClusterRequestServerUser[T1, T2, T any, US ServerUserSubjectPtr[T], REQ define.ProtoMessagePtr[T1], RESP define.ProtoMessagePtr[T2]](
 ) *ClusterRequestServerUser[T1, T2, T, US, REQ, RESP] {
 	c := objectpool.Get[ClusterRequestServerUser[T1, T2, T, US, REQ, RESP]]()
-	c.forNew = 1
 	return c
 }
 
@@ -174,13 +165,9 @@ func (r *ClusterRequestServerUser[T1, T2, T, US, REQ, RESP]) Request(
 	cnc *ClusterClientServerUser[T, US],
 	c ctx.IContext,
 ) *berror.ErrMsg {
-	if r.forNew != 1 {
-		panic("create ClusterRequestServerUser please use NewClusterRequestServerUser")
-	}
-	if atomic.CompareAndSwapUint32(&r.used, 0, 1) {
-		err := cnc.RequestUser(c, (US)(&r.Us), (REQ)(&r.Req), (RESP)(&r.Resp))
-		objectpool.Put(r)
-		return err
-	}
-	panic("ClusterRequestServerUser used")
+	return cnc.RequestUser(c, (US)(&r.Us), (REQ)(&r.Req), (RESP)(&r.Resp))
+}
+
+func (r *ClusterRequestServerUser[T1, T2, T, US, REQ, RESP]) Free() {
+	objectpool.Put(r)
 }
