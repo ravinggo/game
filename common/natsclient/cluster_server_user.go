@@ -150,6 +150,7 @@ func (r *ClusterPublishServerUser[T, T1, US, PUB]) Publish(cnc *ClusterClientSer
 type ClusterRequestServerUser[T1, T2, T any, US ServerUserSubjectPtr[T], REQ define.ProtoMessagePtr[T1], RESP define.ProtoMessagePtr[T2]] struct {
 	Req    T1
 	Resp   T2
+	Us     T
 	used   uint32
 	forNew uint32
 	define.DoNotCopy
@@ -171,14 +172,13 @@ func NewClusterRequestServerUser[T1, T2, T any, US ServerUserSubjectPtr[T], REQ 
 // Request more info see ClusterClientServerUser.RequestUser
 func (r *ClusterRequestServerUser[T1, T2, T, US, REQ, RESP]) Request(
 	cnc *ClusterClientServerUser[T, US],
-	us US,
 	c ctx.IContext,
 ) *berror.ErrMsg {
 	if r.forNew != 1 {
 		panic("create ClusterRequestServerUser please use NewClusterRequestServerUser")
 	}
 	if atomic.CompareAndSwapUint32(&r.used, 0, 1) {
-		err := cnc.RequestUser(c, us, (REQ)(&r.Req), (RESP)(&r.Resp))
+		err := cnc.RequestUser(c, (US)(&r.Us), (REQ)(&r.Req), (RESP)(&r.Resp))
 		objectpool.Put(r)
 		return err
 	}

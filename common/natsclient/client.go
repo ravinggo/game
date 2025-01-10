@@ -74,6 +74,11 @@ func NewNatsClient(name string, urls string, timeout time.Duration) *NatsClient 
 				logger.Log.Warn().Str("nats-server", conn.ConnectedAddr()).Msg("nats closed")
 			},
 		),
+		nats.ErrorHandler(
+			func(conn *nats.Conn, subscription *nats.Subscription, err error) {
+				logger.Log.Warn().Str("nats-server", conn.ConnectedAddr()).Err(err).Msg("nats error")
+			},
+		),
 	)
 	if err != nil {
 		panic(err)
