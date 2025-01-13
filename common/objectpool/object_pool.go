@@ -96,18 +96,20 @@ type poolUintptr struct {
 
 type objectPool struct {
 	m  [math.MaxUint16][]*poolUintptr
-	ml [math.MaxUint16]sync.Mutex
+	ml [math.MaxUint16]sync.RWMutex
 }
 
 func get[T any](o *objectPool, p uintptr) *sync.Pool {
 	index := (p >> 6) & maxIndex
-
+	o.ml[index].RLock()
 	ss := o.m[index]
 	for _, s := range ss {
 		if s.uintptr == p {
+			o.ml[index].RUnlock()
 			return s.singlePool
 		}
 	}
+	o.ml[index].RUnlock()
 
 	// lock for index conflict,
 	o.ml[index].Lock()
@@ -128,13 +130,15 @@ func get[T any](o *objectPool, p uintptr) *sync.Pool {
 
 func getMap[K comparable, V any](o *objectPool, p uintptr) *sync.Pool {
 	index := (p >> 6) & maxIndex
-
+	o.ml[index].RLock()
 	ss := o.m[index]
 	for _, s := range ss {
 		if s.uintptr == p {
+			o.ml[index].Unlock()
 			return s.singlePool
 		}
 	}
+	o.ml[index].RUnlock()
 
 	// lock for index conflict,
 	o.ml[index].Lock()
@@ -160,13 +164,15 @@ func getMap[K comparable, V any](o *objectPool, p uintptr) *sync.Pool {
 
 func (o *objectPool) getSlice(p uintptr) *slicePool {
 	index := (p >> 6) & maxIndex
-
+	o.ml[index].RLock()
 	ss := o.m[index]
 	for _, s := range ss {
 		if s.uintptr == p {
+			o.ml[index].RUnlock()
 			return s.slicePool
 		}
 	}
+	o.ml[index].RUnlock()
 
 	// lock for index conflict,
 	o.ml[index].Lock()
