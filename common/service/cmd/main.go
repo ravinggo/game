@@ -22,22 +22,37 @@ import (
 
 type TestService struct {
 	svc *service.ServerUserService[natsclient.ServerIntUserSubject, ctx.Int64TraceCtx, *ctx.Int64TraceCtx, *natsclient.ServerIntUserSubject]
+	nc  *natsclient.ClusterClientServerUser[natsclient.ServerIntUserSubject, *natsclient.ServerIntUserSubject]
 }
 
 func NewTestService() *TestService {
 	t := &TestService{
 		svc: service.NewServerUserService[natsclient.ServerIntUserSubject, ctx.Int64TraceCtx](
 			[]string{
-				"nats://192.168.0.166:4222", "nats://192.168.0.166:4222", "nats://192.168.0.166:4222", "nats://192.168.0.166:4222",
+				"nats://192.168.0.168:4222",
+				"nats://192.168.0.166:4222",
+				"nats://192.168.0.141:4222",
+				"nats://192.168.0.168:4222",
+				"nats://192.168.0.166:4222",
 				"nats://192.168.0.168:4222",
 				"nats://192.168.0.141:4222",
-				"nats://192.168.0.160:4222",
 			},
 			false,
 			0, 0, time.Second*10,
 		),
+		nc: natsclient.NewClusterClientServerUser[natsclient.ServerIntUserSubject](
+			"client", []string{
+				"nats://192.168.0.168:4222",
+				"nats://192.168.0.166:4222",
+				"nats://192.168.0.141:4222",
+				"nats://192.168.0.168:4222",
+				"nats://192.168.0.166:4222",
+				"nats://192.168.0.168:4222",
+				"nats://192.168.0.141:4222",
+			}, time.Second*10,
+		),
 	}
-	// t.Router()
+	t.Router()
 	return t
 }
 
@@ -60,15 +75,17 @@ func (t *TestService) Stop() {
 }
 
 func (t *TestService) Trace(c *ctx.Int64TraceCtx, req *basepb.IntTrace, resp *basepb.IntTrace) *berror.ErrMsg {
-	us := &natsclient.ServerIntUserSubject{
-		ServerType: "test",
-		ServerId:   0,
-		RoleId:     req.RoleId,
+	if req.RoleId%100 == 0 {
+		us := &natsclient.ServerIntUserSubject{
+			ServerType: "test",
+			ServerId:   0,
+			RoleId:     req.RoleId,
+		}
+		t.svc.UserSubscribeOneWaitSuccess(
+			us,
+		)
+		atomic.AddInt64(&subCount, 1)
 	}
-	t.svc.UserSubscribeOne(
-		us,
-	)
-	atomic.AddInt64(&subCount, 1)
 	atomic.AddInt64(&count, 1)
 	resp.RoleId = req.RoleId
 	return nil
@@ -81,9 +98,6 @@ func (t *TestService) TraceString(c *ctx.Int64TraceCtx, req *basepb.StringTrace)
 
 func (t *TestService) Error(c *ctx.Int64TraceCtx, req *basepb.ErrorMessage, resp *basepb.IntTrace) *berror.ErrMsg {
 	if c.TD.RoleId != 0 {
-		if c.TD.FromServerId == 0 && c.TD.RoleId < 10e10 {
-			panic("xxxx")
-		}
 		atomic.AddInt64(&subCount, -1)
 		t.svc.UserUnsubscribe(
 			&natsclient.ServerIntUserSubject{
@@ -109,10 +123,10 @@ func (t *TestService) ReqTrace(roleId int64) {
 	rpc.Req.TraceId = "4"
 	// rpc := natsclient.ClusterRequest[basepb.IntTrace, *basepb.IntTrace]{}
 	err := rpc.RequestToServer(
-		t.svc.GetNatsCluster(), c, baseenv.GetConfig().ServerId,
+		t.nc.ClusterClient, c, baseenv.GetConfig().ServerId,
 	)
 	if err != nil {
-		logger.Log.Panic().Err(err).Msg("ReqTrace IntTrace")
+		logger.Log.Error().Err(err).Msg("ReqTrace IntTrace")
 	}
 
 	c = objectpool.Get[ctx.Int64TraceCtx]()
@@ -126,30 +140,32 @@ func (t *TestService) ReqTrace(roleId int64) {
 	rpc1.Pub.TraceId = "4"
 
 	err = rpc1.PublishToServer(
-		t.svc.GetNatsCluster(), c, baseenv.GetConfig().ServerId,
+		t.nc.ClusterClient, c, baseenv.GetConfig().ServerId,
 	)
 	if err != nil {
 		logger.Log.Panic().Err(err).Msg("ReqTrace StringTrace")
 	}
+	if roleId%100 == 0 {
 
-	c = objectpool.Get[ctx.Int64TraceCtx]()
-	defer objectpool.Put[ctx.Int64TraceCtx](c)
+		c = objectpool.Get[ctx.Int64TraceCtx]()
+		defer objectpool.Put[ctx.Int64TraceCtx](c)
 
-	if rpc.Resp.RoleId == roleId {
-		c.TD.RoleId = roleId
-		c.TD.FromServerId = 1
-	}
+		if rpc.Resp.RoleId == roleId {
+			c.TD.RoleId = roleId
+			c.TD.FromServerId = 0
+		}
 
-	req := natsclient.NewClusterRequestServerUser[basepb.ErrorMessage, basepb.IntTrace, natsclient.ServerIntUserSubject]()
-	defer req.Free()
-	req.Us.ServerType = "test"
-	req.Us.RoleId = roleId
-	err = req.Request(t.svc.GetUserNatsCluster(), c)
+		req := natsclient.NewClusterRequestServerUser[basepb.ErrorMessage, basepb.IntTrace, natsclient.ServerIntUserSubject]()
+		defer req.Free()
+		req.Us.ServerType = "test"
+		req.Us.RoleId = roleId
+		err = req.Request(t.nc, c)
 
-	if err != nil {
-		logger.Log.Panic().Err(err).Int64("roleId", roleId).Msg("ReqUser ErrorMessage")
-	} else {
-		// logger.Log.Info().Int64("roleId", roleId).Msg("ReqUser ErrorMessage success")
+		if err != nil {
+			logger.Log.Panic().Err(err).Int64("roleId", roleId).Msg("ReqUser ErrorMessage")
+		} else {
+			// logger.Log.Info().Int64("roleId", roleId).Msg("ReqUser ErrorMessage success")
+		}
 	}
 }
 
@@ -164,7 +180,7 @@ func main() {
 	zerolog.SetGlobalLevel(zerolog.InfoLevel)
 	svc := NewTestService()
 	svc.Start()
-	for i := 0; i < 1000; i++ {
+	for i := 0; i < 3000; i++ {
 		go func() {
 			for {
 				roleId := atomic.AddInt64(&userCount, 1)
