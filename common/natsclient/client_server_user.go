@@ -178,6 +178,36 @@ func (nc *ServerUserNatsClient[T, US]) SubscribeUser(us US, handler nats.MsgHand
 	return true
 }
 
+func (nc *ServerUserNatsClient[T, US]) SubscribeUserWaitSuccess(us US, handler nats.MsgHandler) bool {
+	b := objectpool.GetBytes(0)
+	defer objectpool.PutBytes(b)
+	us.CreateSubj(b)
+	subj := string(b.Bytes())
+	if _, ok := nc.subs.Get(subj); ok {
+		return false
+	}
+	sub, err := nc.conn.Subscribe(subj, handler)
+	if err != nil {
+		logger.Log.Error().Err(err).Str("subj", subj).Msg("ClientSubscribeServerUser")
+	}
+	if !nc.subs.SetIfAbsent(subj, sub) {
+		err := sub.Unsubscribe()
+		if err != nil {
+			logger.Log.Error().Err(err).Str("subj", subj).Msg("ClientSubscribeServerUser for Unsubscribe")
+		}
+		return false
+	}
+	logger.Log.Debug().Str("subj", subj).Msg("ClientSubscribeServerUser")
+
+	// wait for success
+	_, err = nc.conn.Request(subj, nil, nc.timeout)
+	if err != nil {
+		logger.Log.Error().Err(err).Str("subj", subj).Msg("SubscribeUserWaitSuccess error")
+		return false
+	}
+	return true
+}
+
 // QueueSubscribeUser Generic Implementation : queue subscribe user topic
 // param us not escapes to heap
 func (nc *ServerUserNatsClient[T, US]) QueueSubscribeUser(us US, handler nats.MsgHandler) bool {
@@ -201,6 +231,36 @@ func (nc *ServerUserNatsClient[T, US]) QueueSubscribeUser(us US, handler nats.Ms
 		return false
 	}
 	logger.Log.Info().Str("subj", subj).Str("group", group).Msg("ClientQueueSubscribeServerUser")
+	return true
+}
+
+func (nc *ServerUserNatsClient[T, US]) QueueSubscribeUserWaitSuccess(us US, handler nats.MsgHandler) bool {
+	b := objectpool.GetBytes(0)
+	defer objectpool.PutBytes(b)
+	us.CreateSubj(b)
+	subj := string(b.Bytes())
+	if _, ok := nc.subs.Get(subj); ok {
+		return false
+	}
+	group := subj[:len(subj)-2]
+	sub, err := nc.conn.QueueSubscribe(subj, group, handler)
+	if err != nil {
+		logger.Log.Error().Err(err).Str("subj", subj).Str("group", group).Msg("ClientQueueSubscribeServerUser")
+	}
+	if !nc.subs.SetIfAbsent(subj, sub) {
+		err := sub.Unsubscribe()
+		if err != nil {
+			logger.Log.Error().Err(err).Str("subj", subj).Str("group", group).Msg("QueueSubscribeServerUser for Unsubscribe")
+		}
+		return false
+	}
+	logger.Log.Info().Str("subj", subj).Str("group", group).Msg("ClientQueueSubscribeServerUser")
+	// wait for success
+	_, err = nc.conn.Request(subj, nil, nc.timeout)
+	if err != nil {
+		logger.Log.Error().Err(err).Str("subj", subj).Msg("QueueSubscribeUserWaitSuccess error")
+		return false
+	}
 	return true
 }
 

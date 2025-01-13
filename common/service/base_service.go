@@ -244,7 +244,13 @@ func (s *BaseService[T, CTX]) dealNatsMsg(msg *nats.Msg) {
 	if index == -1 {
 		return
 	}
-
+	if msgName[index+1] == '>' && msg.Reply != "" && len(msg.Data) == 0 {
+		err := msg.Respond(nil)
+		if err != nil {
+			logger.Log.Error().Err(err).Str("msgName", msgName).Msg("deal wait success error")
+		}
+		return
+	}
 	if baseenv.GetConfig().ServerId != 0 {
 		index1 := strings.LastIndexByte(msg.Subject[:index], '.')
 		b := objectpool.GetBytes(len(msgName))

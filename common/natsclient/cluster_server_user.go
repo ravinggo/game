@@ -56,6 +56,16 @@ func (cnc *ClusterClientServerUser[T, US]) UserSubscribeOne(us US, handler nats.
 	client.SubscribeUser(us, handler)
 }
 
+func (cnc *ClusterClientServerUser[T, US]) UserSubscribeOneWaitSuccess(us US, handler nats.MsgHandler) {
+	nsl := uint64(len(cnc.natsClients))
+	if nsl == 0 {
+		panic("nats client is empty")
+	}
+	hash := us.ToHash()
+	client := cnc.natsClients[hash%nsl]
+	client.SubscribeUserWaitSuccess(us, handler)
+}
+
 // UserSubscribeAll Generic Implementation : Subscribe user topic for all NatsClient.
 // param us not escapes to heap.
 func (cnc *ClusterClientServerUser[T, US]) UserSubscribeAll(us US, handler nats.MsgHandler) {
@@ -65,6 +75,16 @@ func (cnc *ClusterClientServerUser[T, US]) UserSubscribeAll(us US, handler nats.
 	}
 	for _, client := range cnc.natsClients {
 		client.SubscribeUser(us, handler)
+	}
+}
+
+func (cnc *ClusterClientServerUser[T, US]) UserSubscribeAllWaitSuccess(us US, handler nats.MsgHandler) {
+	nsl := len(cnc.natsClients)
+	if nsl == 0 {
+		panic("nats client is empty")
+	}
+	for _, client := range cnc.natsClients {
+		client.SubscribeUserWaitSuccess(us, handler)
 	}
 }
 

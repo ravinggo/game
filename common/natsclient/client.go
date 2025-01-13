@@ -141,6 +141,36 @@ func (this_ *NatsClient) Subscribe(subj string, h nats.MsgHandler) bool {
 	return true
 }
 
+func (this_ *NatsClient) SubscribeWaitSuccess(subj string, h nats.MsgHandler) bool {
+	if _, ok := this_.subs.Get(subj); ok {
+		logger.Log.Error().Str("subj", subj).Msg("subj had Subscribed")
+		return false
+	}
+	sub, err := this_.conn.Subscribe(subj, h)
+	if err != nil {
+		logger.Log.Panic().Err(err).Str("subj", subj).Msg("Subscribe error")
+		return false
+	}
+
+	if !this_.subs.SetIfAbsent(subj, sub) {
+		err = sub.Unsubscribe()
+		if err != nil {
+			logger.Log.Error().Err(err).Str("subj", subj).Msg("Subscribe for Unsubscribe")
+		}
+		return false
+	}
+	logger.Log.Info().Str("urls", this_.urls).Str("subj", subj).Msg("Subscribe")
+
+	// wait for success
+	_, err = this_.conn.Request(subj, nil, this_.timeout)
+	if err != nil {
+		logger.Log.Error().Err(err).Str("subj", subj).Msg("SubscribeWaitSuccess error")
+		return false
+	}
+	return true
+
+}
+
 // QueueSubscribe queue subscribe
 func (this_ *NatsClient) QueueSubscribe(subj string, h nats.MsgHandler) bool {
 	if _, ok := this_.subs.Get(subj); ok {
@@ -161,6 +191,35 @@ func (this_ *NatsClient) QueueSubscribe(subj string, h nats.MsgHandler) bool {
 		return false
 	}
 	logger.Log.Info().Str("urls", this_.urls).Str("subj", subj).Msg("QueueSubscribe")
+	return true
+}
+
+func (this_ *NatsClient) QueueSubscribeWaitSuccess(subj string, h nats.MsgHandler) bool {
+	if _, ok := this_.subs.Get(subj); ok {
+		logger.Log.Error().Str("subj", subj).Msg("subj had Subscribed")
+		return false
+	}
+	group := strings.ReplaceAll(subj, ">", "group")
+	sub, err := this_.conn.QueueSubscribe(subj, group, h)
+	if err != nil {
+		logger.Log.Panic().Err(err).Str("subj", subj).Msg("Subscribe error")
+		return false
+	}
+	if !this_.subs.SetIfAbsent(subj, sub) {
+		err = sub.Unsubscribe()
+		if err != nil {
+			logger.Log.Error().Err(err).Str("subj", subj).Msg("QueueSubscribe for Unsubscribe")
+		}
+		return false
+	}
+	logger.Log.Info().Str("urls", this_.urls).Str("subj", subj).Msg("QueueSubscribe")
+
+	// wait for success
+	_, err = this_.conn.Request(subj, nil, this_.timeout)
+	if err != nil {
+		logger.Log.Error().Err(err).Str("subj", subj).Msg("QueueSubscribeWaitSuccess error")
+		return false
+	}
 	return true
 }
 

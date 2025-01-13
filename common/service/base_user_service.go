@@ -49,8 +49,16 @@ func (s *ServerUserService[T1, T, CTX, US]) UserSubscribeOne(us US) {
 	s.userNatsCluster.UserSubscribeOne(us, s.dealServerUserNatsMsg)
 }
 
+func (s *ServerUserService[T1, T, CTX, US]) UserSubscribeOneWaitSuccess(us US) {
+	s.userNatsCluster.UserSubscribeOneWaitSuccess(us, s.dealServerUserNatsMsg)
+}
+
 func (s *ServerUserService[T1, T, CTX, US]) UserSubscribeAll(us US) {
 	s.userNatsCluster.UserSubscribeAll(us, s.dealServerUserNatsMsg)
+}
+
+func (s *ServerUserService[T1, T, CTX, US]) UserSubscribeAllWaitSuccess(us US) {
+	s.userNatsCluster.UserSubscribeAllWaitSuccess(us, s.dealServerUserNatsMsg)
 }
 
 func (s *ServerUserService[T1, T, CTX, US]) UserUnsubscribe(us US) {
@@ -62,7 +70,13 @@ func (s *ServerUserService[T1, T, CTX, US]) dealServerUserNatsMsg(msg *nats.Msg)
 	if index == -1 {
 		return
 	}
-
+	if msg.Subject[index+1] == '>' && msg.Reply != "" && len(msg.Data) == 0 {
+		err := msg.Respond(nil)
+		if err != nil {
+			logger.Log.Error().Err(err).Str("msgName", msg.Subject).Msg("deal wait success error")
+		}
+		return
+	}
 	msgName := msg.Subject[index+1:]
 	elem, ok := s.h.GetHandler(msgName)
 	if !ok {

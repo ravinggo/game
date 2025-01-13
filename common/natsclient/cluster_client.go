@@ -53,10 +53,22 @@ func (this_ *ClusterClient) SubscribeAll(subj string, h nats.MsgHandler) {
 	}
 }
 
+func (this_ *ClusterClient) SubscribeAllWaitSuccess(subj string, h nats.MsgHandler) {
+	for _, natsClient := range this_.natsClients {
+		natsClient.SubscribeWaitSuccess(subj, h)
+	}
+}
+
 // QueueSubscribeAll queue subscribe subj for all NatsClient if not subscribed.
 func (this_ *ClusterClient) QueueSubscribeAll(subj string, h nats.MsgHandler) {
 	for _, natsClient := range this_.natsClients {
 		natsClient.QueueSubscribe(subj, h)
+	}
+}
+
+func (this_ *ClusterClient) QueueSubscribeAllWaitSuccess(subj string, h nats.MsgHandler) {
+	for _, natsClient := range this_.natsClients {
+		natsClient.QueueSubscribeWaitSuccess(subj, h)
 	}
 }
 
