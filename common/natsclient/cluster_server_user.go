@@ -22,7 +22,7 @@ func NewClusterClientServerUser[T any, US ServerUserSubjectPtr[T]](
 ) *ClusterClientServerUser[T, US] {
 	cnc := NewClusterClient(name, urls, timeout)
 
-	clusterClient := &ClusterClientServerUser[T, US]{}
+	clusterClient := &ClusterClientServerUser[T, US]{ClusterClient: cnc}
 	clusterClient.natsClients = make([]*ServerUserNatsClient[T, US], 0, len(cnc.natsClients))
 	for _, c := range cnc.natsClients {
 		natsClient := newServerUserNatsClient[T, US](c)

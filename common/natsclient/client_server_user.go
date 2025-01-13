@@ -309,7 +309,7 @@ func (nc *ServerUserNatsClient[T, US]) RequestUser(c ctx.IContext, us US, reqMsg
 	}
 	outMsg, err := nc.conn.Request(utils.BytesToString(b.Data[:size]), b.Data[size:], nc.timeout)
 	if err != nil {
-		return berror.NewProtocolStr(utils.BytesToString(b.Data[:size]) + ":" + nc.conn.ConnectedAddr() + ":" + err.Error())
+		return berror.NewProtocolStr(utils.BytesToString(b.Data[:size]) + "[" + nc.conn.ConnectedAddr() + "]:" + err.Error())
 	}
 
 	return NatsUnmarshalResponseWithout(outMsg.Data, out)
