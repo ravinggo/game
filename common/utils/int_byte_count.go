@@ -1,5 +1,7 @@
 package utils
 
+// CountIntByte Calculate the number of bytes occupied after conversion to a string
+// 1 = 1 ,10 = 2, 222 = 3 1000 = 4, 10000 = 5
 func CountIntByte(i int64) int {
 	ret := 0
 	if i < 0 {

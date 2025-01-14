@@ -6,27 +6,19 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
-type ServerType string
-
-func (s ServerType) String() string {
-	return string(s)
-}
-
+// ProtoMessagePtr is an interface that can be implemented by a struct to be a proto message pointer
+// for enforce constraints on proto message pointer when using generics
 type ProtoMessagePtr[T any] interface {
 	proto.Message
 	*T
 }
 
-type Ptr[T any] interface {
-	*T
-}
-
-func GetProtoMessage[PB ProtoMessagePtr[T], T any](t *T) PB {
-	return PB(t)
-}
-
+// Clear is an interface that can be implemented by a struct to reset its value
+// Just for the convenience of objectpool
 type Clear interface {
 	Reset()
 }
 
+// DoNotCopy is an empty structure that can be embedded into a struct to prevent
+// It cannot be copied
 type DoNotCopy [0]sync.Mutex

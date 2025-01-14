@@ -24,7 +24,7 @@ func newTicker() *tickerElem {
 	return tickerElemPool.Get().(*tickerElem)
 }
 
-func (t *tickerElem) AfterFunc(interval time.Duration, f func()) {
+func (t *tickerElem) afterFunc(interval time.Duration, f func()) {
 	if interval < time.Millisecond {
 		interval = time.Millisecond
 	}
@@ -37,7 +37,7 @@ func (t *tickerElem) AfterFunc(interval time.Duration, f func()) {
 	}
 }
 
-func (t *tickerElem) UtilFunc(util time.Time, f func()) {
+func (t *tickerElem) untilFunc(util time.Time, f func()) {
 	interval := util.Sub(time.Now())
 	if interval < time.Millisecond {
 		interval = time.Millisecond
@@ -52,7 +52,7 @@ func (t *tickerElem) UtilFunc(util time.Time, f func()) {
 	}
 }
 
-func (t *tickerElem) TickFunc(interval time.Duration, f func() bool) {
+func (t *tickerElem) tickFunc(interval time.Duration, f func() bool) {
 	if interval < time.Millisecond {
 		interval = time.Millisecond
 	}

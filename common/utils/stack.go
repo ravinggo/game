@@ -139,6 +139,7 @@ func (st StackTrace) formatSlice(s fmt.State, verb rune) {
 // Stack represents a Stack of program counters.
 type Stack []uintptr
 
+// Format formats the Stack of Frames according to the fmt.Formatter interface.
 func (s *Stack) Format(st fmt.State, verb rune) {
 	switch verb {
 	case 'v':
@@ -152,6 +153,7 @@ func (s *Stack) Format(st fmt.State, verb rune) {
 	}
 }
 
+// StackTrace returns formatted StackTrace of the stack.
 func (s *Stack) StackTrace() StackTrace {
 	f := make([]Frame, len(*s))
 	for i := 0; i < len(f); i++ {
@@ -160,6 +162,7 @@ func (s *Stack) StackTrace() StackTrace {
 	return f
 }
 
+// Callers returns Stack
 func Callers() *Stack {
 	const depth = 32
 	var pcs [depth]uintptr
