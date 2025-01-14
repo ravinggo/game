@@ -7,26 +7,26 @@ import (
 )
 
 type Config struct {
-	ServerType string `envconfig:"ServerType"` // 应用名
-	ServerId   int64  `envconfig:"SERVER_ID"`
+	ServerType string `envconfig:"ServerType"` // app name
+	ServerId   int64  `envconfig:"SERVER_ID"`  // app server id
 
 	/* ============================== */
-	/* ========== 配置中心 =========== */
+	/* ========== config =========== */
 	/* ============================== */
 
-	ConfType   string `envconfig:"CONF_TYPE"`   // 配置类型
-	ConfHosts  string `envconfig:"CONF_HOSTS"`  // 配置集群地址
-	ConfPath   string `envconfig:"CONF_PATH"`   // 配置节点路径
-	ConfAuth   string `envconfig:"CONF_AUTH"`   // 配置认证信息
-	ConfFormat string `envconfig:"CONF_FORMAT"` // 配置文件格式
+	ConfType   string `envconfig:"CONF_TYPE"`   // config type
+	ConfHosts  string `envconfig:"CONF_HOSTS"`  // config hosts
+	ConfPath   string `envconfig:"CONF_PATH"`   // config path
+	ConfAuth   string `envconfig:"CONF_AUTH"`   // config auth user:pass? token?
+	ConfFormat string `envconfig:"CONF_FORMAT"` // config format,json? yaml?
 
 	/* ============================== */
-	/* ============ 网络 ============= */
+	/* ============ network ============= */
 	/* ============================== */
 	TcpAddr string `envconfig:"TCP_ADDR"`
 
 	/* ============================== */
-	/* ============ 日志 ============= */
+	/* ============ logger ============= */
 	/* ============================== */
 
 	// LogLevel DEBUG, INFO, WARN, ERROR, PANIC
@@ -36,25 +36,28 @@ type Config struct {
 	// LogAsync async output log data
 	LogAsync bool `envconfig:"LOG_ASYNC"`
 
-	// 日志使用utc时间
+	// LogUtcTime use utc time or local time
 	LogUtcTime bool `envconfig:"LOG_UTC_TIME"`
 
+	// LogTimestamp output log timestamp or time.String()
 	LogTimestamp bool `envconfig:"LOG_TIMESTAMP"`
 
-	// output console. default stderr. yet can stdout or discard
+	// LogConsole output console. default stderr. yet can stdout or discard
 	LogConsole string `envconfig:"LOG_CONSOLE"`
 
+	// LogDir write log to directory
 	LogDir string `envconfig:"LOG_DIR"`
-	// lumberjack 文件到多大时进行rotate
+	// LogMaxSize lumberjack Maximum size of a single file
 	LogMaxSize int `envconfig:"LOG_MAX_SIZE"`
-	// lumberjack 最多保留多少个rotate
+	// LogMaxBackup lumberjack How many log files are retained at most?
 	LogMaxBackup int `envconfig:"LOG_MAX_BACKUP"`
 
-	// 日志输出格式 默认"console",另有"json"
+	// LogEncodingMode Log output format default "console" ,yet can "json"
 	LogEncodingMode string `envconfig:"LOG_ENCODING_MODE"`
 
+	// LogNoCaller No call line output
 	LogNoCaller bool `envconfig:"LOG_NO_CALLER"`
-
+	// ErrorStackTrace output berror caller stack trace
 	ErrorStackTrace bool `envconfig:"ERROR_STACK_TRACE"`
 }
 
