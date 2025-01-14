@@ -164,7 +164,7 @@ func (this_ *File) VisitEnumField(i *proto.EnumField) {
 	if i.ValueOption != nil {
 		o := i.ValueOption
 		optionName := TrimOption(o.Name)
-		if optionName == "models.error_info" {
+		if optionName == "basepb.error_info" {
 			ei := &ErrorInfo{Name: optionName, ErrorCode: "1", Integer: i.Integer}
 
 			for _, ac := range o.AggregatedConstants {

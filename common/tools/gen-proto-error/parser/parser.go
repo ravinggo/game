@@ -43,6 +43,7 @@ type Parser struct {
 	ext         map[string]*proto.Message
 	enumsModels map[string][]*ErrorInfo
 	Files       []*File
+	dirs        []string
 }
 
 func NewParser(dir string) (*Parser, error) {
@@ -73,6 +74,7 @@ func NewParser(dir string) (*Parser, error) {
 		enums:       map[string]*ErrorInfo{},
 		ext:         map[string]*proto.Message{},
 		enumsModels: map[string][]*ErrorInfo{},
+		dirs:        dirs,
 	}, nil
 }
 
@@ -217,7 +219,7 @@ import (
 )
 
 %s
-`, pkgName, outPath, stackError,
+`, strings.Join(this_.dirs, ","), pkgName, stackError,
 	)
 	if !utils.IsDirExists(outPath) {
 		err := os.MkdirAll(outPath, os.ModePerm)
