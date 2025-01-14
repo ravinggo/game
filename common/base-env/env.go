@@ -6,6 +6,29 @@ import (
 	"github.com/kelseyhightower/envconfig"
 )
 
+const (
+	ServerType      = "SERVER_TYPE"
+	ServerId        = "SERVER_ID"
+	ConfType        = "CONF_TYPE"
+	ConfHosts       = "CONF_HOSTS"
+	ConfPath        = "CONF_PATH"
+	ConfAuth        = "CONF_AUTH"
+	ConfFormat      = "CONF_FORMAT"
+	TcpAddr         = "TCP_ADDR"
+	LogLevel        = "LOG_LEVEL"
+	LogAsync        = "LOG_ASYNC"
+	LogUtcTime      = "LOG_UTC_TIME"
+	LogTimestamp    = "LOG_TIMESTAMP"
+	LogConsole      = "LOG_CONSOLE"
+	LogDir          = "LOG_DIR"
+	LogMaxSize      = "LOG_MAX_SIZE"
+	LogMaxBackup    = "LOG_MAX_BACKUP"
+	LogMaxAge       = "LOG_MAX_AGE"
+	LogEncodingMode = "LOG_ENCODING_MODE"
+	LogNoCaller     = "LOG_NO_CALLER"
+	ErrorStackTrace = "ERROR_STACK_TRACE"
+)
+
 type Config struct {
 	ServerType string `envconfig:"SERVER_TYPE"` // app name
 	ServerId   int64  `envconfig:"SERVER_ID"`   // app server id
