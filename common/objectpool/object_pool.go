@@ -145,7 +145,7 @@ func getMap[K comparable, V any](o *objectPool, p uintptr) *sync.Pool {
 	ss := o.m[index]
 	for _, s := range ss {
 		if s.uintptr == p {
-			o.ml[index].Unlock()
+			o.ml[index].RUnlock()
 			return s.singlePool
 		}
 	}
