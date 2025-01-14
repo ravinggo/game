@@ -17,6 +17,7 @@ import (
 	"github.com/ravinggo/game/common/ctx"
 	"github.com/ravinggo/game/common/eventloop"
 	"github.com/ravinggo/game/common/handler"
+	"github.com/ravinggo/game/common/localevent"
 	"github.com/ravinggo/game/common/logger"
 	"github.com/ravinggo/game/common/natsclient"
 	"github.com/ravinggo/game/common/objectpool"
@@ -145,6 +146,8 @@ func (s *BaseService[T, CTX]) Start(f func(any)) {
 			logger.Log.Warn().Str("type", reflect.TypeOf(e).String()).Any("data", e).Msg("unknown event")
 		}
 	}
+	s.GetHandler().Logger()
+	localevent.Logger()
 	s.subscribe()
 	s.el.Start(
 		func(e any) {

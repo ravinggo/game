@@ -88,10 +88,10 @@ func calcIndex2(a any) (uintptr, int) {
 }
 
 // Logger print all local event
-func Logger(logE *logger.Event) {
+func Logger() {
 	for _, es := range le.events {
 		for _, e := range es {
-			logE.Msg(e.String())
+			logger.Log.Info().Str("event", e.String()).Msg("register localevent")
 		}
 	}
 }

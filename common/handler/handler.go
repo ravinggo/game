@@ -13,6 +13,7 @@ import (
 	"github.com/ravinggo/game/common/berror"
 	"github.com/ravinggo/game/common/ctx"
 	"github.com/ravinggo/game/common/define"
+	"github.com/ravinggo/game/common/logger"
 	"github.com/ravinggo/game/common/objectpool"
 )
 
@@ -121,6 +122,12 @@ func (h *Handler[CTX, T]) GetQueueSubjInfo() map[string]struct{} {
 // GetBroadcastSubjInfo get all broadcast subj topic prefix
 func (h *Handler[CTX, T]) GetBroadcastSubjInfo() map[string]struct{} {
 	return h.broadcastSubj
+}
+
+func (h *Handler[CTX, T]) Logger() {
+	for _, e := range h.handle {
+		logger.Log.Info().Str("func", e.String()).Msg("register handler")
+	}
 }
 
 // RegisterRPC RESP is out parameter and Call in many goroutines,just one sub will receive the event
