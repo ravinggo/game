@@ -82,7 +82,7 @@ var (
 	}
 )
 
-func init() {
+func InitConfig() {
 	envconfig.MustProcess("", &cfg)
 }
 
