@@ -6,12 +6,14 @@ import (
 	"github.com/ravinggo/game/common/safego"
 )
 
+// TaskPool dynamic task pool
 type TaskPool struct {
 	poolSize int64
 	c        chan func()
 	maxCap   int64
 }
 
+// NewTaskPool create a TaskPool
 func NewTaskPool(poolSize int64, maxCap int64) *TaskPool {
 	tp := &TaskPool{
 		c:        make(chan func(), maxCap),
@@ -22,6 +24,7 @@ func NewTaskPool(poolSize int64, maxCap int64) *TaskPool {
 	return tp
 }
 
+// PutForce force put task to TaskPool
 func (tp *TaskPool) PutForce(f func()) {
 	if atomic.AddInt64(&tp.poolSize, 1) <= tp.maxCap {
 		go func() {
@@ -44,6 +47,7 @@ func (tp *TaskPool) PutForce(f func()) {
 	tp.c <- f
 }
 
+// Put task to TaskPool, if task pool is full, return false
 func (tp *TaskPool) Put(f func()) bool {
 	if atomic.AddInt64(&tp.poolSize, 1) <= tp.maxCap {
 		go func() {

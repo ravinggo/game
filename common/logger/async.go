@@ -8,6 +8,7 @@ import (
 	"sync/atomic"
 )
 
+// AsyncSink write log asynchronously
 type AsyncSink struct {
 	writer io.Writer
 	open   int32
@@ -19,9 +20,9 @@ type AsyncSink struct {
 	closed chan struct{}
 }
 
+// NewAsync create a AsyncSink
 func NewAsync(writer io.Writer) *AsyncSink {
 	as := &AsyncSink{
-
 		writer:   writer,
 		open:     0,
 		swapBuff: [2][]*bs{},
@@ -56,20 +57,13 @@ func putBuff(b *bs) {
 	buffPool.Put(b)
 }
 
-func (this_ *AsyncSink) close() {
-	atomic.StoreUint32(&this_.close_, 1)
-}
-
+// Closed return true if closed
 func (this_ *AsyncSink) Closed() bool {
 	return atomic.LoadUint32(&this_.close_) == 1
 }
 
-func (this_ *AsyncSink) Sync() error {
-	return nil
-}
-
 func (this_ *AsyncSink) Close() error {
-	this_.close()
+	atomic.StoreUint32(&this_.close_, 1)
 	this_.cond.Signal()
 	<-this_.closed
 	closer, ok := this_.writer.(io.Closer)

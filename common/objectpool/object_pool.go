@@ -65,6 +65,7 @@ type PtrType struct {
 	Elem *Type
 }
 
+// GetPtr get type pointer of T
 func GetPtr[T any]() uintptr {
 	var a any = (*T)(nil)
 	t := *(**Type)(unsafe.Pointer(&a))
@@ -74,6 +75,7 @@ func GetPtr[T any]() uintptr {
 	return (uintptr)(unsafe.Pointer(t))
 }
 
+// GetPtrAny get type pointer of param a
 func GetPtrAny(a any) uintptr {
 	t := *(**Type)(unsafe.Pointer(&a))
 	if t.Kind_&KindMask == uint8(reflect.Pointer) {
@@ -82,6 +84,7 @@ func GetPtrAny(a any) uintptr {
 	return (uintptr)(unsafe.Pointer(t))
 }
 
+// GetMapPtr get type pointer of map[K]V
 func GetMapPtr[K comparable, V any]() uintptr {
 	var a any = (map[K]V)(nil)
 	t := *(**Type)(unsafe.Pointer(&a))
@@ -314,8 +317,6 @@ func PutSliceClear[T any](t *Slice[T]) {
 	putSlicePool(s, t)
 }
 
-type Map[K comparable, V any] map[K]V
-
 // GetMap  get a map from object pool with K and V
 func GetMap[K comparable, V any]() map[K]V {
 	return getMap[K, V](&op, GetMapPtr[K, V]()).Get().(map[K]V)
@@ -327,6 +328,7 @@ func PutMap[K comparable, V any](t map[K]V) {
 	getMap[K, V](&op, GetMapPtr[K, V]()).Put(t)
 }
 
+// Bytes is a slice object pool for byte
 type Bytes Slice[byte]
 
 func GetBytes(cap int) *Bytes {

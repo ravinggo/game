@@ -141,6 +141,7 @@ func (this_ *NatsClient) Subscribe(subj string, h nats.MsgHandler) bool {
 	return true
 }
 
+// SubscribeWaitSuccess Subscribe and wait for success
 func (this_ *NatsClient) SubscribeWaitSuccess(subj string, h nats.MsgHandler) bool {
 	if _, ok := this_.subs.Get(subj); ok {
 		logger.Log.Error().Str("subj", subj).Msg("subj had Subscribed")
@@ -194,6 +195,7 @@ func (this_ *NatsClient) QueueSubscribe(subj string, h nats.MsgHandler) bool {
 	return true
 }
 
+// QueueSubscribeWaitSuccess QueueSubscribe and wait for success
 func (this_ *NatsClient) QueueSubscribeWaitSuccess(subj string, h nats.MsgHandler) bool {
 	if _, ok := this_.subs.Get(subj); ok {
 		logger.Log.Error().Str("subj", subj).Msg("subj had Subscribed")
@@ -239,7 +241,7 @@ func (this_ *NatsClient) Unsubscribe(subj string) {
 	}
 }
 
-// ClientPublish Generic Implementation : publish for topic
+// ClientPublish publish for topic
 // designed to use objectpool, because Pub will always escape to heap
 // for more information, see NatsClient.Publish and NatsClient.PublishToServer
 // create use NewClientPublish
@@ -266,6 +268,7 @@ func (r *ClientPublish[T, PUB]) Publish(nc *NatsClient, c ctx.IContext) *berror.
 	return err
 }
 
+// Free object to objectpool
 func (r *ClientPublish[T, PUB]) Free() {
 	objectpool.Put(r)
 }
@@ -404,7 +407,7 @@ func (this_ *NatsClient) Request(c ctx.IContext, reqMsg proto.Message, respMsg p
 	return this_.RequestToServer(c, 0, reqMsg, respMsg)
 }
 
-// ClientRequest Generic Implementation : rpc for topic
+// ClientRequest  rpc for topic
 // designed to use objectpool, because Req, Resp will always escape to heap
 // for more information, see NatsClient.Request
 // create use NewClientRequest

@@ -153,7 +153,7 @@ func (u *ServerStringUserSubject) ParseSubjForCall(s string) error {
 	return nil
 }
 
-// SubscribeUser Generic Implementation : subscribe user topic
+// SubscribeUser  subscribe user topic
 // param us not escapes to heap
 func (nc *ServerUserNatsClient[T, US]) SubscribeUser(us US, handler nats.MsgHandler) bool {
 	b := objectpool.GetBytes(0)
@@ -178,6 +178,7 @@ func (nc *ServerUserNatsClient[T, US]) SubscribeUser(us US, handler nats.MsgHand
 	return true
 }
 
+// SubscribeUserWaitSuccess SubscribeUser and wait for success
 func (nc *ServerUserNatsClient[T, US]) SubscribeUserWaitSuccess(us US, handler nats.MsgHandler) bool {
 	b := objectpool.GetBytes(0)
 	defer objectpool.PutBytes(b)
@@ -208,7 +209,7 @@ func (nc *ServerUserNatsClient[T, US]) SubscribeUserWaitSuccess(us US, handler n
 	return true
 }
 
-// QueueSubscribeUser Generic Implementation : queue subscribe user topic
+// QueueSubscribeUser queue subscribe user topic
 // param us not escapes to heap
 func (nc *ServerUserNatsClient[T, US]) QueueSubscribeUser(us US, handler nats.MsgHandler) bool {
 	b := objectpool.GetBytes(0)
@@ -234,6 +235,7 @@ func (nc *ServerUserNatsClient[T, US]) QueueSubscribeUser(us US, handler nats.Ms
 	return true
 }
 
+// QueueSubscribeUserWaitSuccess QueueSubscribeUser and wait for success
 func (nc *ServerUserNatsClient[T, US]) QueueSubscribeUserWaitSuccess(us US, handler nats.MsgHandler) bool {
 	b := objectpool.GetBytes(0)
 	defer objectpool.PutBytes(b)
@@ -264,7 +266,7 @@ func (nc *ServerUserNatsClient[T, US]) QueueSubscribeUserWaitSuccess(us US, hand
 	return true
 }
 
-// UnsubscribeUser Generic Implementation : unsubscribe user topic
+// UnsubscribeUser  unsubscribe user topic
 // param us not escapes to heap
 func (nc *ServerUserNatsClient[T, US]) UnsubscribeUser(us US) {
 	b := objectpool.GetBytes(0)
@@ -282,7 +284,7 @@ func (nc *ServerUserNatsClient[T, US]) UnsubscribeUser(us US) {
 	}
 }
 
-// PublishUser Generic Implementation : publish user topic
+// PublishUser publish msg to user topic
 // param us,pubMsg escapes to heap
 // recommended use ClientPublishServerUser
 func (nc *ServerUserNatsClient[T, US]) PublishUser(c ctx.IContext, us US, pubMsg proto.Message) *berror.ErrMsg {
@@ -375,7 +377,7 @@ func (nc *ServerUserNatsClient[T, US]) RequestUser(c ctx.IContext, us US, reqMsg
 	return NatsUnmarshalResponseWithout(outMsg.Data, out)
 }
 
-// ClientPublishServerUser Generic Implementation : publish user topic
+// ClientPublishServerUser publish msg to user topic
 // designed to use objectpool, because Pub,Us will always escape to heap
 // for more information, see NatsClient.PublishServerUser
 // create use NewSUClientPublishUser
@@ -406,7 +408,7 @@ func (r *ClientPublishServerUser[T, T1, US, PUB]) Free() {
 	objectpool.Put(r)
 }
 
-// ClientRequestServerUser Generic Implementation : rpc user topic
+// ClientRequestServerUser rpc user topic
 // designed to use objectpool, because Pub,Us will always escape to heap
 // for more information, see NatsClient.RequestUser
 // create use NewClientRequestServerUser

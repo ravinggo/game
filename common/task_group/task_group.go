@@ -47,6 +47,7 @@ func (this_ *TaskGroup[T]) SetMaxCap(maxCap int) {
 	this_.maxCap = maxCap
 }
 
+// PutForce force put task to TaskGroup
 func (this_ *TaskGroup[T]) PutForce(d T, f func()) {
 	run := false
 	this_.mu.Lock()
@@ -96,6 +97,7 @@ func (this_ *TaskGroup[T]) PutForce(d T, f func()) {
 	}
 }
 
+// Put task to TaskGroup, if task group is full, return false
 func (this_ *TaskGroup[T]) Put(d T, f func()) bool {
 	run := false
 	this_.mu.Lock()
@@ -149,6 +151,7 @@ func (this_ *TaskGroup[T]) Put(d T, f func()) bool {
 	return true
 }
 
+// IsRunning return true if TaskGroup is running
 func (this_ *TaskGroup[T]) IsRunning() bool {
 	this_.mu.Lock()
 	isRunning := this_.isRunning

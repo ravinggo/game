@@ -35,11 +35,18 @@ type BaseService[T any, CTX ctx.IContextPtr[T]] struct {
 	taskPool      *task_group.TaskPool
 }
 
+// HashRunMode 0: FixedHashPoolMode, 1: OneHashOneGo
+// FixedHashPoolMode use hash to run task,
+// OneHashOneGo use one hash one goroutine
 type HashRunMode int
 
 const (
+	// FixedHashPoolMode fixed((runtime.NumCPU()+1)*1024) task group pool
+	// by ToHash() distribute task to task_group.TaskGroup
 	FixedHashPoolMode HashRunMode = 0
-	OneHashOneGo      HashRunMode = 1
+
+	// OneHashOneGo one hash one goroutine
+	OneHashOneGo HashRunMode = 1
 )
 
 type TaskRunMode int
@@ -56,6 +63,7 @@ type ce[CTX ctx.IContextPtr[T], T any] struct {
 	Elem *handler.Elem[CTX, T]
 }
 
+// NewBaseService create a new BaseService
 func NewBaseService[T any, CTX ctx.IContextPtr[T]](
 	natsUrls []string,
 	lockQueueThread bool,
@@ -115,18 +123,22 @@ func (s *BaseService[T, CTX]) taskFunc(e task_group.TaskGroupElem[ce[CTX, T]]) {
 	}
 }
 
+// GetHandler return all registered handlers
 func (s *BaseService[T, CTX]) GetHandler() *handler.Handler[CTX, T] {
 	return s.h
 }
 
+// GetNatsCluster return nats cluster client
 func (s *BaseService[T, CTX]) GetNatsCluster() *natsclient.ClusterClient {
 	return s.natsCluster
 }
 
+// PostEventloop post any event to eventloop
 func (s *BaseService[T, CTX]) PostEventloop(e any) {
 	s.el.PostEventQueue(e)
 }
 
+// Start if PostEventloop is being called, param f need to be implemented by the user
 func (s *BaseService[T, CTX]) Start(f func(any)) {
 	if f == nil {
 		f = func(e any) {
@@ -203,6 +215,7 @@ func (s *BaseService[T, CTX]) call(c CTX, e *handler.Elem[CTX, T]) {
 	}
 }
 
+// Stop the service
 func (s *BaseService[T, CTX]) Stop() {
 	s.natsCluster.Close()
 	s.el.Stop()
@@ -383,6 +396,7 @@ func (s *BaseService[T, CTX]) dealNatsMsg(msg *nats.Msg) {
 	}
 }
 
+// ReplyTaskPoolFull reply task pool full error
 func ReplyTaskPoolFull(c *ctx.BaseContext) {
 	if c.NatsMsg != nil && c.NatsMsg.Reply != "" {
 		err := natsclient.NatsMsgReplyError(c.NatsMsg, berror.NewProtocolStr("task pool full"))

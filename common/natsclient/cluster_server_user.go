@@ -12,11 +12,13 @@ import (
 	"github.com/ravinggo/game/common/objectpool"
 )
 
+// ClusterClientServerUser is a ClusterClient with user topic
 type ClusterClientServerUser[T any, US ServerUserSubjectPtr[T]] struct {
 	*ClusterClient
 	natsClients []*ServerUserNatsClient[T, US]
 }
 
+// NewClusterClientServerUser create a ClusterClientServerUser.
 func NewClusterClientServerUser[T any, US ServerUserSubjectPtr[T]](
 	name string, urls []string, timeout time.Duration,
 ) *ClusterClientServerUser[T, US] {
@@ -31,6 +33,7 @@ func NewClusterClientServerUser[T any, US ServerUserSubjectPtr[T]](
 	return clusterClient
 }
 
+// NewClusterClientServerUser2 create a ClusterClientServerUser with *ClusterClient
 func NewClusterClientServerUser2[T any, US ServerUserSubjectPtr[T]](
 	cnc *ClusterClient,
 ) *ClusterClientServerUser[T, US] {
@@ -44,7 +47,7 @@ func NewClusterClientServerUser2[T any, US ServerUserSubjectPtr[T]](
 	return clusterClient
 }
 
-// UserSubscribeOne Generic Implementation : Subscribe user topic for one NatsClient.
+// UserSubscribeOne  Subscribe user topic for one NatsClient.
 // param us not escapes to heap.
 func (cnc *ClusterClientServerUser[T, US]) UserSubscribeOne(us US, handler nats.MsgHandler) {
 	nsl := uint64(len(cnc.natsClients))
@@ -56,6 +59,7 @@ func (cnc *ClusterClientServerUser[T, US]) UserSubscribeOne(us US, handler nats.
 	client.SubscribeUser(us, handler)
 }
 
+// UserSubscribeOneWaitSuccess  Subscribe user topic for one NatsClient and wait success.
 func (cnc *ClusterClientServerUser[T, US]) UserSubscribeOneWaitSuccess(us US, handler nats.MsgHandler) {
 	nsl := uint64(len(cnc.natsClients))
 	if nsl == 0 {
@@ -66,7 +70,7 @@ func (cnc *ClusterClientServerUser[T, US]) UserSubscribeOneWaitSuccess(us US, ha
 	client.SubscribeUserWaitSuccess(us, handler)
 }
 
-// UserSubscribeAll Generic Implementation : Subscribe user topic for all NatsClient.
+// UserSubscribeAll Subscribe user topic for all NatsClient.
 // param us not escapes to heap.
 func (cnc *ClusterClientServerUser[T, US]) UserSubscribeAll(us US, handler nats.MsgHandler) {
 	nsl := len(cnc.natsClients)
@@ -78,6 +82,7 @@ func (cnc *ClusterClientServerUser[T, US]) UserSubscribeAll(us US, handler nats.
 	}
 }
 
+// UserSubscribeAllWaitSuccess Subscribe user topic for all NatsClient and wait success.
 func (cnc *ClusterClientServerUser[T, US]) UserSubscribeAllWaitSuccess(us US, handler nats.MsgHandler) {
 	nsl := len(cnc.natsClients)
 	if nsl == 0 {
@@ -88,7 +93,7 @@ func (cnc *ClusterClientServerUser[T, US]) UserSubscribeAllWaitSuccess(us US, ha
 	}
 }
 
-// UserUnsubscribe Generic Implementation : Unsubscribe user topic for all NatsClient if subscribed.
+// UserUnsubscribe  Unsubscribe user topic for all NatsClient if subscribed.
 // param us not escapes to heap.
 func (cnc *ClusterClientServerUser[T, US]) UserUnsubscribe(us US) {
 	nsl := len(cnc.natsClients)
@@ -126,7 +131,7 @@ func (cnc *ClusterClientServerUser[T, US]) RequestUser(c ctx.IContext, us US, re
 	return client.RequestUser(c, us, reqMsg, respMsg)
 }
 
-// ClusterPublishServerUser Generic Implementation : publish user topic
+// ClusterPublishServerUser publish msg to user topic
 // designed to use objectpool, because Pub,Us will always escape to heap
 // for more information, see ClusterClientServerUser.PublishUser
 // create use NewPublishUser
@@ -157,7 +162,7 @@ func (r *ClusterPublishServerUser[T, T1, US, PUB]) Free() {
 	objectpool.Put(r)
 }
 
-// ClusterRequestServerUser Generic Implementation : rpc user topic
+// ClusterRequestServerUser rpc user topic
 // designed to use objectpool, because Pub,Us will always escape to heap
 // for more information, see ClusterClientServerUser.RequestUser
 // create use NewPublishUser

@@ -16,11 +16,13 @@ import (
 	"github.com/ravinggo/game/common/task_group"
 )
 
+// ServerUserService is a service,can use user subject.
 type ServerUserService[T1 any, T any, CTX ctx.IContextPtr[T], US natsclient.ServerUserSubjectPtr[T1]] struct {
 	*BaseService[T, CTX]
 	userNatsCluster *natsclient.ClusterClientServerUser[T1, US]
 }
 
+// NewServerUserService create a ServerUserService.
 func NewServerUserService[T1 any, T any, CTX ctx.IContextPtr[T], US natsclient.ServerUserSubjectPtr[T1]](
 	natsUrls []string,
 	lockQueueThread bool,
@@ -41,26 +43,34 @@ func NewServerUserService[T1 any, T any, CTX ctx.IContextPtr[T], US natsclient.S
 	return s
 }
 
+// GetUserNatsCluster return *ClusterClientServerUser.
 func (s *ServerUserService[T1, T, CTX, US]) GetUserNatsCluster() *natsclient.ClusterClientServerUser[T1, US] {
 	return s.userNatsCluster
 }
 
+// UserSubscribeOne subscribe one user subject.
 func (s *ServerUserService[T1, T, CTX, US]) UserSubscribeOne(us US) {
 	s.userNatsCluster.UserSubscribeOne(us, s.dealServerUserNatsMsg)
 }
 
+// UserSubscribeOneWaitSuccess subscribe one user subject and wait success.
+// Only used in multi-cluster or multiple connections to the same cluster
 func (s *ServerUserService[T1, T, CTX, US]) UserSubscribeOneWaitSuccess(us US) {
 	s.userNatsCluster.UserSubscribeOneWaitSuccess(us, s.dealServerUserNatsMsg)
 }
 
+// UserSubscribeAll subscribe all NatsClient for user subject.
 func (s *ServerUserService[T1, T, CTX, US]) UserSubscribeAll(us US) {
 	s.userNatsCluster.UserSubscribeAll(us, s.dealServerUserNatsMsg)
 }
 
+// UserSubscribeAllWaitSuccess subscribe all NatsClient for user subject and wait success.
+// Only used in multi-cluster or multiple connections to the same cluster
 func (s *ServerUserService[T1, T, CTX, US]) UserSubscribeAllWaitSuccess(us US) {
 	s.userNatsCluster.UserSubscribeAllWaitSuccess(us, s.dealServerUserNatsMsg)
 }
 
+// UserUnsubscribe unsubscribe user subject if subscribed.
 func (s *ServerUserService[T1, T, CTX, US]) UserUnsubscribe(us US) {
 	s.userNatsCluster.UserUnsubscribe(us)
 }

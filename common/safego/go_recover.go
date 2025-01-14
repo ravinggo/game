@@ -4,12 +4,14 @@ import (
 	"github.com/ravinggo/game/common/logger"
 )
 
+// Recover panic of default logger
 func Recover() {
 	if e := recover(); e != nil {
 		logger.Log.Error().Any("panic info", e).Msg("panic")
 	}
 }
 
+// RecoverFunc panic of panicHandler
 func RecoverFunc(panicHandler func(e interface{})) {
 	if e := recover(); e != nil {
 		if panicHandler != nil {
@@ -18,12 +20,14 @@ func RecoverFunc(panicHandler func(e interface{})) {
 	}
 }
 
+// RecoverWithLogger panic of log
 func RecoverWithLogger(log logger.Logger) {
 	if e := recover(); e != nil {
 		log.Error().Any("panic info", e).Msg("panic")
 	}
 }
 
+// Go run f with Recover
 func Go(f func()) {
 	go func() {
 		defer Recover()
@@ -31,6 +35,7 @@ func Go(f func()) {
 	}()
 }
 
+// GOWithLogger run f with RecoverWithLogger
 func GOWithLogger(log logger.Logger, f func()) {
 	go func() {
 		defer RecoverWithLogger(log)
@@ -38,7 +43,8 @@ func GOWithLogger(log logger.Logger, f func()) {
 	}()
 }
 
-func GOWithPanic(panicFunc func(interface{}), f func()) {
+// GOWithPanic run f with RecoverFunc
+func GOWithPanic(panicFunc func(any), f func()) {
 	go func() {
 		defer RecoverFunc(panicFunc)
 		f()
