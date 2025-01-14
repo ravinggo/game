@@ -24,3 +24,5 @@ go.work.sum
 # base-env file
 .env
 .xlsx
+.idea
+.vscode
