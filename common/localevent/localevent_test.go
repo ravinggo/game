@@ -12,7 +12,7 @@ type testStruct struct {
 	Id int
 }
 
-func (ts testStruct) call(x ctx.IContext, t testStruct) *berror.ErrMsg {
+func (ts testStruct) call(x *ctx.BaseContext, t testStruct) *berror.ErrMsg {
 	return nil
 }
 
@@ -23,7 +23,7 @@ func BenchmarkLocalEvent(b *testing.B) {
 	b.ResetTimer()
 
 	for i := 0; i < b.N; i++ {
-		err := Call(nil, testStruct{Id: i})
+		err := Call(&c, testStruct{Id: i})
 		if err != nil {
 			panic(err)
 		}

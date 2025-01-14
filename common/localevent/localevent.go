@@ -4,6 +4,7 @@ import (
 	"math"
 	"reflect"
 	"runtime"
+	"sync"
 
 	"github.com/ravinggo/game/common/berror"
 	"github.com/ravinggo/game/common/ctx"
@@ -16,7 +17,7 @@ const mark = math.MaxUint16 - 1
 
 var (
 	le     localEvent
-	esPool = objectpool.GetTypePool[events]()
+	esPool *sync.Pool
 )
 
 type eventHandler struct {
@@ -98,12 +99,15 @@ func Logger(logE *logger.Event) {
 	}
 }
 
-func Register[T any](desc string, f func(ctx.IContext, T) *berror.ErrMsg) {
+func Register[T1, T any, CTX ctx.IContextPtr[T1]](desc string, f func(CTX, T) *berror.ErrMsg) {
+	if esPool == nil {
+		esPool = objectpool.GetTypePool[events[CTX, T1]]()
+	}
 	ptr, index := calcIndex[T]()
 	setES(
 		ptr, index, eventHandler{
 			f: f,
-			fa: func(c ctx.IContext, a any) *berror.ErrMsg {
+			fa: func(c CTX, a any) *berror.ErrMsg {
 				return f(c, a.(T))
 			},
 			desc: "localevent[" + desc + "] [" + runtime.FuncForPC(reflect.ValueOf(f).Pointer()).Name() + "] " + reflect.TypeOf(f).String(),
@@ -111,11 +115,11 @@ func Register[T any](desc string, f func(ctx.IContext, T) *berror.ErrMsg) {
 	)
 }
 
-func Call[T any](c ctx.IContext, data T) *berror.ErrMsg {
+func Call[T1, T any, CTX ctx.IContextPtr[T1]](c CTX, data T) *berror.ErrMsg {
 	ptr, index := calcIndex[T]()
 	es := getES(ptr, index)
 	for _, e := range es {
-		if err := e.f.(func(ctx.IContext, T) *berror.ErrMsg)(c, data); err != nil {
+		if err := e.f.(func(CTX, T) *berror.ErrMsg)(c, data); err != nil {
 			return err
 		}
 	}
@@ -123,15 +127,15 @@ func Call[T any](c ctx.IContext, data T) *berror.ErrMsg {
 }
 
 type localEventKey struct{}
-type events struct {
+type events[CTX ctx.IContextPtr[T], T any, ] struct {
 	es []any
 }
 
-func (es *events) add(a any) {
+func (es *events[CTX, T]) add(a any) {
 	es.es = append(es.es, a)
 }
 
-func (es *events) call(c ctx.IContext) *berror.ErrMsg {
+func (es *events[CTX, T]) call(c CTX) *berror.ErrMsg {
 	cs := es.es
 	es.es = es.es[:0]
 	if len(cs) == 0 {
@@ -145,7 +149,7 @@ func (es *events) call(c ctx.IContext) *berror.ErrMsg {
 			continue
 		}
 		for _, ef := range es {
-			if err := ef.fa.(func(ctx.IContext, any) *berror.ErrMsg)(c, e); err != nil {
+			if err := ef.fa.(func(CTX, any) *berror.ErrMsg)(c, e); err != nil {
 				return err
 			}
 		}
@@ -153,10 +157,10 @@ func (es *events) call(c ctx.IContext) *berror.ErrMsg {
 	return nil
 }
 
-func Publish(c ctx.IContext, data any) {
-	es, ok := c.Value(localEventKey{}).(*events)
+func Publish[CTX ctx.IContextPtr[T], T any](c CTX, data any) {
+	es, ok := c.Value(localEventKey{}).(*events[CTX, T])
 	if !ok {
-		es = esPool.Get().(*events)
+		es = esPool.Get().(*events[CTX, T])
 		if cap(es.es) == 0 {
 			es.es = make([]any, 0, 8)
 		}
@@ -173,11 +177,11 @@ func MiddleLocalEvent[CTX ctx.IContextPtr[T], T any](
 		if err != nil {
 			return err
 		}
-		v := c.Value(localEventKey{})
+		v := c.MustBaseContext().Value(localEventKey{})
 		if v == nil {
 			return nil
 		}
-		es := v.(*events)
+		es := v.(*events[CTX, T])
 		err = es.call(c)
 		esPool.Put(es)
 		return err

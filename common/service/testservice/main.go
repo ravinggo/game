@@ -14,6 +14,7 @@ import (
 	"github.com/ravinggo/game/common/berror"
 	"github.com/ravinggo/game/common/ctx"
 	"github.com/ravinggo/game/common/handler"
+	"github.com/ravinggo/game/common/localevent"
 	"github.com/ravinggo/game/common/logger"
 	"github.com/ravinggo/game/common/natsclient"
 	"github.com/ravinggo/game/common/objectpool"
@@ -57,9 +58,11 @@ func NewTestService() *TestService {
 }
 
 func (t *TestService) Router() {
-	handler.RegisterRPCRespSingle(t.svc.GetHandler(), "测试", t.Trace)
-	handler.RegisterEventSingle(t.svc.GetHandler(), "测试1", t.TraceString)
-	handler.RegisterRPCRespSingle(t.svc.GetHandler(), "测试2", t.Error)
+	handler.RegisterRPCResp(t.svc.GetHandler(), "测试", t.Trace)
+	handler.RegisterEvent(t.svc.GetHandler(), "测试1", t.TraceString)
+	handler.RegisterRPCResp(t.svc.GetHandler(), "测试2", t.Error)
+	localevent.Register("test localevent eventString", t.eventString)
+	localevent.Register("test localevent eventInt", t.eventInt)
 }
 
 func (t *TestService) Start() {
@@ -88,10 +91,22 @@ func (t *TestService) Trace(c *ctx.Int64TraceCtx, req *basepb.IntTrace, resp *ba
 	}
 	atomic.AddInt64(&count, 1)
 	resp.RoleId = req.RoleId
+	return localevent.Call(c, req)
+}
+
+func (t *TestService) eventString(c *ctx.Int64TraceCtx, req *basepb.StringTrace) *berror.ErrMsg {
+	return nil
+}
+
+func (t *TestService) eventInt(c *ctx.Int64TraceCtx, req *basepb.IntTrace) *berror.ErrMsg {
 	return nil
 }
 
 func (t *TestService) TraceString(c *ctx.Int64TraceCtx, req *basepb.StringTrace) *berror.ErrMsg {
+	err := localevent.Call(c, req)
+	if err != nil {
+		return err
+	}
 	atomic.AddInt64(&count, 1)
 	return nil
 }
