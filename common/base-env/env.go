@@ -7,8 +7,8 @@ import (
 )
 
 type Config struct {
-	ServerType string `envconfig:"ServerType"` // app name
-	ServerId   int64  `envconfig:"SERVER_ID"`  // app server id
+	ServerType string `envconfig:"SERVER_TYPE"` // app name
+	ServerId   int64  `envconfig:"SERVER_ID"`   // app server id
 
 	/* ============================== */
 	/* ========== config =========== */
