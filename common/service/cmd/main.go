@@ -37,7 +37,7 @@ func NewTestService() *TestService {
 				"nats://192.168.0.168:4222",
 				"nats://192.168.0.141:4222",
 			},
-			false,
+			true,
 			0, 0, time.Second*10,
 		),
 		nc: natsclient.NewClusterClientServerUser[natsclient.ServerIntUserSubject](
@@ -57,9 +57,9 @@ func NewTestService() *TestService {
 }
 
 func (t *TestService) Router() {
-	handler.RegisterRPCResp(t.svc.GetHandler(), "测试", t.Trace)
-	handler.RegisterEvent(t.svc.GetHandler(), "测试1", t.TraceString)
-	handler.RegisterRPCResp(t.svc.GetHandler(), "测试2", t.Error)
+	handler.RegisterRPCRespSingle(t.svc.GetHandler(), "测试", t.Trace)
+	handler.RegisterEventSingle(t.svc.GetHandler(), "测试1", t.TraceString)
+	handler.RegisterRPCRespSingle(t.svc.GetHandler(), "测试2", t.Error)
 }
 
 func (t *TestService) Start() {
