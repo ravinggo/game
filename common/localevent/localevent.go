@@ -22,7 +22,7 @@ var (
 
 type eventHandler struct {
 	f    any
-	fa   any
+	fa   any // for publish
 	desc string
 }
 
@@ -87,10 +87,7 @@ func calcIndex2(a any) (uintptr, int) {
 	return ptr, index
 }
 
-func GetAllLocalEvent() [][]eventHandler {
-	return le.events
-}
-
+// Logger print all local event
 func Logger(logE *logger.Event) {
 	for _, es := range le.events {
 		for _, e := range es {
@@ -99,6 +96,7 @@ func Logger(logE *logger.Event) {
 	}
 }
 
+// Register a local event
 func Register[T1, T any, CTX ctx.IContextPtr[T1]](desc string, f func(CTX, T) *berror.ErrMsg) {
 	if esPool == nil {
 		esPool = objectpool.GetTypePool[events[CTX, T1]]()
@@ -115,6 +113,7 @@ func Register[T1, T any, CTX ctx.IContextPtr[T1]](desc string, f func(CTX, T) *b
 	)
 }
 
+// Call sync call local event
 func Call[T1, T any, CTX ctx.IContextPtr[T1]](c CTX, data T) *berror.ErrMsg {
 	ptr, index := calcIndex[T]()
 	es := getES(ptr, index)
@@ -157,6 +156,7 @@ func (es *events[CTX, T]) call(c CTX) *berror.ErrMsg {
 	return nil
 }
 
+// Publish local event, async call by MiddleLocalEvent
 func Publish[CTX ctx.IContextPtr[T], T any](c CTX, data any) {
 	es, ok := c.Value(localEventKey{}).(*events[CTX, T])
 	if !ok {
@@ -169,6 +169,7 @@ func Publish[CTX ctx.IContextPtr[T], T any](c CTX, data any) {
 	es.es = append(es.es, data)
 }
 
+// MiddleLocalEvent local event middleware,call Publish local event
 func MiddleLocalEvent[CTX ctx.IContextPtr[T], T any](
 	next handler.HandleFunc[CTX, T],
 ) handler.HandleFunc[CTX, T] {

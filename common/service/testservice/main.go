@@ -58,9 +58,9 @@ func NewTestService() *TestService {
 }
 
 func (t *TestService) Router() {
-	handler.RegisterRPCResp(t.svc.GetHandler(), "测试", t.Trace)
-	handler.RegisterEvent(t.svc.GetHandler(), "测试1", t.TraceString)
-	handler.RegisterRPCResp(t.svc.GetHandler(), "测试2", t.Error)
+	handler.RegisterRPCResp(t.svc.GetHandler(), "test1", t.Trace)
+	handler.RegisterEvent(t.svc.GetHandler(), "test2", t.TraceString)
+	handler.RegisterRPCResp(t.svc.GetHandler(), "test3", t.Error)
 	localevent.Register("test localevent eventString", t.eventString)
 	localevent.Register("test localevent eventInt", t.eventInt)
 }
