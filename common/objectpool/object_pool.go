@@ -74,6 +74,14 @@ func GetPtr[T any]() uintptr {
 	return (uintptr)(unsafe.Pointer(t))
 }
 
+func GetPtrAny(a any) uintptr {
+	t := *(**Type)(unsafe.Pointer(&a))
+	if t.Kind_&KindMask == uint8(reflect.Pointer) {
+		t = (*PtrType)(unsafe.Pointer(t)).Elem
+	}
+	return (uintptr)(unsafe.Pointer(t))
+}
+
 func GetMapPtr[K comparable, V any]() uintptr {
 	var a any = (map[K]V)(nil)
 	t := *(**Type)(unsafe.Pointer(&a))

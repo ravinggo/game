@@ -57,6 +57,7 @@ type IContextPtr[T any] interface {
 type IContext interface {
 	context.Context
 	define.Clear
+	SetValue(any, any)
 	// MustBaseContext implementations of IContext must contain BaseContext
 	MustBaseContext() *BaseContext
 	GetTrace() Trace
