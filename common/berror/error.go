@@ -21,7 +21,7 @@ const (
 var (
 	ErrMsgName = string(proto.MessageName(&basepb.ErrorMessage{}))
 	errPool    = objectpool.GetTypePool[ErrMsg]()
-	getErr     = func() *ErrMsg {
+	GetErr     = func() *ErrMsg {
 		return errPool.Get().(*ErrMsg)
 	}
 	PutErr = func(e *ErrMsg) {
@@ -29,7 +29,7 @@ var (
 	}
 )
 
-func isOpenStack() bool {
+func IsOpenStack() bool {
 	return baseenv.GetConfig().ErrorStackTrace
 }
 
@@ -114,22 +114,22 @@ func (this_ *ErrMsg) IsErrorNoAuth() bool {
 }
 
 func NewNormalInternalStr(str string) *ErrMsg {
-	e := getErr()
+	e := GetErr()
 	e.ErrCode = basepb.ErrorType_ETNormal
 	e.ErrMsg = ServerInternalErrorStr
 	e.ErrInternalInfo = str
-	if isOpenStack() {
+	if IsOpenStack() {
 		e.WithStackTrace()
 	}
 	return e
 }
 
 func NewNormalStr(errMsg string, str string) *ErrMsg {
-	e := getErr()
+	e := GetErr()
 	e.ErrCode = basepb.ErrorType_ETNormal
 	e.ErrMsg = errMsg
 	e.ErrInternalInfo = str
-	if isOpenStack() {
+	if IsOpenStack() {
 		e.WithStackTrace()
 	}
 	return e
@@ -149,11 +149,11 @@ func NewNormalErr(errMsg string, err error) *ErrMsg {
 }
 
 func NewProtocolStr(str string) *ErrMsg {
-	e := getErr()
+	e := GetErr()
 	e.ErrCode = basepb.ErrorType_ETProtocol
 	e.ErrMsg = ServerInternalErrorStr
 	e.ErrInternalInfo = str
-	if isOpenStack() {
+	if IsOpenStack() {
 		e.WithStackTrace()
 	}
 	return e
@@ -172,11 +172,11 @@ func NewProtocolErr(err error) *ErrMsg {
 }
 
 func NewPanicStr(str string) *ErrMsg {
-	e := getErr()
+	e := GetErr()
 	e.ErrCode = basepb.ErrorType_ETPanic
 	e.ErrMsg = ServerInternalErrorStr
 	e.ErrInternalInfo = str
-	if isOpenStack() {
+	if IsOpenStack() {
 		e.WithStackTrace()
 	}
 	return e
@@ -195,11 +195,11 @@ func NewPanicErr(err error) *ErrMsg {
 }
 
 func NewDatabaseStr(str string) *ErrMsg {
-	e := getErr()
+	e := GetErr()
 	e.ErrCode = basepb.ErrorType_ETDataBase
 	e.ErrMsg = ServerInternalErrorStr
 	e.ErrInternalInfo = str
-	if isOpenStack() {
+	if IsOpenStack() {
 		e.WithStackTrace()
 	}
 	return e
@@ -218,11 +218,11 @@ func NewDatabaseErr(err error) *ErrMsg {
 }
 
 func NewNoAuthStr(str string) *ErrMsg {
-	e := getErr()
+	e := GetErr()
 	e.ErrCode = basepb.ErrorType_ETNoAuth
 	e.ErrMsg = ServerInternalErrorStr
 	e.ErrInternalInfo = str
-	if isOpenStack() {
+	if IsOpenStack() {
 		e.WithStackTrace()
 	}
 	return e
