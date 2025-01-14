@@ -27,6 +27,7 @@ const (
 	LogEncodingMode = "LOG_ENCODING_MODE"
 	LogNoCaller     = "LOG_NO_CALLER"
 	ErrorStackTrace = "ERROR_STACK_TRACE"
+	PprofAddr       = "PPROF_ADDR"
 )
 
 type Config struct {
@@ -46,7 +47,8 @@ type Config struct {
 	/* ============================== */
 	/* ============ network ============= */
 	/* ============================== */
-	TcpAddr string `envconfig:"TCP_ADDR"`
+	TcpAddr   string `envconfig:"TCP_ADDR"`
+	PprofAddr string `envconfig:"PPROF_ADDR"`
 
 	/* ============================== */
 	/* ============ logger ============= */
