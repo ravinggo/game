@@ -18,6 +18,7 @@ import (
 
 type Logger = zerolog.Logger
 type Context = zerolog.Context
+type Event = zerolog.Event
 
 var Log *Logger
 

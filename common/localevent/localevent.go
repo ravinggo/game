@@ -3,6 +3,7 @@ package localevent
 import (
 	"math"
 	"reflect"
+	"runtime"
 
 	"github.com/ravinggo/game/common/berror"
 	"github.com/ravinggo/game/common/ctx"
@@ -23,6 +24,11 @@ type eventHandler struct {
 	fa   any
 	desc string
 }
+
+func (e eventHandler) String() string {
+	return e.desc
+}
+
 type slot struct {
 	ptr uintptr
 	i   int
@@ -80,6 +86,18 @@ func calcIndex2(a any) (uintptr, int) {
 	return ptr, index
 }
 
+func GetAllLocalEvent() [][]eventHandler {
+	return le.events
+}
+
+func Logger(logE *logger.Event) {
+	for _, es := range le.events {
+		for _, e := range es {
+			logE.Msg(e.String())
+		}
+	}
+}
+
 func Register[T any](desc string, f func(ctx.IContext, T) *berror.ErrMsg) {
 	ptr, index := calcIndex[T]()
 	setES(
@@ -88,6 +106,7 @@ func Register[T any](desc string, f func(ctx.IContext, T) *berror.ErrMsg) {
 			fa: func(c ctx.IContext, a any) *berror.ErrMsg {
 				return f(c, a.(T))
 			},
+			desc: "localevent[" + desc + "] [" + runtime.FuncForPC(reflect.ValueOf(f).Pointer()).Name() + "] " + reflect.TypeOf(f).String(),
 		},
 	)
 }
