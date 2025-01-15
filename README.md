@@ -13,13 +13,13 @@ All logic can be directly modularized, which is very friendly to companies that 
 专为全球同服、大型分布式游戏开发的服务器框架，性能高，开发速度非常快。<br>
 核心代码非常简单，基于nats多集群模式，轻松实现百万qps,
 组件化，大量泛型实现，以及强制约束，使用对象池减少GC消耗。<br>
-能满除全球同服mmorpg游戏以外的所有游戏开发<br>
+能满足除全球同服mmorpg游戏以外的所有游戏开发<br>
 当然也能用作分服的模式，可以极大的节省服务器资源<br>
 支持actor思想<br>
 支持DDD模式开发<br>
 支持事件驱动<br>
 支持全内存模型，支持数据库模型<br>
-所有逻辑可直接模块话，对需要做中台的公司非常友好<br>
+所有逻辑可直接模块化，对需要做中台的公司非常友好<br>
 
 It can now be used for production environment game development<br>
 目前已经能用作生产环境游戏开发了
