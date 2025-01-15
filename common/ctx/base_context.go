@@ -120,6 +120,7 @@ func (c *BaseContext) Reset() {
 	c.Context = context.Background()
 	clear(c.Resp)
 	c.Resp = c.Resp[:0]
+	c.NatsMsg = nil
 }
 
 var _ IContext = (*BaseContext)(nil)

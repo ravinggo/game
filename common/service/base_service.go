@@ -172,11 +172,7 @@ func (s *BaseService[T, CTX]) handleCtx(c CTX, e *handler.Elem[CTX, T]) {
 		e.ReqPool().Put(baseCtx.Req)
 		baseCtx.Req = nil
 	}
-	if e.IsRPCResp() {
-		last := len(baseCtx.Resp) - 1
-		e.RespPool().Put(baseCtx.Resp[last])
-		baseCtx.Resp[last] = nil
-	}
+
 	objectpool.Put[T](c)
 }
 
@@ -210,8 +206,13 @@ func (s *BaseService[T, CTX]) call(c CTX, e *handler.Elem[CTX, T]) {
 	if err != nil {
 		return
 	}
-	if baseCtx.NatsMsg != nil && baseCtx.Resp != nil {
+
+	if baseCtx.NatsMsg != nil && len(baseCtx.Resp) != 0 {
 		err = natsclient.NatsMsgReply(baseCtx.NatsMsg, baseCtx.Resp...)
+		if e.IsRPCResp() {
+			last := len(baseCtx.Resp) - 1
+			e.RespPool().Put(baseCtx.Resp[last])
+		}
 		if err != nil {
 			return
 		}

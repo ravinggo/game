@@ -264,8 +264,10 @@ func registerRPCResp[CTX ctx.IContextPtr[T], REQ define.ProtoMessagePtr[T1], RES
 			resp := respPool.Get().(RESP)
 			err := f(c, bc.Req.(REQ), resp)
 			if err != nil {
+				respPool.Put(resp)
 				return err
 			}
+
 			bc.Resp = append(bc.Resp, resp)
 			return nil
 		},
