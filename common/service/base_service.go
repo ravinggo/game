@@ -172,7 +172,7 @@ func (s *BaseService[T, CTX]) handleCtx(c CTX, e *handler.Elem[CTX, T]) {
 		e.ReqPool().Put(baseCtx.Req)
 		baseCtx.Req = nil
 	}
-	if e.IsRPC() {
+	if e.IsRPCResp() {
 		last := len(baseCtx.Resp) - 1
 		e.RespPool().Put(baseCtx.Resp[last])
 		baseCtx.Resp[last] = nil

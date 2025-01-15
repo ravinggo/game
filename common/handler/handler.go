@@ -23,16 +23,17 @@ type (
 )
 
 type Elem[CTX ctx.IContextPtr[T], T any] struct {
-	h        HandleFunc[CTX, T]
-	desc     string
-	midS     []MiddleWare[CTX, T]
-	isRPC    bool
-	msgName  protoreflect.FullName
-	funcType string
-	isForce  bool
-	isSingle bool
-	reqPool  *sync.Pool
-	respPool *sync.Pool
+	h         HandleFunc[CTX, T]
+	desc      string
+	midS      []MiddleWare[CTX, T]
+	isRPC     bool
+	isRPCResp bool
+	msgName   protoreflect.FullName
+	funcType  string
+	isForce   bool
+	isSingle  bool
+	reqPool   *sync.Pool
+	respPool  *sync.Pool
 }
 
 func (this_ *Elem[CTX, T]) IsForce() bool {
@@ -49,6 +50,10 @@ func (this_ *Elem[CTX, T]) IsSingle() bool {
 
 func (this_ *Elem[CTX, T]) IsRPC() bool {
 	return this_.isRPC
+}
+
+func (this_ *Elem[CTX, T]) IsRPCResp() bool {
+	return this_.isRPCResp
 }
 
 func (this_ *Elem[CTX, T]) ReqPool() *sync.Pool {
@@ -264,15 +269,16 @@ func registerRPCResp[CTX ctx.IContextPtr[T], REQ define.ProtoMessagePtr[T1], RES
 			bc.Resp = append(bc.Resp, resp)
 			return nil
 		},
-		desc:     desc,
-		midS:     midS,
-		isRPC:    true,
-		msgName:  msgName,
-		isForce:  isForceHandle,
-		isSingle: isSingle,
-		funcType: " [" + runtime.FuncForPC(reflect.ValueOf(f).Pointer()).Name() + "] " + reflect.TypeOf(f).String(),
-		reqPool:  objectpool.GetTypePool[T1](),
-		respPool: respPool,
+		desc:      desc,
+		midS:      midS,
+		isRPC:     true,
+		isRPCResp: true,
+		msgName:   msgName,
+		isForce:   isForceHandle,
+		isSingle:  isSingle,
+		funcType:  " [" + runtime.FuncForPC(reflect.ValueOf(f).Pointer()).Name() + "] " + reflect.TypeOf(f).String(),
+		reqPool:   objectpool.GetTypePool[T1](),
+		respPool:  respPool,
 	}
 }
 
