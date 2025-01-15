@@ -39,13 +39,9 @@ Welcome friends who are interested to participate in the development<br>
 
 
 ### 各大主流服务器配置文件接入(Access to configuration files for major mainstream servers)
-- [ ] consul
-- [ ] etcd
-- [ ] zookeeper
-- [ ] nacos
-- [ ] polaris
-- [ ] apollo
-- [ ] file(json,yaml...)
+consul etcd3 .... <br>
+file(json,yaml...)<br>
+请使用(please use) [viper](https://github.com/spf13/viper)
 
 ### 数据库集成(Database Integration)
 - [ ] mongo
