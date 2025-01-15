@@ -2,8 +2,10 @@ package objectpool
 
 import (
 	"reflect"
+	"runtime"
 	"sync"
 	"testing"
+	"time"
 	"unsafe"
 )
 
@@ -99,7 +101,9 @@ func TestGet(t *testing.T) {
 	if to.Elem().Kind() != reflect.Ptr {
 		t.Errorf("GetSlice[*Struct1](1).Data Type is not ptr")
 	}
-
+	now := time.Now()
+	runtime.GC()
+	t.Logf("gc time:%v", time.Since(now))
 }
 
 func addSet(m map[uintptr]struct{}, keys ...uintptr) {

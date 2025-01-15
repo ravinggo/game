@@ -101,105 +101,123 @@ var (
 
 type poolUintptr struct {
 	uintptr
-	singlePool *sync.Pool
-	slicePool  *slicePool
+	singlePool sync.Pool
+	slicePool  slicePool
 }
 
 type objectPool struct {
-	m  [math.MaxUint16][]*poolUintptr
+	m  [math.MaxUint16][]poolUintptr
 	ml [math.MaxUint16]sync.RWMutex
 }
 
 func get[T any](o *objectPool, p uintptr) *sync.Pool {
 	index := (p >> 6) & maxIndex
-	o.ml[index].RLock()
+	lock := &o.ml[index]
+	lock.RLock()
 	ss := o.m[index]
-	for _, s := range ss {
-		if s.uintptr == p {
-			o.ml[index].RUnlock()
-			return s.singlePool
+	for i := range ss {
+		if ss[i].uintptr == p {
+			lock.RUnlock()
+			return &ss[i].singlePool
 		}
 	}
-	o.ml[index].RUnlock()
+	lock.RUnlock()
 
 	// lock for index conflict,
-	o.ml[index].Lock()
-	for _, s := range o.m[index] {
-		if s.uintptr == p {
-			o.ml[index].Unlock()
-			return s.singlePool
+	lock.Lock()
+	ss = o.m[index]
+	for i := range ss {
+		if ss[i].uintptr == p {
+			lock.Unlock()
+			return &ss[i].singlePool
 		}
 	}
-	pu := &poolUintptr{
-		uintptr:    p,
-		singlePool: newPool[T](),
-	}
-	o.m[index] = append(o.m[index], pu)
-	o.ml[index].Unlock()
-	return pu.singlePool
+	ss = append(
+		ss, poolUintptr{
+			uintptr: p,
+			singlePool: sync.Pool{
+				New: func() any {
+					return new(T)
+				},
+			},
+		},
+	)
+	o.m[index] = ss
+	po := &ss[len(ss)-1]
+	lock.Unlock()
+	return &po.singlePool
 }
 
 func getMap[K comparable, V any](o *objectPool, p uintptr) *sync.Pool {
 	index := (p >> 6) & maxIndex
-	o.ml[index].RLock()
+	lock := &o.ml[index]
+	lock.RLock()
 	ss := o.m[index]
-	for _, s := range ss {
-		if s.uintptr == p {
-			o.ml[index].RUnlock()
-			return s.singlePool
+	for i := range ss {
+		if ss[i].uintptr == p {
+			lock.RUnlock()
+			return &ss[i].singlePool
 		}
 	}
-	o.ml[index].RUnlock()
+	lock.RUnlock()
 
 	// lock for index conflict,
-	o.ml[index].Lock()
-	for _, s := range o.m[index] {
-		if s.uintptr == p {
-			o.ml[index].Unlock()
-			return s.singlePool
+	lock.Lock()
+	ss = o.m[index]
+	for i := range ss {
+		if ss[i].uintptr == p {
+			lock.Unlock()
+			return &ss[i].singlePool
 		}
 	}
-	pu := &poolUintptr{
-		uintptr: p,
-		singlePool: &sync.Pool{
-			New: func() any {
-
-				return map[K]V{}
+	ss = append(
+		ss, poolUintptr{
+			uintptr: p,
+			singlePool: sync.Pool{
+				New: func() any {
+					return map[K]V{}
+				},
 			},
 		},
-	}
-	o.m[index] = append(o.m[index], pu)
-	o.ml[index].Unlock()
-	return pu.singlePool
+	)
+
+	o.m[index] = ss
+	po := &ss[len(ss)-1]
+	lock.Unlock()
+	return &po.singlePool
 }
 
 func (o *objectPool) getSlice(p uintptr) *slicePool {
 	index := (p >> 6) & maxIndex
-	o.ml[index].RLock()
+	lock := &o.ml[index]
+	lock.RLock()
 	ss := o.m[index]
-	for _, s := range ss {
-		if s.uintptr == p {
-			o.ml[index].RUnlock()
-			return s.slicePool
+	for i := range ss {
+		if ss[i].uintptr == p {
+			lock.RUnlock()
+			return &ss[i].slicePool
 		}
 	}
-	o.ml[index].RUnlock()
+	lock.RUnlock()
 
 	// lock for index conflict,
-	o.ml[index].Lock()
-	for _, s := range o.m[index] {
-		if s.uintptr == p {
-			o.ml[index].Unlock()
-			return s.slicePool
+	lock.Lock()
+	ss = o.m[index]
+	for i := range ss {
+		if ss[i].uintptr == p {
+			lock.Unlock()
+			return &ss[i].slicePool
 		}
 	}
-	pu := &poolUintptr{
-		uintptr:   p,
-		slicePool: &slicePool{},
-	}
-	o.m[index] = append(o.m[index], pu)
-	o.ml[index].Unlock()
-	return pu.slicePool
+	ss = append(
+		ss, poolUintptr{
+			uintptr: p,
+		},
+	)
+	o.m[index] = ss
+	po := &ss[len(ss)-1]
+	lock.Unlock()
+	return &po.slicePool
 }
 
 // Get a object from object pool with T

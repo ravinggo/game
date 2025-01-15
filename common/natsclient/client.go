@@ -55,7 +55,7 @@ func NewNatsClient(name string, urls string, timeout time.Duration) *NatsClient 
 	}
 	c, err := nats.Connect(
 		urls, nats.ReconnectWait(time.Millisecond*10), nats.MaxReconnects(math.MaxInt64),
-		nats.PingInterval(time.Second*3), nats.MaxPingsOutstanding(2), nats.Timeout(time.Second),
+		nats.PingInterval(time.Second*10), nats.MaxPingsOutstanding(3),
 		nats.DrainTimeout(time.Second*5), nats.Name(name),
 		nats.DisconnectErrHandler(
 			func(conn *nats.Conn, err error) {
