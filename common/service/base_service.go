@@ -189,7 +189,7 @@ func (s *BaseService[T, CTX]) call(c CTX, e *handler.Elem[CTX, T]) {
 				Msg("handle error")
 			if baseCtx.NatsMsg != nil {
 				errReply := natsclient.NatsMsgReplyError(baseCtx.NatsMsg, err)
-				if err != nil {
+				if errReply != nil {
 					baseCtx.TraceLog.Error().Err(errReply).Msg("nats reply error")
 					berror.PutErr(errReply)
 				}
