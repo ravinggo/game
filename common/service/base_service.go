@@ -188,9 +188,10 @@ func (s *BaseService[T, CTX]) call(c CTX, e *handler.Elem[CTX, T]) {
 				Dur("cost", time.Since(start)).
 				Msg("handle error")
 			if baseCtx.NatsMsg != nil {
-				err = natsclient.NatsMsgReplyError(baseCtx.NatsMsg, err)
+				errReply := natsclient.NatsMsgReplyError(baseCtx.NatsMsg, err)
 				if err != nil {
-					baseCtx.TraceLog.Error().Err(err).Msg("nats reply error")
+					baseCtx.TraceLog.Error().Err(errReply).Msg("nats reply error")
+					berror.PutErr(errReply)
 				}
 			}
 			berror.PutErr(err)
