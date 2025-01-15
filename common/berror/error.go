@@ -3,7 +3,6 @@ package berror
 import (
 	"errors"
 	"fmt"
-	"strings"
 	"unsafe"
 
 	"google.golang.org/protobuf/proto"
@@ -35,31 +34,57 @@ func IsOpenStack() bool {
 
 type ErrMsg basepb.ErrorMessage
 
+// func (this_ *ErrMsg) Error1() string {
+// 	if this_ == nil {
+// 		return "nil"
+// 	}
+// 	b := strings.Builder{}
+// 	b.WriteString(`{"err_code":"`)
+// 	b.WriteString(this_.ErrCode.String())
+// 	b.WriteString(`","err_msg":"`)
+// 	b.WriteString(this_.ErrMsg)
+// 	if this_.ErrInternalInfo != "" {
+// 		b.WriteString(`","err_internal_info":"`)
+// 		b.WriteString(this_.ErrInternalInfo)
+// 	}
+// 	if this_.ErrExtraInfo != "" {
+// 		b.WriteString(`","err_extra_info":"`)
+// 		b.WriteString(this_.ErrExtraInfo)
+// 	}
+// 	if len(this_.StackStace) > 0 {
+// 		b.WriteString(`","stack_stace":"`)
+// 		s := ((*utils.Stack)(unsafe.Pointer(&this_.StackStace))).StackTrace()
+// 		b.WriteString(fmt.Sprintf("%+v", s))
+// 	}
+// 	b.WriteString(`"}`)
+//
+// 	return b.String()
+// }
+
 func (this_ *ErrMsg) Error() string {
 	if this_ == nil {
 		return "nil"
 	}
-	b := strings.Builder{}
-	b.WriteString(`{"err_code":"`)
-	b.WriteString(this_.ErrCode.String())
-	b.WriteString(`","err_msg":"`)
-	b.WriteString(this_.ErrMsg)
+	b := make([]byte, 0, 512)
+	b = append(b, `{"err_code":"`...)
+	b = append(b, this_.ErrCode.String()...)
+	b = append(b, `","err_msg":"`...)
+	b = append(b, this_.ErrMsg...)
 	if this_.ErrInternalInfo != "" {
-		b.WriteString(`","err_internal_info":"`)
-		b.WriteString(this_.ErrInternalInfo)
+		b = append(b, `","err_internal_info":"`...)
+		b = append(b, this_.ErrInternalInfo...)
 	}
 	if this_.ErrExtraInfo != "" {
-		b.WriteString(`","err_extra_info":"`)
-		b.WriteString(this_.ErrExtraInfo)
+		b = append(b, `","err_extra_info":"`...)
+		b = append(b, this_.ErrExtraInfo...)
 	}
 	if len(this_.StackStace) > 0 {
-		b.WriteString(`","stack_stace":"`)
+		b = append(b, `","stack_stace":"`...)
 		s := ((*utils.Stack)(unsafe.Pointer(&this_.StackStace))).StackTrace()
-		b.WriteString(fmt.Sprintf("%+v", s))
+		b = append(b, fmt.Sprintf("%+v", s)...)
 	}
-	b.WriteString(`"}`)
-
-	return b.String()
+	b = append(b, `"}`...)
+	return utils.BytesToString(b)
 }
 
 func (this_ *ErrMsg) Reset() {

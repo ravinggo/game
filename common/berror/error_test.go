@@ -14,3 +14,12 @@ func TestStackTrace(t *testing.T) {
 	}
 	t.Log(e.String())
 }
+
+func BenchmarkErrorString(b *testing.B) {
+	b.ReportAllocs()
+	b.ResetTimer()
+	err := NewProtocolStr("xxxxx")
+	for i := 0; i < b.N; i++ {
+		err.String()
+	}
+}
