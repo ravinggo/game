@@ -43,6 +43,11 @@ consul etcd3 .... <br>
 file(json,yaml...)<br>
 请使用(please use) [viper](https://github.com/spf13/viper)
 
+### i18n 多国家语言(Multi-language)
+use tools/gen-proto-error to generate errmsg <br>
+使用tools/gen-proto-error 生成errmsg代码和文件可以解决多语言和错误堆栈等问题
+详情可以看<br> [common/tools/gen-proto-error/README.md](./common/tools/gen-proto-error/README.md)
+
 ### 数据库集成(Database Integration)
 - [ ] mongo
 - [ ] mysql
