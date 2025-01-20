@@ -10,6 +10,8 @@ import (
 	"github.com/nats-io/nats.go"
 	"google.golang.org/protobuf/proto"
 
+	"github.com/ravinggo/objectpool"
+
 	baseenv "github.com/ravinggo/game/common/base-env"
 	"github.com/ravinggo/game/common/basepb"
 	"github.com/ravinggo/game/common/berror"
@@ -17,7 +19,6 @@ import (
 	"github.com/ravinggo/game/common/ctx"
 	"github.com/ravinggo/game/common/define"
 	"github.com/ravinggo/game/common/logger"
-	"github.com/ravinggo/game/common/objectpool"
 	"github.com/ravinggo/game/common/safego"
 	"github.com/ravinggo/game/common/utils"
 )

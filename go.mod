@@ -8,6 +8,7 @@ require (
 	github.com/kelseyhightower/envconfig v1.4.0
 	github.com/nats-io/nats.go v1.38.0
 	github.com/petermattis/goid v0.0.0-20241211131331-93ee7e083c43
+	github.com/ravinggo/objectpool v0.0.1
 	github.com/rs/zerolog v1.33.0
 	github.com/stretchr/testify v1.10.0
 	google.golang.org/protobuf v1.36.2

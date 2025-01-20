@@ -8,10 +8,11 @@ import (
 	"github.com/nats-io/nats.go"
 	"google.golang.org/protobuf/proto"
 
+	"github.com/ravinggo/objectpool"
+
 	"github.com/ravinggo/game/common/basepb"
 	"github.com/ravinggo/game/common/define"
 	"github.com/ravinggo/game/common/logger"
-	"github.com/ravinggo/game/common/objectpool"
 	"github.com/ravinggo/game/common/utils"
 )
 

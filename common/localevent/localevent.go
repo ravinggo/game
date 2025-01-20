@@ -6,11 +6,12 @@ import (
 	"runtime"
 	"sync"
 
+	"github.com/ravinggo/objectpool"
+
 	"github.com/ravinggo/game/common/berror"
 	"github.com/ravinggo/game/common/ctx"
 	"github.com/ravinggo/game/common/handler"
 	"github.com/ravinggo/game/common/logger"
-	"github.com/ravinggo/game/common/objectpool"
 )
 
 const mark = math.MaxUint16 - 1

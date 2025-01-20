@@ -9,6 +9,8 @@ import (
 
 	"github.com/rs/zerolog"
 
+	"github.com/ravinggo/objectpool"
+
 	baseenv "github.com/ravinggo/game/common/base-env"
 	"github.com/ravinggo/game/common/basepb"
 	"github.com/ravinggo/game/common/berror"
@@ -17,7 +19,6 @@ import (
 	"github.com/ravinggo/game/common/localevent"
 	"github.com/ravinggo/game/common/logger"
 	"github.com/ravinggo/game/common/natsclient"
-	"github.com/ravinggo/game/common/objectpool"
 	"github.com/ravinggo/game/common/service"
 )
 

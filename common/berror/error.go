@@ -7,9 +7,10 @@ import (
 
 	"google.golang.org/protobuf/proto"
 
+	"github.com/ravinggo/objectpool"
+
 	baseenv "github.com/ravinggo/game/common/base-env"
 	"github.com/ravinggo/game/common/basepb"
-	"github.com/ravinggo/game/common/objectpool"
 	"github.com/ravinggo/game/common/utils"
 )
 
