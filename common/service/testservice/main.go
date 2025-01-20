@@ -40,7 +40,7 @@ func NewTestService() *TestService {
 				"nats://192.168.0.141:4222",
 			},
 			true,
-			0, 0, time.Second*10,
+			0, 0, time.Second*10, handler.LoggerAndRecover[*ctx.Int64TraceCtx, ctx.Int64TraceCtx],
 		),
 		nc: natsclient.NewClusterClientServerUser[natsclient.ServerIntUserSubject](
 			"client", []string{
@@ -196,7 +196,7 @@ func main() {
 	zerolog.SetGlobalLevel(zerolog.InfoLevel)
 	svc := NewTestService()
 	svc.Start()
-	for i := 0; i < 3000; i++ {
+	for i := 0; i < 1; i++ {
 		go func() {
 			for {
 				roleId := atomic.AddInt64(&userCount, 1)

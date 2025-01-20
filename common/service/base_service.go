@@ -35,6 +35,8 @@ type BaseService[T any, CTX ctx.IContextPtr[T]] struct {
 	taskMap       cmap.ConcurrentMap[uint64, *task_group.TaskGroup[ce[CTX, T]]]
 	taskGroupPool *sync.Pool
 	taskPool      *task_group.TaskPool
+	serverId      int64
+	serverType    string
 }
 
 // HashRunMode 0: FixedHashPoolMode, 1: OneHashOneGo
@@ -72,9 +74,10 @@ func NewBaseService[T any, CTX ctx.IContextPtr[T]](
 	hashMode HashRunMode,
 	taskMode TaskRunMode,
 	rpcTimeout time.Duration,
+	middlewares ...handler.Middleware[CTX, T],
 ) *BaseService[T, CTX] {
 	s := &BaseService[T, CTX]{
-		h:           handler.NewHandler[CTX](),
+		h:           handler.NewHandler[CTX](middlewares...),
 		natsCluster: natsclient.NewClusterClient(baseenv.GetConfig().ServerType, natsUrls, rpcTimeout),
 		el:          eventloop.NewDoubleBuffQueue(lockQueueThread),
 		taskMap: cmap.NewWithCustomShardingFunction[uint64, *task_group.TaskGroup[ce[CTX, T]]](
@@ -83,6 +86,8 @@ func NewBaseService[T any, CTX ctx.IContextPtr[T]](
 			},
 		),
 		taskGroupPool: objectpool.GetTypePool[task_group.TaskGroup[CTX]](),
+		serverId:      baseenv.GetConfig().ServerId,
+		serverType:    baseenv.GetConfig().ServerType,
 	}
 
 	numCpu := uint64(runtime.NumCPU())
@@ -293,6 +298,7 @@ func (s *BaseService[T, CTX]) dealNatsMsg(msg *nats.Msg) {
 	traceSize := int(data[0]) | int(data[1])<<8
 	c := (CTX)(objectpool.Get[T]())
 	baseCtx := c.MustBaseContext()
+	baseCtx.InitTraceLog()
 	traceCtx := c.GetTrace()
 	if traceSize > 0 && traceCtx != nil {
 		err := traceCtx.TraceMarshalFrom(msg.Data[2 : 2+traceSize])
@@ -306,8 +312,24 @@ func (s *BaseService[T, CTX]) dealNatsMsg(msg *nats.Msg) {
 			return
 		}
 		baseCtx.TraceLog.UpdateContext(
-			func(c logger.Context) logger.Context {
-				return traceCtx.TraceLogField(c.Reset())
+			func(logC logger.Context) logger.Context {
+				logC.Reset()
+				logC = logC.Str("_AN_", s.serverType)
+				if s.serverId != 0 {
+					logC = logC.Int64("_SID_", s.serverId)
+				}
+				return traceCtx.TraceLogField(logC)
+			},
+		)
+	} else {
+		baseCtx.TraceLog.UpdateContext(
+			func(logC logger.Context) logger.Context {
+				logC.Reset()
+				logC = logC.Str("_AN_", s.serverType)
+				if s.serverId != 0 {
+					logC = logC.Int64("_SID_", s.serverId)
+				}
+				return logC
 			},
 		)
 	}

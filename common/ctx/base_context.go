@@ -65,13 +65,21 @@ type IContext interface {
 }
 
 type BaseContext struct {
-	Context  context.Context
-	TraceLog logger.Logger
-	Req      proto.Message
-	Resp     []proto.Message
+	Context      context.Context
+	TraceLog     logger.Logger
+	initTraceLog bool
+	Req          proto.Message
+	Resp         []proto.Message
 
 	// for rpc reply
 	NatsMsg *nats.Msg
+}
+
+func (c *BaseContext) InitTraceLog() {
+	if !c.initTraceLog {
+		c.TraceLog = logger.Log.Output(logger.Writer)
+		c.initTraceLog = true
+	}
 }
 
 func (c *BaseContext) GetTrace() Trace {

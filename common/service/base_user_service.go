@@ -12,6 +12,7 @@ import (
 	"github.com/ravinggo/game/common/berror"
 	"github.com/ravinggo/game/common/ctx"
 	"github.com/ravinggo/game/common/define"
+	"github.com/ravinggo/game/common/handler"
 	"github.com/ravinggo/game/common/logger"
 	"github.com/ravinggo/game/common/natsclient"
 	"github.com/ravinggo/game/common/task_group"
@@ -30,6 +31,7 @@ func NewServerUserService[T1 any, T any, CTX ctx.IContextPtr[T], US natsclient.S
 	hashMode HashRunMode,
 	taskMode TaskRunMode,
 	rpcTimeout time.Duration,
+	middlewares ...handler.Middleware[CTX, T],
 ) *ServerUserService[T1, T, CTX, US] {
 	s := &ServerUserService[T1, T, CTX, US]{
 		BaseService: NewBaseService[T, CTX](
@@ -38,6 +40,7 @@ func NewServerUserService[T1 any, T any, CTX ctx.IContextPtr[T], US natsclient.S
 			hashMode,
 			taskMode,
 			rpcTimeout,
+			middlewares...,
 		),
 	}
 	s.userNatsCluster = natsclient.NewClusterClientServerUser2[T1, US](s.BaseService.natsCluster)

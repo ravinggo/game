@@ -16,11 +16,16 @@ import (
 	baseenv "github.com/ravinggo/game/common/base-env"
 )
 
-type Logger = zerolog.Logger
-type Context = zerolog.Context
-type Event = zerolog.Event
+type (
+	Logger  = zerolog.Logger
+	Context = zerolog.Context
+	Event   = zerolog.Event
+)
 
-var Log *Logger
+var (
+	Log    *Logger
+	Writer io.Writer
+)
 
 func init() {
 	envCnf := baseenv.GetConfig()
@@ -108,7 +113,7 @@ func init() {
 	if envCnf.LogAsync {
 		writer = NewAsync(writer)
 	}
-
+	Writer = writer
 	zerolog.ErrorStackMarshaler = pkgerrors.MarshalStack
 	ctx := zerolog.New(writer).
 		Level(getLoggerLevel()).With().Timestamp().Str("_AN_", appName).Stack()
