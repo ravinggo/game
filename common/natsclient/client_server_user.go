@@ -425,8 +425,7 @@ func (r *ClientRequestServerUser[T, T1, T2, US, REQ, RESP]) Reset() {
 }
 
 // NewClientRequestServerUser create ClientRequestServerUser for objectpool
-func NewClientRequestServerUser[T, T1, T2 any, US ServerUserSubjectPtr[T], REQ define.ProtoMessagePtr[T1], RESP define.ProtoMessagePtr[T2]](
-) *ClientRequestServerUser[T, T1, T2, US, REQ, RESP] {
+func NewClientRequestServerUser[T, T1, T2 any, US ServerUserSubjectPtr[T], REQ define.ProtoMessagePtr[T1], RESP define.ProtoMessagePtr[T2]]() *ClientRequestServerUser[T, T1, T2, US, REQ, RESP] {
 	c := objectpool.Get[ClientRequestServerUser[T, T1, T2, US, REQ, RESP]]()
 	return c
 }

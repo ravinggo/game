@@ -18,8 +18,8 @@ import (
 )
 
 type (
-	MiddleWare[CTX ctx.IContextPtr[T], T any]                func(HandleFunc[CTX, T]) HandleFunc[CTX, T]
-	HandleFunc[CTX ctx.IContextPtr[T], T any]                func(ctx CTX) *berror.ErrMsg
+	MiddleWare[CTX ctx.IContextPtr[T], T any] func(HandleFunc[CTX, T]) HandleFunc[CTX, T]
+	HandleFunc[CTX ctx.IContextPtr[T], T any] func(ctx CTX) *berror.ErrMsg
 )
 
 type Elem[CTX ctx.IContextPtr[T], T any] struct {

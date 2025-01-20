@@ -179,8 +179,7 @@ func (r *ClusterRequestServerUser[T1, T2, T, US, REQ, RESP]) Reset() {
 }
 
 // NewClusterRequestServerUser create ClusterRequestServerUser use objectpool
-func NewClusterRequestServerUser[T1, T2, T any, US ServerUserSubjectPtr[T], REQ define.ProtoMessagePtr[T1], RESP define.ProtoMessagePtr[T2]](
-) *ClusterRequestServerUser[T1, T2, T, US, REQ, RESP] {
+func NewClusterRequestServerUser[T1, T2, T any, US ServerUserSubjectPtr[T], REQ define.ProtoMessagePtr[T1], RESP define.ProtoMessagePtr[T2]]() *ClusterRequestServerUser[T1, T2, T, US, REQ, RESP] {
 	c := objectpool.Get[ClusterRequestServerUser[T1, T2, T, US, REQ, RESP]]()
 	return c
 }

@@ -126,7 +126,7 @@ func Call[T1, T any, CTX ctx.IContextPtr[T1]](c CTX, data T) *berror.ErrMsg {
 }
 
 type localEventKey struct{}
-type events[CTX ctx.IContextPtr[T], T any, ] struct {
+type events[CTX ctx.IContextPtr[T], T any] struct {
 	es []any
 }
 
