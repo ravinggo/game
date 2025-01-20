@@ -34,7 +34,9 @@ func NewTaskGroup[T any](f func(TaskGroupElem[T]), maxCap int) *TaskGroup[T] {
 
 // SetOnStop why add this function? for sync.Pool
 func (this_ *TaskGroup[T]) SetOnStop(f func(*TaskGroup[T])) {
-	f(this_)
+	this_.onStop = func() {
+		f(this_)
+	}
 }
 
 // SetTaskFunc why add this function? for sync.Pool
@@ -61,8 +63,8 @@ func (this_ *TaskGroup[T]) PutForce(d T, f func()) {
 	this_.mu.Unlock()
 	if run {
 		go func() {
-			defer safego.Recover()
 			defer func() {
+				safego.Recover()
 				if this_.onStop != nil {
 					this_.onStop()
 				}
@@ -115,8 +117,8 @@ func (this_ *TaskGroup[T]) Put(d T, f func()) bool {
 	this_.mu.Unlock()
 	if run {
 		go func() {
-			defer safego.Recover()
 			defer func() {
+				safego.Recover()
 				if this_.onStop != nil {
 					this_.onStop()
 				}

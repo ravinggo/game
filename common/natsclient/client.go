@@ -36,6 +36,7 @@ type NatsClient struct {
 	closed   int32
 	f        nats.MsgHandler
 	timeout  time.Duration
+	define.DoNotCopy
 }
 
 // NewNatsClient one nats cluster client
