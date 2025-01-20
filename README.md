@@ -48,6 +48,10 @@ use tools/gen-proto-error to generate errmsg <br>
 使用tools/gen-proto-error 生成errmsg代码和文件可以解决多语言和错误堆栈等问题
 详情可以看<br> [common/tools/gen-proto-error/README.md](./common/tools/gen-proto-error/README.md)
 
+### gateway
+推荐使用(Recommended use) [nbio](https://github.com/lesismal/nbio) <br>
+支持得比较全面, 性能也不错(The support is comprehensive and the performance is good)<br>
+
 ### 数据库集成(Database Integration)
 - [ ] mongo
 - [ ] mysql
