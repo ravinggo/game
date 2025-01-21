@@ -102,7 +102,7 @@ var (
 		LogEncodingMode: "",
 		LogNoCaller:     false,
 		LogTimestamp:    false,
-		LogAsync:        false,
+		LogAsync:        true,
 		ErrorStackTrace: false,
 	}
 )

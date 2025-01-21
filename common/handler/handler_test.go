@@ -23,7 +23,7 @@ func (s *Server) Test2(c *ctx.Int64TraceCtx, req *basepb.IntTrace, resp *basepb.
 }
 
 func TestHandler(t *testing.T) {
-	h := NewHandler[*ctx.Int64TraceCtx]()
+	h := NewHandler[ctx.IntTrace]()
 	s := &Server{}
 	fn := "[" + runtime.FuncForPC(reflect.ValueOf(s.Test1).Pointer()).Name() + "] " + reflect.TypeOf(s.Test1).String()
 	fmt.Println(fn)

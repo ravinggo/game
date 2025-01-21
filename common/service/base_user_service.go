@@ -19,22 +19,22 @@ import (
 )
 
 // ServerUserService is a service,can use user subject.
-type ServerUserService[T1 any, T any, CTX ctx.IContextPtr[T], US natsclient.ServerUserSubjectPtr[T1]] struct {
-	*BaseService[T, CTX]
+type ServerUserService[T1 any, TraceData any, TP ctx.TracePtr[TraceData], US natsclient.ServerUserSubjectPtr[T1]] struct {
+	*BaseService[TraceData, TP]
 	userNatsCluster *natsclient.ClusterClientServerUser[T1, US]
 }
 
 // NewServerUserService create a ServerUserService.
-func NewServerUserService[T1 any, T any, CTX ctx.IContextPtr[T], US natsclient.ServerUserSubjectPtr[T1]](
+func NewServerUserService[T1 any, TraceData any, TP ctx.TracePtr[TraceData], US natsclient.ServerUserSubjectPtr[T1]](
 	natsUrls []string,
 	lockQueueThread bool,
 	hashMode HashRunMode,
 	taskMode TaskRunMode,
 	rpcTimeout time.Duration,
-	middlewares ...handler.Middleware[CTX, T],
-) *ServerUserService[T1, T, CTX, US] {
-	s := &ServerUserService[T1, T, CTX, US]{
-		BaseService: NewBaseService[T, CTX](
+	middlewares ...handler.Middleware[TraceData, TP],
+) *ServerUserService[T1, TraceData, TP, US] {
+	s := &ServerUserService[T1, TraceData, TP, US]{
+		BaseService: NewBaseService[TraceData, TP](
 			natsUrls,
 			lockQueueThread,
 			hashMode,
@@ -48,38 +48,38 @@ func NewServerUserService[T1 any, T any, CTX ctx.IContextPtr[T], US natsclient.S
 }
 
 // GetUserNatsCluster return *ClusterClientServerUser.
-func (s *ServerUserService[T1, T, CTX, US]) GetUserNatsCluster() *natsclient.ClusterClientServerUser[T1, US] {
+func (s *ServerUserService[T1, TraceData, TP, US]) GetUserNatsCluster() *natsclient.ClusterClientServerUser[T1, US] {
 	return s.userNatsCluster
 }
 
 // UserSubscribeOne subscribe one user subject.
-func (s *ServerUserService[T1, T, CTX, US]) UserSubscribeOne(us US) {
+func (s *ServerUserService[T1, TraceData, TP, US]) UserSubscribeOne(us US) {
 	s.userNatsCluster.UserSubscribeOne(us, s.dealServerUserNatsMsg)
 }
 
 // UserSubscribeOneWaitSuccess subscribe one user subject and wait success.
 // Only used in multi-cluster or multiple connections to the same cluster
-func (s *ServerUserService[T1, T, CTX, US]) UserSubscribeOneWaitSuccess(us US) {
+func (s *ServerUserService[T1, TraceData, TP, US]) UserSubscribeOneWaitSuccess(us US) {
 	s.userNatsCluster.UserSubscribeOneWaitSuccess(us, s.dealServerUserNatsMsg)
 }
 
 // UserSubscribeAll subscribe all NatsClient for user subject.
-func (s *ServerUserService[T1, T, CTX, US]) UserSubscribeAll(us US) {
+func (s *ServerUserService[T1, TraceData, TP, US]) UserSubscribeAll(us US) {
 	s.userNatsCluster.UserSubscribeAll(us, s.dealServerUserNatsMsg)
 }
 
 // UserSubscribeAllWaitSuccess subscribe all NatsClient for user subject and wait success.
 // Only used in multi-cluster or multiple connections to the same cluster
-func (s *ServerUserService[T1, T, CTX, US]) UserSubscribeAllWaitSuccess(us US) {
+func (s *ServerUserService[T1, TraceData, TP, US]) UserSubscribeAllWaitSuccess(us US) {
 	s.userNatsCluster.UserSubscribeAllWaitSuccess(us, s.dealServerUserNatsMsg)
 }
 
 // UserUnsubscribe unsubscribe user subject if subscribed.
-func (s *ServerUserService[T1, T, CTX, US]) UserUnsubscribe(us US) {
+func (s *ServerUserService[T1, TraceData, TP, US]) UserUnsubscribe(us US) {
 	s.userNatsCluster.UserUnsubscribe(us)
 }
 
-func (s *ServerUserService[T1, T, CTX, US]) dealServerUserNatsMsg(msg *nats.Msg) {
+func (s *ServerUserService[T1, TraceData, TP, US]) dealServerUserNatsMsg(msg *nats.Msg) {
 	index := strings.IndexByte(msg.Subject, '.')
 	if index == -1 {
 		return
@@ -110,8 +110,7 @@ func (s *ServerUserService[T1, T, CTX, US]) dealServerUserNatsMsg(msg *nats.Msg)
 	}
 
 	traceSize := int(data[0]) | int(data[1])<<8
-	c := (CTX)(objectpool.Get[T]())
-	baseCtx := c.MustBaseContext()
+	c := objectpool.Get[ctx.BaseCtx[TraceData, TP]]()
 	traceCtx := c.GetTrace()
 	if traceSize > 0 && traceCtx != nil {
 		err := traceCtx.TraceMarshalFrom(msg.Data[2 : 2+traceSize])
@@ -124,30 +123,25 @@ func (s *ServerUserService[T1, T, CTX, US]) dealServerUserNatsMsg(msg *nats.Msg)
 			}
 			return
 		}
-		baseCtx.TraceLog.UpdateContext(
-			func(c logger.Context) logger.Context {
-				return traceCtx.TraceLogField(c.Reset())
-			},
-		)
 	}
 
-	baseCtx.Req = elem.ReqPool().Get().(proto.Message)
-	err = proto.Unmarshal(data[2+traceSize:], baseCtx.Req)
+	c.Req = elem.ReqPool().Get().(proto.Message)
+	err = proto.Unmarshal(data[2+traceSize:], c.Req)
 	if err != nil {
 		if msg.Reply == "" {
 			e := natsclient.NatsMsgReplyError(msg, berror.NewProtocolErr(err))
 			if e != nil {
-				logger.Log.Error().Err(e).Msg("nats reply error")
+				c.Error().Err(e).Msg("nats reply error")
 			}
 		}
 		return
 	}
 	if elem.IsRPC() {
-		baseCtx.NatsMsg = msg
+		c.NatsMsg = msg
 	}
 
 	if elem.IsSingle() {
-		s.el.PostEventQueue(ce[CTX, T]{Data: c, Elem: elem})
+		s.el.PostEventQueue(ce[TraceData, TP]{Data: c, Elem: elem})
 	} else {
 		l := len(s.taskGroupHash)
 		hash := us.ToHash()
@@ -157,24 +151,24 @@ func (s *ServerUserService[T1, T, CTX, US]) dealServerUserNatsMsg(msg *nats.Msg)
 		if hash != 0 {
 			if l > 0 {
 				if elem.IsForce() {
-					s.taskGroupHash[hash&s.taskPoolMark].PutForce(ce[CTX, T]{Data: c, Elem: elem}, nil)
+					s.taskGroupHash[hash&s.taskPoolMark].PutForce(ce[TraceData, TP]{Data: c, Elem: elem}, nil)
 				} else {
-					if !s.taskGroupHash[hash&s.taskPoolMark].Put(ce[CTX, T]{Data: c, Elem: elem}, nil) {
-						ReplyTaskPoolFull(baseCtx)
-						objectpool.Put[T](c)
-						logger.Log.Warn().Err(err).Msg("task group full")
+					if !s.taskGroupHash[hash&s.taskPoolMark].Put(ce[TraceData, TP]{Data: c, Elem: elem}, nil) {
+						ReplyTaskPoolFull(c)
+						objectpool.Put(c)
+						c.Warn().Err(err).Msg("task group full")
 					}
 				}
 
 				return
 			}
 			tg, _ := s.taskMap.GetOrCreate(
-				hash, func() *task_group.TaskGroup[ce[CTX, T]] {
-					tg := s.taskGroupPool.Get().(*task_group.TaskGroup[ce[CTX, T]])
+				hash, func() *task_group.TaskGroup[ce[TraceData, TP]] {
+					tg := s.taskGroupPool.Get().(*task_group.TaskGroup[ce[TraceData, TP]])
 					tg.SetTaskFunc(s.taskFunc)
 					tg.SetMaxCap(128)
 					tg.SetOnStop(
-						func(t *task_group.TaskGroup[ce[CTX, T]]) {
+						func(t *task_group.TaskGroup[ce[TraceData, TP]]) {
 							tg.SetOnStop(nil)
 							s.taskGroupPool.Put(tg)
 						},
@@ -183,21 +177,21 @@ func (s *ServerUserService[T1, T, CTX, US]) dealServerUserNatsMsg(msg *nats.Msg)
 				},
 			)
 			if elem.IsForce() {
-				tg.PutForce(ce[CTX, T]{Data: c, Elem: elem}, nil)
+				tg.PutForce(ce[TraceData, TP]{Data: c, Elem: elem}, nil)
 			} else {
-				if !tg.Put(ce[CTX, T]{Data: c, Elem: elem}, nil) {
-					ReplyTaskPoolFull(baseCtx)
-					objectpool.Put[T](c)
-					logger.Log.Warn().Err(err).Msg("task group full")
+				if !tg.Put(ce[TraceData, TP]{Data: c, Elem: elem}, nil) {
+					ReplyTaskPoolFull(c)
+					objectpool.Put(c)
+					c.Warn().Err(err).Msg("task group full")
 				}
 			}
 			return
 		} else {
-			logger.Log.Error().Err(define.ErrInvalidToHash).Msg("dealServerUserNatsMsg not dispatch")
+			c.Error().Err(define.ErrInvalidToHash).Msg("dealServerUserNatsMsg not dispatch")
 			if msg.Reply != "" { // RPC
 				err := natsclient.NatsMsgReplyError(msg, berror.NewProtocolErr(define.ErrInvalidToHash))
 				if err != nil {
-					logger.Log.Error().Err(err).Msg("nats reply error")
+					c.Error().Err(err).Msg("nats reply error")
 				}
 			}
 		}

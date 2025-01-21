@@ -98,15 +98,15 @@ func Logger() {
 }
 
 // Register a local event
-func Register[T1, T any, CTX ctx.IContextPtr[T1]](desc string, f func(CTX, T) *berror.ErrMsg) {
+func Register[TraceData, T any, TP ctx.TracePtr[TraceData]](desc string, f func(*ctx.BaseCtx[TraceData, TP], T) *berror.ErrMsg) {
 	if esPool == nil {
-		esPool = objectpool.GetTypePool[events[CTX, T1]]()
+		esPool = objectpool.GetTypePool[events[TraceData, TP]]()
 	}
 	ptr, index := calcIndex[T]()
 	setES(
 		ptr, index, eventHandler{
 			f: f,
-			fa: func(c CTX, a any) *berror.ErrMsg {
+			fa: func(c *ctx.BaseCtx[TraceData, TP], a any) *berror.ErrMsg {
 				return f(c, a.(T))
 			},
 			desc: "localevent[" + desc + "] [" + runtime.FuncForPC(reflect.ValueOf(f).Pointer()).Name() + "] " + reflect.TypeOf(f).String(),
@@ -115,11 +115,11 @@ func Register[T1, T any, CTX ctx.IContextPtr[T1]](desc string, f func(CTX, T) *b
 }
 
 // Call sync call local event
-func Call[T1, T any, CTX ctx.IContextPtr[T1]](c CTX, data T) *berror.ErrMsg {
+func Call[TraceData, T any, TP ctx.TracePtr[TraceData]](c *ctx.BaseCtx[TraceData, TP], data T) *berror.ErrMsg {
 	ptr, index := calcIndex[T]()
 	es := getES(ptr, index)
 	for _, e := range es {
-		if err := e.f.(func(CTX, T) *berror.ErrMsg)(c, data); err != nil {
+		if err := e.f.(func(*ctx.BaseCtx[TraceData, TP], T) *berror.ErrMsg)(c, data); err != nil {
 			return err
 		}
 	}
@@ -127,15 +127,15 @@ func Call[T1, T any, CTX ctx.IContextPtr[T1]](c CTX, data T) *berror.ErrMsg {
 }
 
 type localEventKey struct{}
-type events[CTX ctx.IContextPtr[T], T any] struct {
+type events[TraceData any, TP ctx.TracePtr[TraceData]] struct {
 	es []any
 }
 
-func (es *events[CTX, T]) add(a any) {
+func (es *events[TraceData, TP]) add(a any) {
 	es.es = append(es.es, a)
 }
 
-func (es *events[CTX, T]) call(c CTX) *berror.ErrMsg {
+func (es *events[TraceData, TP]) call(c *ctx.BaseCtx[TraceData, TP]) *berror.ErrMsg {
 	cs := es.es
 	es.es = es.es[:0]
 	if len(cs) == 0 {
@@ -149,7 +149,7 @@ func (es *events[CTX, T]) call(c CTX) *berror.ErrMsg {
 			continue
 		}
 		for _, ef := range es {
-			if err := ef.fa.(func(CTX, any) *berror.ErrMsg)(c, e); err != nil {
+			if err := ef.fa.(func(*ctx.BaseCtx[TraceData, TP], any) *berror.ErrMsg)(c, e); err != nil {
 				return err
 			}
 		}
@@ -158,32 +158,32 @@ func (es *events[CTX, T]) call(c CTX) *berror.ErrMsg {
 }
 
 // Publish local event, async call by MiddleLocalEvent
-func Publish[CTX ctx.IContextPtr[T], T any](c CTX, data any) {
-	es, ok := c.Value(localEventKey{}).(*events[CTX, T])
+func Publish[TraceData any, TP ctx.TracePtr[TraceData]](c *ctx.BaseCtx[TraceData, TP], data any) {
+	es, ok := c.Value(localEventKey{}).(*events[TraceData, TP])
 	if !ok {
-		es = esPool.Get().(*events[CTX, T])
+		es = esPool.Get().(*events[TraceData, TP])
 		if cap(es.es) == 0 {
 			es.es = make([]any, 0, 8)
 		}
-		c.MustBaseContext().SetValue(localEventKey{}, es)
+		c.SetValue(localEventKey{}, es)
 	}
 	es.es = append(es.es, data)
 }
 
 // MiddleLocalEvent local event middleware,call Publish local event
-func MiddleLocalEvent[CTX ctx.IContextPtr[T], T any](
-	next handler.HandleFunc[CTX, T],
-) handler.HandleFunc[CTX, T] {
-	return func(c CTX) *berror.ErrMsg {
+func MiddleLocalEvent[TraceData any, TP ctx.TracePtr[TraceData]](
+	next handler.HandleFunc[TraceData, TP],
+) handler.HandleFunc[TraceData, TP] {
+	return func(c *ctx.BaseCtx[TraceData, TP]) *berror.ErrMsg {
 		err := next(c)
 		if err != nil {
 			return err
 		}
-		v := c.MustBaseContext().Value(localEventKey{})
+		v := c.Value(localEventKey{})
 		if v == nil {
 			return nil
 		}
-		es := v.(*events[CTX, T])
+		es := v.(*events[TraceData, TP])
 		err = es.call(c)
 		esPool.Put(es)
 		return err

@@ -16,10 +16,24 @@ import (
 	baseenv "github.com/ravinggo/game/common/base-env"
 )
 
+type ILogger interface {
+	Trace() *Event
+	Debug() *Event
+	Info() *Event
+	Warn() *Event
+	Error() *Event
+	Fatal() *Event
+	Panic() *Event
+	NoLevel() *Event
+	Disabled() *Event
+	WithLevel(Level) *Event
+}
+
 type (
 	Logger  = zerolog.Logger
 	Context = zerolog.Context
 	Event   = zerolog.Event
+	Level   = zerolog.Level
 )
 
 var (

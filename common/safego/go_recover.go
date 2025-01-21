@@ -21,7 +21,7 @@ func RecoverFunc(panicHandler func(e interface{})) {
 }
 
 // RecoverWithLogger panic of log
-func RecoverWithLogger(log logger.Logger) {
+func RecoverWithLogger(log logger.ILogger) {
 	if e := recover(); e != nil {
 		log.Error().Any("panic info", e).Msg("panic")
 	}
@@ -36,7 +36,7 @@ func Go(f func()) {
 }
 
 // GOWithLogger run f with RecoverWithLogger
-func GOWithLogger(log logger.Logger, f func()) {
+func GOWithLogger(log logger.ILogger, f func()) {
 	go func() {
 		defer RecoverWithLogger(log)
 		f()

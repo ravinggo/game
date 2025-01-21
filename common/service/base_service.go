@@ -26,13 +26,13 @@ import (
 	"github.com/ravinggo/game/common/task_group"
 )
 
-type BaseService[T any, CTX ctx.IContextPtr[T]] struct {
-	h             *handler.Handler[CTX, T]
+type BaseService[TraceData any, TP ctx.TracePtr[TraceData]] struct {
+	h             *handler.Handler[TraceData, TP]
 	natsCluster   *natsclient.ClusterClient
 	el            *eventloop.DoubleBuffQueue
-	taskGroupHash []task_group.TaskGroup[ce[CTX, T]]
+	taskGroupHash []task_group.TaskGroup[ce[TraceData, TP]]
 	taskPoolMark  uint64
-	taskMap       cmap.ConcurrentMap[uint64, *task_group.TaskGroup[ce[CTX, T]]]
+	taskMap       cmap.ConcurrentMap[uint64, *task_group.TaskGroup[ce[TraceData, TP]]]
 	taskGroupPool *sync.Pool
 	taskPool      *task_group.TaskPool
 	serverId      int64
@@ -62,30 +62,30 @@ const (
 	OneTaskOneGo TaskRunMode = 1
 )
 
-type ce[CTX ctx.IContextPtr[T], T any] struct {
-	Data CTX
-	Elem *handler.Elem[CTX, T]
+type ce[TraceData any, TP ctx.TracePtr[TraceData]] struct {
+	Data *ctx.BaseCtx[TraceData, TP]
+	Elem *handler.Elem[TraceData, TP]
 }
 
 // NewBaseService create a new BaseService
-func NewBaseService[T any, CTX ctx.IContextPtr[T]](
+func NewBaseService[TraceData any, TP ctx.TracePtr[TraceData]](
 	natsUrls []string,
 	lockQueueThread bool,
 	hashMode HashRunMode,
 	taskMode TaskRunMode,
 	rpcTimeout time.Duration,
-	middlewares ...handler.Middleware[CTX, T],
-) *BaseService[T, CTX] {
-	s := &BaseService[T, CTX]{
-		h:           handler.NewHandler[CTX](middlewares...),
+	middlewares ...handler.Middleware[TraceData, TP],
+) *BaseService[TraceData, TP] {
+	s := &BaseService[TraceData, TP]{
+		h:           handler.NewHandler[TraceData](middlewares...),
 		natsCluster: natsclient.NewClusterClient(baseenv.GetConfig().ServerType, natsUrls, rpcTimeout),
 		el:          eventloop.NewDoubleBuffQueue(lockQueueThread),
-		taskMap: cmap.NewWithCustomShardingFunction[uint64, *task_group.TaskGroup[ce[CTX, T]]](
+		taskMap: cmap.NewWithCustomShardingFunction[uint64, *task_group.TaskGroup[ce[TraceData, TP]]](
 			func(key uint64) uint32 {
 				return uint32(key)
 			},
 		),
-		taskGroupPool: objectpool.GetTypePool[task_group.TaskGroup[CTX]](),
+		taskGroupPool: objectpool.GetTypePool[task_group.TaskGroup[*ctx.BaseCtx[TraceData, TP]]](),
 		serverId:      baseenv.GetConfig().ServerId,
 		serverType:    baseenv.GetConfig().ServerType,
 	}
@@ -106,7 +106,7 @@ func NewBaseService[T any, CTX ctx.IContextPtr[T]](
 		}
 		taskPoolSize := numCpu * 1024
 		s.taskPoolMark = taskPoolSize - 1
-		s.taskGroupHash = make([]task_group.TaskGroup[ce[CTX, T]], taskPoolSize)
+		s.taskGroupHash = make([]task_group.TaskGroup[ce[TraceData, TP]], taskPoolSize)
 		for i := uint64(0); i < taskPoolSize; i++ {
 			s.taskGroupHash[i].SetMaxCap(128)
 			s.taskGroupHash[i].SetTaskFunc(s.taskFunc)
@@ -120,7 +120,7 @@ func NewBaseService[T any, CTX ctx.IContextPtr[T]](
 	return s
 }
 
-func (s *BaseService[T, CTX]) taskFunc(e task_group.TaskGroupElem[ce[CTX, T]]) {
+func (s *BaseService[TraceData, TP]) taskFunc(e task_group.TaskGroupElem[ce[TraceData, TP]]) {
 	defer safego.Recover()
 	if e.Data.Data != nil {
 		s.handleCtx(e.Data.Data, e.Data.Elem)
@@ -131,22 +131,22 @@ func (s *BaseService[T, CTX]) taskFunc(e task_group.TaskGroupElem[ce[CTX, T]]) {
 }
 
 // GetHandler return all registered handlers
-func (s *BaseService[T, CTX]) GetHandler() *handler.Handler[CTX, T] {
+func (s *BaseService[TraceData, TP]) GetHandler() *handler.Handler[TraceData, TP] {
 	return s.h
 }
 
 // GetNatsCluster return nats cluster client
-func (s *BaseService[T, CTX]) GetNatsCluster() *natsclient.ClusterClient {
+func (s *BaseService[TraceData, TP]) GetNatsCluster() *natsclient.ClusterClient {
 	return s.natsCluster
 }
 
 // PostEventloop post any event to eventloop
-func (s *BaseService[T, CTX]) PostEventloop(e any) {
+func (s *BaseService[TraceData, TP]) PostEventloop(e any) {
 	s.el.PostEventQueue(e)
 }
 
 // Start if PostEventloop is being called, param f need to be implemented by the user
-func (s *BaseService[T, CTX]) Start(f func(any)) {
+func (s *BaseService[TraceData, TP]) Start(f func(any)) {
 	if f == nil {
 		f = func(e any) {
 			logger.Log.Warn().Str("type", reflect.TypeOf(e).String()).Any("data", e).Msg("unknown event")
@@ -158,7 +158,7 @@ func (s *BaseService[T, CTX]) Start(f func(any)) {
 	s.el.Start(
 		func(e any) {
 			switch c := e.(type) {
-			case ce[CTX, T]:
+			case ce[TraceData, TP]:
 				s.handleCtx(c.Data, c.Elem)
 			case func():
 				c()
@@ -171,21 +171,19 @@ func (s *BaseService[T, CTX]) Start(f func(any)) {
 	)
 }
 
-func (s *BaseService[T, CTX]) handleCtx(c CTX, e *handler.Elem[CTX, T]) {
+func (s *BaseService[TraceData, TP]) handleCtx(c *ctx.BaseCtx[TraceData, TP], e *handler.Elem[TraceData, TP]) {
 	s.call(c, e)
-	baseCtx := c.MustBaseContext()
-	if baseCtx.Req != nil {
-		e.ReqPool().Put(baseCtx.Req)
-		baseCtx.Req = nil
+	if c.Req != nil {
+		e.ReqPool().Put(c.Req)
+		c.Req = nil
 	}
 
-	objectpool.Put[T](c)
+	objectpool.Put(c)
 }
 
-func (s *BaseService[T, CTX]) call(c CTX, e *handler.Elem[CTX, T]) {
+func (s *BaseService[TraceData, TP]) call(c *ctx.BaseCtx[TraceData, TP], e *handler.Elem[TraceData, TP]) {
 	var err *berror.ErrMsg
 	start := time.Now()
-	baseCtx := c.MustBaseContext()
 	defer func() {
 		if err != nil {
 			logger.Log.Warn().
@@ -193,32 +191,32 @@ func (s *BaseService[T, CTX]) call(c CTX, e *handler.Elem[CTX, T]) {
 				Err(err).
 				Dur("cost", time.Since(start)).
 				Msg("handle error")
-			if baseCtx.NatsMsg != nil {
-				errReply := natsclient.NatsMsgReplyError(baseCtx.NatsMsg, err)
+			if c.NatsMsg != nil {
+				errReply := natsclient.NatsMsgReplyError(c.NatsMsg, err)
 				if errReply != nil {
-					baseCtx.TraceLog.Error().Err(errReply).Msg("nats reply error")
+					c.Error().Err(errReply).Msg("nats reply error")
 					berror.PutErr(errReply)
 				}
 			}
 			berror.PutErr(err)
 		}
 
-		baseCtx.TraceLog.Debug().
+		c.Debug().
 			Str("req", e.MsgName()).
 			Dur("cost", time.Since(start)).
 			Msg("handle success")
 	}()
-	baseCtx.TraceLog.Debug().Str("req", e.MsgName()).Msg("handle start")
+	c.Debug().Str("req", e.MsgName()).Msg("handle start")
 	err = e.Call(c)
 	if err != nil {
 		return
 	}
 
-	if baseCtx.NatsMsg != nil && len(baseCtx.Resp) != 0 {
-		err = natsclient.NatsMsgReply(baseCtx.NatsMsg, baseCtx.Resp...)
+	if c.NatsMsg != nil && len(c.Resp) != 0 {
+		err = natsclient.NatsMsgReply(c.NatsMsg, c.Resp...)
 		if e.IsRPCResp() {
-			last := len(baseCtx.Resp) - 1
-			e.RespPool().Put(baseCtx.Resp[last])
+			last := len(c.Resp) - 1
+			e.RespPool().Put(c.Resp[last])
 		}
 		if err != nil {
 			return
@@ -227,13 +225,13 @@ func (s *BaseService[T, CTX]) call(c CTX, e *handler.Elem[CTX, T]) {
 }
 
 // Stop the service
-func (s *BaseService[T, CTX]) Stop() {
+func (s *BaseService[TraceData, TP]) Stop() {
 	s.natsCluster.Close()
 	s.el.Stop()
 	s.natsCluster.Shutdown()
 }
 
-func (s *BaseService[T, CTX]) subscribe() {
+func (s *BaseService[TraceData, TP]) subscribe() {
 	subjInfo := s.h.GetQueueSubjInfo()
 	serverId := baseenv.GetConfig().ServerId
 	for subj := range subjInfo {
@@ -262,7 +260,7 @@ func (s *BaseService[T, CTX]) subscribe() {
 	}
 }
 
-func (s *BaseService[T, CTX]) dealNatsMsg(msg *nats.Msg) {
+func (s *BaseService[TraceData, TP]) dealNatsMsg(msg *nats.Msg) {
 	msgName := msg.Subject
 	index := strings.LastIndexByte(msgName, '.')
 	if index == -1 {
@@ -296,9 +294,7 @@ func (s *BaseService[T, CTX]) dealNatsMsg(msg *nats.Msg) {
 	}
 
 	traceSize := int(data[0]) | int(data[1])<<8
-	c := (CTX)(objectpool.Get[T]())
-	baseCtx := c.MustBaseContext()
-	baseCtx.InitTraceLog()
+	c := objectpool.Get[ctx.BaseCtx[TraceData, TP]]()
 	traceCtx := c.GetTrace()
 	if traceSize > 0 && traceCtx != nil {
 		err := traceCtx.TraceMarshalFrom(msg.Data[2 : 2+traceSize])
@@ -311,45 +307,25 @@ func (s *BaseService[T, CTX]) dealNatsMsg(msg *nats.Msg) {
 			}
 			return
 		}
-		baseCtx.TraceLog.UpdateContext(
-			func(logC logger.Context) logger.Context {
-				logC.Reset()
-				logC = logC.Str("_AN_", s.serverType)
-				if s.serverId != 0 {
-					logC = logC.Int64("_SID_", s.serverId)
-				}
-				return traceCtx.TraceLogField(logC)
-			},
-		)
-	} else {
-		baseCtx.TraceLog.UpdateContext(
-			func(logC logger.Context) logger.Context {
-				logC.Reset()
-				logC = logC.Str("_AN_", s.serverType)
-				if s.serverId != 0 {
-					logC = logC.Int64("_SID_", s.serverId)
-				}
-				return logC
-			},
-		)
+
 	}
 
-	baseCtx.Req = elem.ReqPool().Get().(proto.Message)
-	err := proto.Unmarshal(data[2+traceSize:], baseCtx.Req)
+	c.Req = elem.ReqPool().Get().(proto.Message)
+	err := proto.Unmarshal(data[2+traceSize:], c.Req)
 	if err != nil {
 		if msg.Reply == "" {
 			e := natsclient.NatsMsgReplyError(msg, berror.NewProtocolErr(err))
 			if e != nil {
-				logger.Log.Error().Err(e).Msg("nats reply error")
+				c.Error().Err(e).Msg("nats reply error")
 			}
 		}
 		return
 	}
 	if elem.IsRPC() {
-		baseCtx.NatsMsg = msg
+		c.NatsMsg = msg
 	}
 	if elem.IsSingle() {
-		s.el.PostEventQueue(ce[CTX, T]{Data: c, Elem: elem})
+		s.el.PostEventQueue(ce[TraceData, TP]{Data: c, Elem: elem})
 	} else {
 		l := len(s.taskGroupHash)
 		if traceCtx != nil {
@@ -357,24 +333,24 @@ func (s *BaseService[T, CTX]) dealNatsMsg(msg *nats.Msg) {
 			if hash != 0 {
 				if l > 0 {
 					if elem.IsForce() {
-						s.taskGroupHash[hash&s.taskPoolMark].PutForce(ce[CTX, T]{Data: c, Elem: elem}, nil)
+						s.taskGroupHash[hash&s.taskPoolMark].PutForce(ce[TraceData, TP]{Data: c, Elem: elem}, nil)
 					} else {
-						if !s.taskGroupHash[hash&s.taskPoolMark].Put(ce[CTX, T]{Data: c, Elem: elem}, nil) {
-							ReplyTaskPoolFull(baseCtx)
-							objectpool.Put[T](c)
-							logger.Log.Warn().Err(err).Msg("task group full")
+						if !s.taskGroupHash[hash&s.taskPoolMark].Put(ce[TraceData, TP]{Data: c, Elem: elem}, nil) {
+							ReplyTaskPoolFull(c)
+							objectpool.Put(c)
+							c.Warn().Err(err).Msg("task group full")
 						}
 					}
 
 					return
 				}
 				tg, _ := s.taskMap.GetOrCreate(
-					hash, func() *task_group.TaskGroup[ce[CTX, T]] {
-						tg := s.taskGroupPool.Get().(*task_group.TaskGroup[ce[CTX, T]])
+					hash, func() *task_group.TaskGroup[ce[TraceData, TP]] {
+						tg := s.taskGroupPool.Get().(*task_group.TaskGroup[ce[TraceData, TP]])
 						tg.SetTaskFunc(s.taskFunc)
 						tg.SetMaxCap(128)
 						tg.SetOnStop(
-							func(t *task_group.TaskGroup[ce[CTX, T]]) {
+							func(t *task_group.TaskGroup[ce[TraceData, TP]]) {
 								tg.SetOnStop(nil)
 								s.taskGroupPool.Put(tg)
 							},
@@ -383,12 +359,12 @@ func (s *BaseService[T, CTX]) dealNatsMsg(msg *nats.Msg) {
 					},
 				)
 				if elem.IsForce() {
-					tg.PutForce(ce[CTX, T]{Data: c, Elem: elem}, nil)
+					tg.PutForce(ce[TraceData, TP]{Data: c, Elem: elem}, nil)
 				} else {
-					if !tg.Put(ce[CTX, T]{Data: c, Elem: elem}, nil) {
-						ReplyTaskPoolFull(baseCtx)
-						objectpool.Put[T](c)
-						logger.Log.Warn().Err(err).Msg("task group full")
+					if !tg.Put(ce[TraceData, TP]{Data: c, Elem: elem}, nil) {
+						ReplyTaskPoolFull(c)
+						objectpool.Put(c)
+						c.Warn().Err(err).Msg("task group full")
 					}
 				}
 				return
@@ -408,16 +384,16 @@ func (s *BaseService[T, CTX]) dealNatsMsg(msg *nats.Msg) {
 						s.handleCtx(c, elem)
 					},
 				) {
-					ReplyTaskPoolFull(baseCtx)
-					objectpool.Put[T](c)
-					logger.Log.Warn().Err(err).Msg("task group full")
+					ReplyTaskPoolFull(c)
+					objectpool.Put(c)
+					c.Warn().Err(err).Msg("task group full")
 				}
 			}
 			return
 		}
 		safego.Go(
 			func() {
-				defer safego.RecoverWithLogger(baseCtx.TraceLog)
+				defer safego.RecoverWithLogger(c)
 				s.handleCtx(c, elem)
 			},
 		)
@@ -425,7 +401,7 @@ func (s *BaseService[T, CTX]) dealNatsMsg(msg *nats.Msg) {
 }
 
 // ReplyTaskPoolFull reply task pool full error
-func ReplyTaskPoolFull(c *ctx.BaseContext) {
+func ReplyTaskPoolFull[TraceData any, TP ctx.TracePtr[TraceData]](c *ctx.BaseCtx[TraceData, TP]) {
 	if c.NatsMsg != nil && c.NatsMsg.Reply != "" {
 		err := natsclient.NatsMsgReplyError(c.NatsMsg, berror.NewProtocolStr("task pool full"))
 		if err != nil {

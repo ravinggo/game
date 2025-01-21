@@ -5,18 +5,17 @@ import (
 
 	"github.com/ravinggo/game/common/berror"
 	"github.com/ravinggo/game/common/ctx"
-	"github.com/ravinggo/game/common/logger"
 )
 
 type testStruct struct {
 	Id int
 }
 
-func (ts testStruct) call(x *ctx.BaseContext, t testStruct) *berror.ErrMsg {
+func (ts testStruct) call(x *ctx.Int64TraceCtx, t testStruct) *berror.ErrMsg {
 	return nil
 }
 
-var c ctx.BaseContext
+var c ctx.Int64TraceCtx
 
 func BenchmarkLocalEvent(b *testing.B) {
 	b.ReportAllocs()
@@ -33,8 +32,8 @@ func BenchmarkLocalEvent(b *testing.B) {
 func BenchmarkLocalEvent1(b *testing.B) {
 	b.ReportAllocs()
 	b.ResetTimer()
-	call := MiddleLocalEvent[*ctx.BaseContext](
-		func(ctx *ctx.BaseContext) *berror.ErrMsg {
+	call := MiddleLocalEvent[ctx.IntTrace](
+		func(ctx *ctx.Int64TraceCtx) *berror.ErrMsg {
 			return nil
 		},
 	)
@@ -52,5 +51,5 @@ func init() {
 	Register(
 		"test", ts.call,
 	)
-	Logger(logger.Log.Info())
+	Logger()
 }

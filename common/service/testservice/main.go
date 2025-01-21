@@ -23,13 +23,13 @@ import (
 )
 
 type TestService struct {
-	svc *service.ServerUserService[natsclient.ServerIntUserSubject, ctx.Int64TraceCtx, *ctx.Int64TraceCtx, *natsclient.ServerIntUserSubject]
+	svc *service.ServerUserService[natsclient.ServerIntUserSubject, ctx.IntTrace, *ctx.IntTrace, *natsclient.ServerIntUserSubject]
 	nc  *natsclient.ClusterClientServerUser[natsclient.ServerIntUserSubject, *natsclient.ServerIntUserSubject]
 }
 
 func NewTestService() *TestService {
 	t := &TestService{
-		svc: service.NewServerUserService[natsclient.ServerIntUserSubject, ctx.Int64TraceCtx](
+		svc: service.NewServerUserService[natsclient.ServerIntUserSubject, ctx.IntTrace](
 			[]string{
 				"nats://192.168.0.168:4222",
 				"nats://192.168.0.166:4222",
@@ -40,7 +40,7 @@ func NewTestService() *TestService {
 				"nats://192.168.0.141:4222",
 			},
 			true,
-			0, 0, time.Second*10, handler.LoggerAndRecover[*ctx.Int64TraceCtx, ctx.Int64TraceCtx],
+			0, 0, time.Second*10, handler.Recover[ctx.IntTrace, *ctx.IntTrace],
 		),
 		nc: natsclient.NewClusterClientServerUser[natsclient.ServerIntUserSubject](
 			"client", []string{
@@ -196,7 +196,7 @@ func main() {
 	zerolog.SetGlobalLevel(zerolog.InfoLevel)
 	svc := NewTestService()
 	svc.Start()
-	for i := 0; i < 1; i++ {
+	for i := 0; i < 1000; i++ {
 		go func() {
 			for {
 				roleId := atomic.AddInt64(&userCount, 1)

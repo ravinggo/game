@@ -10,40 +10,39 @@ import (
 	"github.com/ravinggo/game/common/ctx"
 )
 
-func LoggerAndRecover[CTX ctx.IContextPtr[T], T any](next HandleFunc[CTX, T]) HandleFunc[CTX, T] {
-	return func(c CTX) (err *berror.ErrMsg) {
-		baseCTX := c.MustBaseContext()
-		msgName := string(proto.MessageName(baseCTX.Req))
+func LoggerAndRecover[TraceData any, TP ctx.TracePtr[TraceData]](next HandleFunc[TraceData, TP]) HandleFunc[TraceData, TP] {
+	return func(c *ctx.BaseCtx[TraceData, TP]) (err *berror.ErrMsg) {
+		msgName := string(proto.MessageName(c.Req))
 		start := time.Now()
 		defer func() {
 			if e := recover(); e != nil {
 				err = berror.NewPanicStr(fmt.Sprintf("%v", e))
 			}
 			if err == nil {
-				e := baseCTX.TraceLog.Info().Dur("duration", time.Since(start))
-				if len(baseCTX.Resp) > 0 {
-					for i := range baseCTX.Resp {
-						e = e.Str("resp", string(proto.MessageName(baseCTX.Resp[i]))).Any("respData", baseCTX.Resp[i])
+				e := c.Info().Dur("duration", time.Since(start))
+				if len(c.Resp) > 0 {
+					for i := range c.Resp {
+						e = e.Str("resp", string(proto.MessageName(c.Resp[i]))).Any("respData", c.Resp[i])
 					}
 				}
 				e.Msg("success")
 			} else {
-				baseCTX.TraceLog.Err(err).Dur("duration", time.Since(start)).Msg("end")
+				c.Error().Err(err).Dur("duration", time.Since(start)).Msg("end")
 			}
 		}()
 
-		baseCTX.TraceLog.Info().Str("req", msgName).Any("reqData", baseCTX.Req).Msg("start")
+		c.Info().Str("req", msgName).Any("reqData", c.Req).Msg("start")
 		err = next(c)
 		return
 	}
 }
 
-func Recover[CTX ctx.IContextPtr[T], T any](next HandleFunc[CTX, T]) HandleFunc[CTX, T] {
-	return func(c CTX) (err *berror.ErrMsg) {
+func Recover[TraceData any, TP ctx.TracePtr[TraceData]](next HandleFunc[TraceData, TP]) HandleFunc[TraceData, TP] {
+	return func(c *ctx.BaseCtx[TraceData, TP]) (err *berror.ErrMsg) {
 		defer func() {
 			if e := recover(); e != nil {
 				err = berror.NewPanicStr(fmt.Sprintf("%v", e))
-				c.MustBaseContext().TraceLog.Err(err).Msg("panic")
+				c.Error().Err(err).Msg("panic")
 			}
 		}()
 		err = next(c)
