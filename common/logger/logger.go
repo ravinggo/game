@@ -37,8 +37,7 @@ type (
 )
 
 var (
-	Log    *Logger
-	Writer io.Writer
+	Log *Logger
 )
 
 func init() {
@@ -48,12 +47,10 @@ func init() {
 	} else {
 		zerolog.TimeFieldFormat = zerolog.TimeFormatUnix
 	}
-	var tz *time.Location
 	if envCnf.LogUtcTime {
 		zerolog.TimestampFunc = func() time.Time {
 			return time.Now().UTC()
 		}
-		tz = time.UTC
 	}
 	zerolog.MessageFieldName = "msg"
 	zerolog.ErrorFieldName = "err"
@@ -73,21 +70,11 @@ func init() {
 		} else {
 			if envCnf.LogConsole == "stdout" {
 				writers = append(
-					writers, zerolog.ConsoleWriter{
-						Out: os.Stdout, TimeFormat: zerolog.TimeFieldFormat, TimeLocation: tz,
-						FormatCaller: func(i interface{}) string {
-							return i.(string)
-						},
-					},
+					writers, os.Stdout,
 				)
 			} else if envCnf.LogConsole == "stderr" {
 				writers = append(
-					writers, zerolog.ConsoleWriter{
-						Out: os.Stderr, TimeFormat: zerolog.TimeFieldFormat, TimeLocation: tz,
-						FormatCaller: func(i interface{}) string {
-							return i.(string)
-						},
-					},
+					writers, os.Stderr,
 				)
 			} else if envCnf.LogConsole == "discard" {
 				writers = append(writers, io.Discard)
@@ -127,10 +114,13 @@ func init() {
 	if envCnf.LogAsync {
 		writer = NewAsync(writer)
 	}
-	Writer = writer
+
 	zerolog.ErrorStackMarshaler = pkgerrors.MarshalStack
 	ctx := zerolog.New(writer).
 		Level(getLoggerLevel()).With().Timestamp().Str("_AN_", appName).Stack()
+	if envCnf.LogEncodingMode != "json" {
+		ctx = ctx.NotUseJson(true)
+	}
 	if serverId > 0 {
 		ctx = ctx.Int64("_SID_", serverId)
 	}
@@ -144,6 +134,7 @@ func init() {
 // SetLogger set default logger
 func SetLogger(l Logger) {
 	log.Logger = l
+	Log = &l
 }
 
 func getLoggerLevel() zerolog.Level {

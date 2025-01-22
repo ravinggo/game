@@ -28,6 +28,7 @@ const (
 	LogNoCaller     = "LOG_NO_CALLER"
 	ErrorStackTrace = "ERROR_STACK_TRACE"
 	PprofAddr       = "PPROF_ADDR"
+	LogConsoleColor = "LOG_CONSOLE_COLOR"
 )
 
 type Config struct {
@@ -70,6 +71,8 @@ type Config struct {
 	// LogConsole output console. default stderr. yet can stdout or discard
 	LogConsole string `envconfig:"LOG_CONSOLE"`
 
+	LogConsoleColor bool `envconfig:"LOG_CONSOLE_COLOR"`
+
 	// LogDir write log to directory
 	LogDir string `envconfig:"LOG_DIR"`
 	// LogMaxSize lumberjack Maximum size of a single file
@@ -77,7 +80,7 @@ type Config struct {
 	// LogMaxBackup lumberjack How many log files are retained at most?
 	LogMaxBackup int `envconfig:"LOG_MAX_BACKUP"`
 
-	// LogEncodingMode Log output format default "console" ,yet can "json"
+	// LogEncodingMode Log output format default "json" ,yet can "console"
 	LogEncodingMode string `envconfig:"LOG_ENCODING_MODE"`
 
 	// LogNoCaller No call line output
@@ -89,7 +92,7 @@ type Config struct {
 var (
 	cfg = Config{
 		ServerType:      "ravinggo-game",
-		ServerId:        10,
+		ServerId:        0,
 		ConfType:        "consul",
 		ConfHosts:       "127.0.0.1:8500",
 		ConfPath:        "game/",
@@ -97,13 +100,14 @@ var (
 		ConfFormat:      "",
 		TcpAddr:         "80",
 		LogLevel:        "debug",
-		LogConsole:      "stderr",
+		LogConsole:      "discard",
 		LogDir:          "",
-		LogEncodingMode: "",
+		LogEncodingMode: "0",
 		LogNoCaller:     false,
 		LogTimestamp:    false,
-		LogAsync:        true,
+		LogAsync:        false,
 		ErrorStackTrace: false,
+		LogConsoleColor: true,
 	}
 )
 

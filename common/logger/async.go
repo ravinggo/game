@@ -11,7 +11,6 @@ import (
 // AsyncSink write log asynchronously
 type AsyncSink struct {
 	writer io.Writer
-	open   int32
 
 	swapBuff [2][]*bs
 	cond     *sync.Cond
@@ -24,9 +23,9 @@ type AsyncSink struct {
 func NewAsync(writer io.Writer) *AsyncSink {
 	as := &AsyncSink{
 		writer:   writer,
-		open:     0,
 		swapBuff: [2][]*bs{},
 		cond:     sync.NewCond(&sync.Mutex{}),
+		closed:   make(chan struct{}, 1),
 	}
 
 	as.run()
@@ -74,6 +73,8 @@ func (this_ *AsyncSink) Close() error {
 	return nil
 }
 
+var count int
+
 func (this_ *AsyncSink) run() {
 	go func() {
 		defer func() {
@@ -92,6 +93,7 @@ func (this_ *AsyncSink) run() {
 			this_.cond.L.Unlock()
 
 			for _, v := range this_.swapBuff[1] {
+				count += len(v.data)
 				_, err := this_.writer.Write(v.data)
 				if err != nil {
 					_, _ = fmt.Fprintln(os.Stderr, err)
