@@ -4,6 +4,8 @@ import (
 	"sync"
 
 	"google.golang.org/protobuf/proto"
+
+	"github.com/ravinggo/game/common/xid"
 )
 
 // ProtoMessagePtr is an interface that can be implemented by a struct to be a proto message pointer
@@ -22,3 +24,6 @@ type Clear interface {
 // DoNotCopy is an empty structure that can be embedded into a struct to prevent
 // It cannot be copied
 type DoNotCopy [0]sync.Mutex
+
+// TraceID is an alias of xid.ID
+type TraceID = xid.IDString

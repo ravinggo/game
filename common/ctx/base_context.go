@@ -14,6 +14,7 @@ import (
 	"github.com/ravinggo/game/common/define"
 	"github.com/ravinggo/game/common/logger"
 	"github.com/ravinggo/game/common/utils"
+	"github.com/ravinggo/game/common/xid"
 )
 
 type RoleIdType interface {
@@ -150,6 +151,7 @@ func (c *BaseCtx[TraceData, TP]) GetTrace() Trace {
 
 type IntTrace struct {
 	basepb.IntTrace
+	id define.TraceID
 }
 
 func (i *IntTrace) ToHash() uint64 {
@@ -164,15 +166,31 @@ func (i *IntTrace) ToHash() uint64 {
 }
 
 func (i *IntTrace) TraceMarshalSize() int {
+	if i.TraceId == "" {
+		i.id = xid.NewIDString()
+		i.TraceId = i.id.String()
+	}
 	return proto.Size(i)
 }
 
 func (i *IntTrace) TraceMarshalAppend(b []byte) ([]byte, error) {
+	if i.TraceId == "" {
+		i.id = xid.NewIDString()
+		i.TraceId = i.id.String()
+	}
 	return proto.MarshalOptions{}.MarshalAppend(b, i)
 }
 
 func (i *IntTrace) TraceMarshalFrom(b []byte) error {
-	return proto.Unmarshal(b, i)
+	err := proto.Unmarshal(b, i)
+	if err != nil {
+		return err
+	}
+	if i.TraceId != "" {
+		copy(i.id[:], i.TraceId)
+	}
+
+	return nil
 }
 
 func (i *IntTrace) GetServerIdAndType() (int64, string) {
@@ -191,6 +209,7 @@ func (i *IntTrace) TraceLogField(e *logger.Event) *logger.Event {
 
 type StringTrace struct {
 	basepb.StringTrace
+	id define.TraceID
 }
 
 func (i *StringTrace) ToHash() uint64 {
@@ -206,15 +225,31 @@ func (i *StringTrace) Reset() {
 }
 
 func (i *StringTrace) TraceMarshalSize() int {
+	if i.TraceId == "" {
+		i.id = xid.NewIDString()
+		i.TraceId = i.id.String()
+	}
 	return proto.Size(i)
 }
 
 func (i *StringTrace) TraceMarshalAppend(b []byte) ([]byte, error) {
+	if i.TraceId == "" {
+		i.id = xid.NewIDString()
+		i.TraceId = i.id.String()
+	}
 	return proto.MarshalOptions{}.MarshalAppend(b, i)
 }
 
 func (i *StringTrace) TraceMarshalFrom(b []byte) error {
-	return proto.Unmarshal(b, i)
+	err := proto.Unmarshal(b, i)
+	if err != nil {
+		return err
+	}
+	if i.TraceId != "" {
+		copy(i.id[:], i.TraceId)
+	}
+
+	return nil
 }
 
 func (i *StringTrace) GetServerIdAndType() (int64, string) {

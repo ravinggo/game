@@ -27,7 +27,7 @@ func LoggerAndRecover[TraceData any, TP ctx.TracePtr[TraceData]](next HandleFunc
 				}
 				e.Msg("success")
 			} else {
-				c.Error().Err(err).Dur("duration", time.Since(start)).Msg("end")
+				c.Error().Err(err).Dur("duration", time.Since(start)).Msg("error")
 			}
 		}()
 
