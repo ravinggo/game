@@ -119,7 +119,7 @@ func init() {
 	ctx := zerolog.New(writer).
 		Level(getLoggerLevel()).With().Timestamp().Str("_AN_", appName).Stack()
 	if envCnf.LogEncodingMode != "json" {
-		ctx = ctx.NotUseJson(true)
+		ctx = ctx.NotUseJson(baseenv.GetConfig().LogConsoleColor)
 	}
 	if serverId > 0 {
 		ctx = ctx.Int64("_SID_", serverId)

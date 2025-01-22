@@ -100,7 +100,7 @@ var (
 		ConfFormat:      "",
 		TcpAddr:         "80",
 		LogLevel:        "debug",
-		LogConsole:      "stderr",
+		LogConsole:      "stdout",
 		LogDir:          "",
 		LogEncodingMode: "0",
 		LogNoCaller:     false,
