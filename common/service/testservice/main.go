@@ -7,9 +7,8 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/rs/zerolog"
-
 	"github.com/ravinggo/objectpool"
+	"github.com/ravinggo/zerolog"
 
 	baseenv "github.com/ravinggo/game/common/base-env"
 	"github.com/ravinggo/game/common/basepb"

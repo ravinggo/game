@@ -8,9 +8,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/rs/zerolog"
-	"github.com/rs/zerolog/log"
-	"github.com/rs/zerolog/pkgerrors"
+	"github.com/ravinggo/zerolog"
+	"github.com/ravinggo/zerolog/log"
+	"github.com/ravinggo/zerolog/pkgerrors"
 	"gopkg.in/natefinch/lumberjack.v2"
 
 	baseenv "github.com/ravinggo/game/common/base-env"
