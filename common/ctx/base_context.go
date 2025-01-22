@@ -166,7 +166,7 @@ func (i *IntTrace) ToHash() uint64 {
 }
 
 func (i *IntTrace) TraceMarshalSize() int {
-	if i.TraceId == "" {
+	if i.TraceId == "" && i.id.IsNil() {
 		i.id = xid.NewIDString()
 		i.TraceId = i.id.String()
 	}
@@ -174,7 +174,7 @@ func (i *IntTrace) TraceMarshalSize() int {
 }
 
 func (i *IntTrace) TraceMarshalAppend(b []byte) ([]byte, error) {
-	if i.TraceId == "" {
+	if i.TraceId == "" && i.id.IsNil() {
 		i.id = xid.NewIDString()
 		i.TraceId = i.id.String()
 	}
@@ -225,7 +225,7 @@ func (i *StringTrace) Reset() {
 }
 
 func (i *StringTrace) TraceMarshalSize() int {
-	if i.TraceId == "" {
+	if i.TraceId == "" && i.id.IsNil() {
 		i.id = xid.NewIDString()
 		i.TraceId = i.id.String()
 	}
@@ -233,7 +233,7 @@ func (i *StringTrace) TraceMarshalSize() int {
 }
 
 func (i *StringTrace) TraceMarshalAppend(b []byte) ([]byte, error) {
-	if i.TraceId == "" {
+	if i.TraceId == "" && i.id.IsNil() {
 		i.id = xid.NewIDString()
 		i.TraceId = i.id.String()
 	}
