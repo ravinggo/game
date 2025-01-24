@@ -76,18 +76,6 @@ func setES(ptr uintptr, index int, e eventHandler) {
 	le.events[i] = es
 }
 
-func calcIndex[T any]() (uintptr, int) {
-	ptr := objectpool.GetPtr[T]()
-	index := int((ptr >> 6) & mark)
-	return ptr, index
-}
-
-func calcIndex2(a any) (uintptr, int) {
-	ptr := objectpool.GetPtrAny(a)
-	index := int((ptr >> 6) & mark)
-	return ptr, index
-}
-
 // Logger print all local event
 func Logger() {
 	for _, es := range le.events {
@@ -102,7 +90,7 @@ func Register[TraceData, T any, TP ctx.TracePtr[TraceData]](desc string, f func(
 	if esPool == nil {
 		esPool = objectpool.GetTypePool[events[TraceData, TP]]()
 	}
-	ptr, index := calcIndex[T]()
+	ptr, index := objectpool.GetPtrAndIndex[T]()
 	setES(
 		ptr, index, eventHandler{
 			f: f,
@@ -116,7 +104,7 @@ func Register[TraceData, T any, TP ctx.TracePtr[TraceData]](desc string, f func(
 
 // Call sync call local event
 func Call[TraceData, T any, TP ctx.TracePtr[TraceData]](c *ctx.BaseCtx[TraceData, TP], data T) *berror.ErrMsg {
-	ptr, index := calcIndex[T]()
+	ptr, index := objectpool.GetPtrAndIndex[T]()
 	es := getES(ptr, index)
 	for _, e := range es {
 		if err := e.f.(func(*ctx.BaseCtx[TraceData, TP], T) *berror.ErrMsg)(c, data); err != nil {
@@ -142,7 +130,7 @@ func (es *events[TraceData, TP]) call(c *ctx.BaseCtx[TraceData, TP]) *berror.Err
 		return nil
 	}
 	for _, e := range cs {
-		ptr, index := calcIndex2(e)
+		ptr, index := objectpool.GetPtrAnyAndIndex(e)
 		es := getES(ptr, index)
 		if len(es) == 0 {
 			logger.Log.Warn().Str("eventName", reflect.TypeOf(e).String()).Msg("not found localevent")
