@@ -2,7 +2,6 @@ package natsclient
 
 import (
 	"math/rand/v2"
-	"time"
 
 	"github.com/nats-io/nats.go"
 	"google.golang.org/protobuf/proto"
@@ -23,11 +22,11 @@ type ClusterClient struct {
 // param name Usually the server name ( baseenv.Config.ServerType )
 // param urls a nats cluster urls
 // param timeout for request
-func NewClusterClient(name string, urls []string, timeout time.Duration) *ClusterClient {
+func NewClusterClient(urls []string, options ...nats.Option) *ClusterClient {
 	clusterClient := &ClusterClient{}
 	clusterClient.natsClients = make([]*NatsClient, 0, len(urls))
 	for _, url := range urls {
-		natsClient := NewNatsClient(name, url, timeout)
+		natsClient := NewNatsClient(url, options...)
 		clusterClient.natsClients = append(clusterClient.natsClients, natsClient)
 	}
 	return clusterClient

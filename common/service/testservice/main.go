@@ -41,18 +41,19 @@ func NewTestService() *TestService {
 			true,
 			0, 0, time.Second*10, handler.LoggerAndRecover[ctx.IntTrace, *ctx.IntTrace],
 		),
-		nc: natsclient.NewClusterClientServerUser[natsclient.ServerIntUserSubject](
-			"client", []string{
-				"nats://192.168.0.168:4222",
-				"nats://192.168.0.166:4222",
-				"nats://192.168.0.141:4222",
-				"nats://192.168.0.168:4222",
-				"nats://192.168.0.166:4222",
-				"nats://192.168.0.168:4222",
-				"nats://192.168.0.141:4222",
-			}, time.Second*10,
-		),
 	}
+	t.nc = natsclient.NewClusterClientServerUser[natsclient.ServerIntUserSubject](
+		[]string{
+			"nats://192.168.0.168:4222",
+			"nats://192.168.0.166:4222",
+			"nats://192.168.0.141:4222",
+			"nats://192.168.0.168:4222",
+			"nats://192.168.0.166:4222",
+			"nats://192.168.0.168:4222",
+			"nats://192.168.0.141:4222",
+		},
+		t.svc.DealServerUserNatsMsg,
+	)
 	t.Router()
 	return t
 }

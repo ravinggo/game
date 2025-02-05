@@ -43,7 +43,7 @@ func NewServerUserService[T1 any, TraceData any, TP ctx.TracePtr[TraceData], US 
 			middlewares...,
 		),
 	}
-	s.userNatsCluster = natsclient.NewClusterClientServerUser2[T1, US](s.BaseService.natsCluster)
+	s.userNatsCluster = natsclient.NewClusterClientServerUser2[T1, US](s.BaseService.natsCluster, s.DealServerUserNatsMsg)
 	return s
 }
 
@@ -54,24 +54,24 @@ func (s *ServerUserService[T1, TraceData, TP, US]) GetUserNatsCluster() *natscli
 
 // UserSubscribeOne subscribe one user subject.
 func (s *ServerUserService[T1, TraceData, TP, US]) UserSubscribeOne(us US) {
-	s.userNatsCluster.UserSubscribeOne(us, s.dealServerUserNatsMsg)
+	s.userNatsCluster.UserSubscribeOne(us)
 }
 
 // UserSubscribeOneWaitSuccess subscribe one user subject and wait success.
 // Only used in multi-cluster or multiple connections to the same cluster
 func (s *ServerUserService[T1, TraceData, TP, US]) UserSubscribeOneWaitSuccess(us US) {
-	s.userNatsCluster.UserSubscribeOneWaitSuccess(us, s.dealServerUserNatsMsg)
+	s.userNatsCluster.UserSubscribeOneWaitSuccess(us)
 }
 
 // UserSubscribeAll subscribe all NatsClient for user subject.
 func (s *ServerUserService[T1, TraceData, TP, US]) UserSubscribeAll(us US) {
-	s.userNatsCluster.UserSubscribeAll(us, s.dealServerUserNatsMsg)
+	s.userNatsCluster.UserSubscribeAll(us)
 }
 
 // UserSubscribeAllWaitSuccess subscribe all NatsClient for user subject and wait success.
 // Only used in multi-cluster or multiple connections to the same cluster
 func (s *ServerUserService[T1, TraceData, TP, US]) UserSubscribeAllWaitSuccess(us US) {
-	s.userNatsCluster.UserSubscribeAllWaitSuccess(us, s.dealServerUserNatsMsg)
+	s.userNatsCluster.UserSubscribeAllWaitSuccess(us)
 }
 
 // UserUnsubscribe unsubscribe user subject if subscribed.
@@ -79,16 +79,9 @@ func (s *ServerUserService[T1, TraceData, TP, US]) UserUnsubscribe(us US) {
 	s.userNatsCluster.UserUnsubscribe(us)
 }
 
-func (s *ServerUserService[T1, TraceData, TP, US]) dealServerUserNatsMsg(msg *nats.Msg) {
+func (s *ServerUserService[T1, TraceData, TP, US]) DealServerUserNatsMsg(msg *nats.Msg) {
 	index := strings.IndexByte(msg.Subject, '.')
 	if index == -1 {
-		return
-	}
-	if msg.Subject[index+1] == '>' && msg.Reply != "" && len(msg.Data) == 0 {
-		err := msg.Respond(nil)
-		if err != nil {
-			logger.Log.Error().Err(err).Str("msgName", msg.Subject).Msg("deal wait success error")
-		}
 		return
 	}
 	msgName := msg.Subject[index+1:]
@@ -187,7 +180,7 @@ func (s *ServerUserService[T1, TraceData, TP, US]) dealServerUserNatsMsg(msg *na
 			}
 			return
 		} else {
-			c.Error().Err(define.ErrInvalidToHash).Msg("dealServerUserNatsMsg not dispatch")
+			c.Error().Err(define.ErrInvalidToHash).Msg("DealServerUserNatsMsg not dispatch")
 			if msg.Reply != "" { // RPC
 				err := natsclient.NatsMsgReplyError(msg, berror.NewProtocolErr(define.ErrInvalidToHash))
 				if err != nil {

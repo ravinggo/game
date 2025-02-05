@@ -6,7 +6,6 @@ import (
 	"math"
 	"strconv"
 	"strings"
-	"time"
 
 	"github.com/nats-io/nats.go"
 	"google.golang.org/protobuf/proto"
@@ -18,6 +17,7 @@ import (
 	"github.com/ravinggo/game/common/ctx"
 	"github.com/ravinggo/game/common/define"
 	"github.com/ravinggo/game/common/logger"
+	"github.com/ravinggo/game/common/safego"
 	"github.com/ravinggo/game/common/utils"
 )
 
@@ -52,20 +52,72 @@ type ServerUserSubjectPtr[T any] interface {
 
 type ServerUserNatsClient[T any, US ServerUserSubjectPtr[T]] struct {
 	*NatsClient
+	queues         []chan *nats.Msg
+	userHandler    nats.MsgHandler
+	isCreateQueues bool
+	closeCh        chan struct{}
 }
 
 func NewServerUserNatsClient[T any, US ServerUserSubjectPtr[T]](
-	name string, urls string, timeout time.Duration,
+	urls string, userHandler nats.MsgHandler, opts ...UNOption,
 ) *ServerUserNatsClient[T, US] {
-	return &ServerUserNatsClient[T, US]{
-		NatsClient: NewNatsClient(name, urls, timeout),
+	if userHandler == nil {
+		panic("handler is nil")
 	}
+	uh := func(msg *nats.Msg) {
+		defer safego.Recover()
+		if strings.HasSuffix(msg.Subject, waitSuccessCheckStrSuffix) && msg.Reply != "" && len(msg.Data) == 0 {
+			err := msg.Respond(nil)
+			if err != nil {
+				logger.Log.Error().Err(err).Str("msgName", msg.Subject).Msg("deal wait success error")
+			}
+			return
+		}
+		userHandler(msg)
+	}
+	var un UNOptions
+	for _, o := range opts {
+		if err := o(&un); err != nil {
+			panic(err)
+		}
+	}
+	if un.ChanCount == 0 && len(un.Queues) == 0 {
+		un.ChanCount = 1
+	}
+
+	if un.QueueChanSize == 0 {
+		un.QueueChanSize = defaultQueueChanSize
+	}
+	isCreateQueues := false
+	queues := un.Queues
+	if len(queues) == 0 {
+		queues = make([]chan *nats.Msg, un.ChanCount)
+		for i := 0; i < un.ChanCount; i++ {
+			queues[i] = make(chan *nats.Msg, un.QueueChanSize)
+		}
+		isCreateQueues = true
+	}
+
+	unc := &ServerUserNatsClient[T, US]{
+		NatsClient:     NewNatsClient(urls, un.opts...),
+		queues:         queues,
+		userHandler:    uh,
+		isCreateQueues: isCreateQueues,
+		closeCh:        make(chan struct{}, len(queues)),
+	}
+	unc.startUserChan()
+	return unc
 }
 
-func newServerUserNatsClient[T any, US ServerUserSubjectPtr[T]](c *NatsClient) *ServerUserNatsClient[T, US] {
-	return &ServerUserNatsClient[T, US]{
+func newServerUserNatsClientForCluster[T any, US ServerUserSubjectPtr[T]](
+	c *NatsClient, queues []chan *nats.Msg,
+) *ServerUserNatsClient[T, US] {
+	unc := &ServerUserNatsClient[T, US]{
 		NatsClient: c,
+		queues:     queues,
 	}
+
+	return unc
 }
 
 type ServerIntUserSubject struct {
@@ -154,9 +206,33 @@ func (u *ServerStringUserSubject) ParseSubjForCall(s string) error {
 	return nil
 }
 
+func (nc *ServerUserNatsClient[T, US]) Close() {
+	nc.NatsClient.Close()
+	if nc.isCreateQueues {
+		for _, ch := range nc.queues {
+			close(ch)
+		}
+
+		for range len(nc.queues) {
+			<-nc.closeCh
+		}
+	}
+}
+
+func (nc *ServerUserNatsClient[T, US]) startUserChan() {
+	for _, ch := range nc.queues {
+		go func(ch chan *nats.Msg) {
+			for msg := range ch {
+				nc.userHandler(msg)
+			}
+			nc.closeCh <- struct{}{}
+		}(ch)
+	}
+}
+
 // SubscribeUser  subscribe user topic
 // param us not escapes to heap
-func (nc *ServerUserNatsClient[T, US]) SubscribeUser(us US, handler nats.MsgHandler) bool {
+func (nc *ServerUserNatsClient[T, US]) SubscribeUser(us US) bool {
 	b := objectpool.GetBytes(0)
 	defer objectpool.PutBytes(b)
 	us.CreateSubj(b)
@@ -164,9 +240,11 @@ func (nc *ServerUserNatsClient[T, US]) SubscribeUser(us US, handler nats.MsgHand
 	if _, ok := nc.subs.Get(subj); ok {
 		return false
 	}
-	sub, err := nc.conn.Subscribe(subj, handler)
+	index := us.ToHash() % uint64(len(nc.queues))
+	sub, err := nc.conn.ChanSubscribe(subj, nc.queues[index])
 	if err != nil {
 		logger.Log.Error().Err(err).Str("subj", subj).Msg("ClientSubscribeServerUser")
+		return false
 	}
 	if !nc.subs.SetIfAbsent(subj, sub) {
 		err := sub.Unsubscribe()
@@ -180,7 +258,7 @@ func (nc *ServerUserNatsClient[T, US]) SubscribeUser(us US, handler nats.MsgHand
 }
 
 // SubscribeUserWaitSuccess SubscribeUser and wait for success
-func (nc *ServerUserNatsClient[T, US]) SubscribeUserWaitSuccess(us US, handler nats.MsgHandler) bool {
+func (nc *ServerUserNatsClient[T, US]) SubscribeUserWaitSuccess(us US) bool {
 	b := objectpool.GetBytes(0)
 	defer objectpool.PutBytes(b)
 	us.CreateSubj(b)
@@ -188,7 +266,8 @@ func (nc *ServerUserNatsClient[T, US]) SubscribeUserWaitSuccess(us US, handler n
 	if _, ok := nc.subs.Get(subj); ok {
 		return false
 	}
-	sub, err := nc.conn.Subscribe(subj, handler)
+	index := us.ToHash() % uint64(len(nc.queues))
+	sub, err := nc.conn.ChanSubscribe(subj, nc.queues[index])
 	if err != nil {
 		logger.Log.Error().Err(err).Str("subj", subj).Msg("ClientSubscribeServerUser")
 	}
@@ -202,7 +281,7 @@ func (nc *ServerUserNatsClient[T, US]) SubscribeUserWaitSuccess(us US, handler n
 	logger.Log.Debug().Str("subj", subj).Msg("ClientSubscribeServerUser")
 
 	// wait for success
-	_, err = nc.conn.Request(subj, nil, nc.timeout)
+	_, err = nc.conn.Request(subj+waitSuccessCheckStr, nil, nc.timeout)
 	if err != nil {
 		logger.Log.Error().Err(err).Str("subj", subj).Msg("SubscribeUserWaitSuccess error")
 		return false
@@ -221,7 +300,8 @@ func (nc *ServerUserNatsClient[T, US]) QueueSubscribeUser(us US, handler nats.Ms
 		return false
 	}
 	group := subj[:len(subj)-2]
-	sub, err := nc.conn.QueueSubscribe(subj, group, handler)
+	index := us.ToHash() % uint64(len(nc.queues))
+	sub, err := nc.conn.ChanQueueSubscribe(subj, group, nc.queues[index])
 	if err != nil {
 		logger.Log.Error().Err(err).Str("subj", subj).Str("group", group).Msg("ClientQueueSubscribeServerUser")
 	}
@@ -237,7 +317,7 @@ func (nc *ServerUserNatsClient[T, US]) QueueSubscribeUser(us US, handler nats.Ms
 }
 
 // QueueSubscribeUserWaitSuccess QueueSubscribeUser and wait for success
-func (nc *ServerUserNatsClient[T, US]) QueueSubscribeUserWaitSuccess(us US, handler nats.MsgHandler) bool {
+func (nc *ServerUserNatsClient[T, US]) QueueSubscribeUserWaitSuccess(us US) bool {
 	b := objectpool.GetBytes(0)
 	defer objectpool.PutBytes(b)
 	us.CreateSubj(b)
@@ -246,7 +326,8 @@ func (nc *ServerUserNatsClient[T, US]) QueueSubscribeUserWaitSuccess(us US, hand
 		return false
 	}
 	group := subj[:len(subj)-2]
-	sub, err := nc.conn.QueueSubscribe(subj, group, handler)
+	index := us.ToHash() % uint64(len(nc.queues))
+	sub, err := nc.conn.ChanQueueSubscribe(subj, group, nc.queues[index])
 	if err != nil {
 		logger.Log.Error().Err(err).Str("subj", subj).Str("group", group).Msg("ClientQueueSubscribeServerUser")
 	}
@@ -259,7 +340,7 @@ func (nc *ServerUserNatsClient[T, US]) QueueSubscribeUserWaitSuccess(us US, hand
 	}
 	logger.Log.Info().Str("subj", subj).Str("group", group).Msg("ClientQueueSubscribeServerUser")
 	// wait for success
-	_, err = nc.conn.Request(subj, nil, nc.timeout)
+	_, err = nc.conn.Request(subj+waitSuccessCheckStr, nil, nc.timeout)
 	if err != nil {
 		logger.Log.Error().Err(err).Str("subj", subj).Msg("QueueSubscribeUserWaitSuccess error")
 		return false
@@ -321,7 +402,7 @@ func (nc *ServerUserNatsClient[T, US]) PublishUser(c ctx.IContext, us US, pubMsg
 	} else {
 		b.Data = append(b.Data, 0, 0)
 	}
-	_, err = proto.MarshalOptions{}.MarshalAppend(b.Data, pubMsg)
+	b.Data, err = proto.MarshalOptions{}.MarshalAppend(b.Data, pubMsg)
 	if err != nil {
 		return berror.NewProtocolErr(err)
 	}
@@ -366,7 +447,7 @@ func (nc *ServerUserNatsClient[T, US]) RequestUser(c ctx.IContext, us US, reqMsg
 	} else {
 		b.Data = append(b.Data, 0, 0)
 	}
-	_, err = proto.MarshalOptions{}.MarshalAppend(b.Data, reqMsg)
+	b.Data, err = proto.MarshalOptions{}.MarshalAppend(b.Data, reqMsg)
 	if err != nil {
 		return berror.NewProtocolErr(err)
 	}

@@ -1,7 +1,7 @@
 package natsclient
 
 import (
-	"time"
+	"strings"
 
 	"github.com/nats-io/nats.go"
 	"google.golang.org/protobuf/proto"
@@ -11,86 +11,208 @@ import (
 	"github.com/ravinggo/game/common/berror"
 	"github.com/ravinggo/game/common/ctx"
 	"github.com/ravinggo/game/common/define"
+	"github.com/ravinggo/game/common/logger"
+	"github.com/ravinggo/game/common/safego"
 )
 
 // ClusterClientServerUser is a ClusterClient with user topic
 type ClusterClientServerUser[T any, US ServerUserSubjectPtr[T]] struct {
 	*ClusterClient
-	natsClients []*ServerUserNatsClient[T, US]
+	natsClients    []*ServerUserNatsClient[T, US]
+	queues         []chan *nats.Msg
+	userHandler    nats.MsgHandler
+	closeCh        chan struct{}
+	isCreateQueues bool
 }
 
 // NewClusterClientServerUser create a ClusterClientServerUser.
 func NewClusterClientServerUser[T any, US ServerUserSubjectPtr[T]](
-	name string, urls []string, timeout time.Duration,
+	urls []string, userHandler nats.MsgHandler, opts ...UNOption,
 ) *ClusterClientServerUser[T, US] {
-	cnc := NewClusterClient(name, urls, timeout)
+	if userHandler == nil {
+		panic("handler is nil")
+	}
+	uh := func(msg *nats.Msg) {
+		defer safego.Recover()
+		if strings.HasSuffix(msg.Subject, waitSuccessCheckStrSuffix) && msg.Reply != "" && len(msg.Data) == 0 {
+			err := msg.Respond(nil)
+			if err != nil {
+				logger.Log.Error().Err(err).Str("msgName", msg.Subject).Msg("deal wait success error")
+			}
+			return
+		}
+		userHandler(msg)
+	}
+	var un UNOptions
+	for _, o := range opts {
+		if err := o(&un); err != nil {
+			panic(err)
+		}
+	}
+	if un.ChanCount == 0 && len(un.Queues) == 0 {
+		un.ChanCount = 1
+	}
 
-	clusterClient := &ClusterClientServerUser[T, US]{ClusterClient: cnc}
+	if un.QueueChanSize == 0 {
+		un.QueueChanSize = defaultQueueChanSize
+	}
+
+	isCreateQueues := false
+	queues := un.Queues
+	if len(queues) == 0 {
+		queues = make([]chan *nats.Msg, un.ChanCount)
+		for i := 0; i < un.ChanCount; i++ {
+			queues[i] = make(chan *nats.Msg, un.QueueChanSize)
+		}
+		isCreateQueues = true
+	}
+
+	cnc := NewClusterClient(urls, un.opts...)
+	clusterClient := &ClusterClientServerUser[T, US]{
+		ClusterClient:  cnc,
+		queues:         queues,
+		userHandler:    uh,
+		closeCh:        make(chan struct{}, len(queues)),
+		isCreateQueues: isCreateQueues,
+	}
 	clusterClient.natsClients = make([]*ServerUserNatsClient[T, US], 0, len(cnc.natsClients))
 	for _, c := range cnc.natsClients {
-		natsClient := newServerUserNatsClient[T, US](c)
+		natsClient := newServerUserNatsClientForCluster[T, US](c, queues)
 		clusterClient.natsClients = append(clusterClient.natsClients, natsClient)
 	}
+
+	clusterClient.startUserChan()
 	return clusterClient
 }
 
-// NewClusterClientServerUser2 create a ClusterClientServerUser with *ClusterClient
 func NewClusterClientServerUser2[T any, US ServerUserSubjectPtr[T]](
-	cnc *ClusterClient,
+	cnc *ClusterClient, userHandler nats.MsgHandler, opts ...UNOption,
 ) *ClusterClientServerUser[T, US] {
 
-	clusterClient := &ClusterClientServerUser[T, US]{}
+	if userHandler == nil {
+		panic("handler is nil")
+	}
+	uh := func(msg *nats.Msg) {
+		defer safego.Recover()
+		if strings.HasSuffix(msg.Subject, waitSuccessCheckStrSuffix) && msg.Reply != "" && len(msg.Data) == 0 {
+			err := msg.Respond(nil)
+			if err != nil {
+				logger.Log.Error().Err(err).Str("msgName", msg.Subject).Msg("deal wait success error")
+			}
+			return
+		}
+		userHandler(msg)
+	}
+	var un UNOptions
+	for _, o := range opts {
+		if err := o(&un); err != nil {
+			panic(err)
+		}
+	}
+	if un.ChanCount == 0 && len(un.Queues) == 0 {
+		un.ChanCount = 1
+	}
+
+	if un.QueueChanSize == 0 {
+		un.QueueChanSize = defaultQueueChanSize
+	}
+
+	isCreateQueues := false
+	queues := un.Queues
+	if len(queues) == 0 {
+		queues = make([]chan *nats.Msg, un.ChanCount)
+		for i := 0; i < un.ChanCount; i++ {
+			queues[i] = make(chan *nats.Msg, un.QueueChanSize)
+		}
+		isCreateQueues = true
+	}
+
+	clusterClient := &ClusterClientServerUser[T, US]{
+		ClusterClient:  cnc,
+		queues:         queues,
+		userHandler:    uh,
+		closeCh:        make(chan struct{}, len(queues)),
+		isCreateQueues: isCreateQueues,
+	}
 	clusterClient.natsClients = make([]*ServerUserNatsClient[T, US], 0, len(cnc.natsClients))
 	for _, c := range cnc.natsClients {
-		natsClient := newServerUserNatsClient[T, US](c)
+		natsClient := newServerUserNatsClientForCluster[T, US](c, queues)
 		clusterClient.natsClients = append(clusterClient.natsClients, natsClient)
 	}
+
+	clusterClient.startUserChan()
 	return clusterClient
+}
+
+func (cnc *ClusterClientServerUser[T, US]) Close() {
+	for _, nc := range cnc.natsClients {
+		nc.Close()
+	}
+
+	if cnc.isCreateQueues {
+		for _, q := range cnc.queues {
+			close(q)
+		}
+		for range len(cnc.queues) {
+			<-cnc.closeCh
+		}
+	}
+}
+
+func (cnc *ClusterClientServerUser[T, US]) startUserChan() {
+	for _, ch := range cnc.queues {
+		go func(ch chan *nats.Msg) {
+			for msg := range ch {
+				cnc.userHandler(msg)
+			}
+			cnc.closeCh <- struct{}{}
+		}(ch)
+	}
 }
 
 // UserSubscribeOne  Subscribe user topic for one NatsClient.
 // param us not escapes to heap.
-func (cnc *ClusterClientServerUser[T, US]) UserSubscribeOne(us US, handler nats.MsgHandler) {
+func (cnc *ClusterClientServerUser[T, US]) UserSubscribeOne(us US) {
 	nsl := uint64(len(cnc.natsClients))
 	if nsl == 0 {
 		panic("nats client is empty")
 	}
 	hash := us.ToHash()
 	client := cnc.natsClients[hash%nsl]
-	client.SubscribeUser(us, handler)
+	client.SubscribeUser(us)
 }
 
 // UserSubscribeOneWaitSuccess  Subscribe user topic for one NatsClient and wait success.
-func (cnc *ClusterClientServerUser[T, US]) UserSubscribeOneWaitSuccess(us US, handler nats.MsgHandler) {
+func (cnc *ClusterClientServerUser[T, US]) UserSubscribeOneWaitSuccess(us US) {
 	nsl := uint64(len(cnc.natsClients))
 	if nsl == 0 {
 		panic("nats client is empty")
 	}
 	hash := us.ToHash()
 	client := cnc.natsClients[hash%nsl]
-	client.SubscribeUserWaitSuccess(us, handler)
+	client.SubscribeUserWaitSuccess(us)
 }
 
 // UserSubscribeAll Subscribe user topic for all NatsClient.
 // param us not escapes to heap.
-func (cnc *ClusterClientServerUser[T, US]) UserSubscribeAll(us US, handler nats.MsgHandler) {
+func (cnc *ClusterClientServerUser[T, US]) UserSubscribeAll(us US) {
 	nsl := len(cnc.natsClients)
 	if nsl == 0 {
 		panic("nats client is empty")
 	}
 	for _, client := range cnc.natsClients {
-		client.SubscribeUser(us, handler)
+		client.SubscribeUser(us)
 	}
 }
 
 // UserSubscribeAllWaitSuccess Subscribe user topic for all NatsClient and wait success.
-func (cnc *ClusterClientServerUser[T, US]) UserSubscribeAllWaitSuccess(us US, handler nats.MsgHandler) {
+func (cnc *ClusterClientServerUser[T, US]) UserSubscribeAllWaitSuccess(us US) {
 	nsl := len(cnc.natsClients)
 	if nsl == 0 {
 		panic("nats client is empty")
 	}
 	for _, client := range cnc.natsClients {
-		client.SubscribeUserWaitSuccess(us, handler)
+		client.SubscribeUserWaitSuccess(us)
 	}
 }
 
@@ -180,7 +302,8 @@ func (r *ClusterRequestServerUser[T1, T2, T, US, REQ, RESP]) Reset() {
 }
 
 // NewClusterRequestServerUser create ClusterRequestServerUser use objectpool
-func NewClusterRequestServerUser[T1, T2, T any, US ServerUserSubjectPtr[T], REQ define.ProtoMessagePtr[T1], RESP define.ProtoMessagePtr[T2]]() *ClusterRequestServerUser[T1, T2, T, US, REQ, RESP] {
+func NewClusterRequestServerUser[T1, T2, T any, US ServerUserSubjectPtr[T], REQ define.ProtoMessagePtr[T1],
+RESP define.ProtoMessagePtr[T2]]() *ClusterRequestServerUser[T1, T2, T, US, REQ, RESP] {
 	c := objectpool.Get[ClusterRequestServerUser[T1, T2, T, US, REQ, RESP]]()
 	return c
 }

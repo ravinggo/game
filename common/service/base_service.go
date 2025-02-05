@@ -78,7 +78,7 @@ func NewBaseService[TraceData any, TP ctx.TracePtr[TraceData]](
 ) *BaseService[TraceData, TP] {
 	s := &BaseService[TraceData, TP]{
 		h:           handler.NewHandler[TraceData](middlewares...),
-		natsCluster: natsclient.NewClusterClient(baseenv.GetConfig().ServerType, natsUrls, rpcTimeout),
+		natsCluster: natsclient.NewClusterClient(natsUrls, nats.Timeout(rpcTimeout)),
 		el:          eventloop.NewDoubleBuffQueue(lockQueueThread),
 		taskMap: cmap.NewWithCustomShardingFunction[uint64, *task_group.TaskGroup[ce[TraceData, TP]]](
 			func(key uint64) uint32 {
@@ -264,13 +264,6 @@ func (s *BaseService[TraceData, TP]) dealNatsMsg(msg *nats.Msg) {
 	msgName := msg.Subject
 	index := strings.LastIndexByte(msgName, '.')
 	if index == -1 {
-		return
-	}
-	if msgName[index+1] == '>' && msg.Reply != "" && len(msg.Data) == 0 {
-		err := msg.Respond(nil)
-		if err != nil {
-			logger.Log.Error().Err(err).Str("msgName", msgName).Msg("deal wait success error")
-		}
 		return
 	}
 	if baseenv.GetConfig().ServerId != 0 {

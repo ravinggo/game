@@ -24,8 +24,10 @@ import (
 )
 
 const (
-	totalSizeLen    = 4
-	maxProtoMsgSize = math.MaxInt32 >> 8
+	totalSizeLen              = 4
+	maxProtoMsgSize           = math.MaxInt32 >> 8
+	waitSuccessCheckStr       = "///success/check///"
+	waitSuccessCheckStrSuffix = ".>///success/check///"
 )
 
 type NatsClient struct {
@@ -45,43 +47,88 @@ type NatsClient struct {
 // param name Usually the server name ( baseenv.Config.ServerType )
 // param urls a nats cluster urls
 // param timeout for request
-func NewNatsClient(name string, urls string, timeout time.Duration) *NatsClient {
-	if timeout <= 0 {
-		timeout = time.Second * 10
-	}
+func NewNatsClient(urls string, options ...nats.Option) *NatsClient {
 	nc := &NatsClient{
-		subs:    cmap.New[*nats.Subscription](),
-		name:    name,
-		urls:    urls,
-		timeout: timeout,
+		subs: cmap.New[*nats.Subscription](),
+		urls: urls,
 	}
-	c, err := nats.Connect(
-		urls, nats.ReconnectWait(time.Millisecond*10), nats.MaxReconnects(math.MaxInt64),
-		nats.PingInterval(time.Second*10), nats.MaxPingsOutstanding(3),
-		nats.DrainTimeout(time.Second*5), nats.Name(name),
-		nats.DisconnectErrHandler(
-			func(conn *nats.Conn, err error) {
-				if atomic.LoadInt32(&nc.closed) == 0 {
-					logger.Log.Error().Err(err).Str("urls", urls).Str("nats-server", conn.ConnectedAddr()).Msg("nats disconnected")
-				}
-			},
-		),
-		nats.ReconnectHandler(
-			func(conn *nats.Conn) {
-				logger.Log.Warn().Str("nats-server", conn.ConnectedAddr()).Msg("nats reconnected")
-			},
-		),
-		nats.ClosedHandler(
-			func(conn *nats.Conn) {
-				logger.Log.Warn().Str("nats-server", conn.ConnectedAddr()).Msg("nats closed")
-			},
-		),
-		nats.ErrorHandler(
-			func(conn *nats.Conn, subscription *nats.Subscription, err error) {
-				logger.Log.Warn().Str("nats-server", conn.ConnectedAddr()).Err(err).Msg("nats error")
-			},
-		),
-	)
+	opts := nats.GetDefaultOptions()
+
+	addrS := strings.Split(urls, ",")
+	var j int
+	for _, s := range addrS {
+		u := strings.TrimSuffix(strings.TrimSpace(s), "/")
+		if len(u) > 0 {
+			addrS[j] = u
+			j++
+		}
+	}
+
+	opts.Servers = addrS
+
+	for _, opt := range options {
+		if opt != nil {
+			if err := opt(&opts); err != nil {
+				panic(err)
+			}
+		}
+	}
+
+	if opts.Timeout == 0 {
+		opts.Timeout = time.Second * 10
+	}
+	nc.timeout = opts.Timeout
+
+	if opts.ReconnectWait == 0 {
+		opts.ReconnectWait = time.Millisecond * 10
+	}
+	if opts.MaxReconnect == 0 {
+		opts.MaxReconnect = math.MaxInt64
+	}
+
+	if opts.PingInterval == 0 {
+		opts.PingInterval = time.Second * 10
+	}
+	if opts.MaxPingsOut == 0 {
+		opts.MaxPingsOut = 3
+	}
+
+	if opts.DrainTimeout == 0 {
+		opts.DrainTimeout = time.Second * 5
+	}
+
+	if opts.Name == "" {
+		opts.Name = baseenv.GetConfig().ServerType + "_" + strconv.FormatInt(baseenv.GetConfig().ServerId, 10)
+	}
+	nc.name = opts.Name
+
+	if opts.DisconnectedErrCB == nil {
+		opts.DisconnectedErrCB = func(conn *nats.Conn, err error) {
+			if atomic.LoadInt32(&nc.closed) == 0 {
+				logger.Log.Error().Err(err).Str("urls", urls).Str("nats-server", conn.ConnectedAddr()).Msg("nats disconnected")
+			}
+		}
+	}
+
+	if opts.ReconnectedCB == nil {
+		opts.ReconnectedCB = func(conn *nats.Conn) {
+			logger.Log.Warn().Str("nats-server", conn.ConnectedAddr()).Msg("nats reconnected")
+		}
+	}
+
+	if opts.ClosedCB == nil {
+		opts.ClosedCB = func(conn *nats.Conn) {
+			logger.Log.Warn().Str("nats-server", conn.ConnectedAddr()).Msg("nats closed")
+		}
+	}
+
+	if opts.AsyncErrorCB == nil {
+		opts.AsyncErrorCB = func(conn *nats.Conn, subscription *nats.Subscription, err error) {
+			logger.Log.Warn().Str("nats-server", conn.ConnectedAddr()).Err(err).Msg("nats error")
+		}
+	}
+
+	c, err := opts.Connect()
 	if err != nil {
 		panic(err)
 	}
@@ -149,23 +196,26 @@ func (this_ *NatsClient) SubscribeWaitSuccess(subj string, h nats.MsgHandler) bo
 		logger.Log.Error().Str("subj", subj).Msg("subj had Subscribed")
 		return false
 	}
-	sub, err := this_.conn.Subscribe(subj, h)
+	subj1 := subj + waitSuccessCheckStr
+	f := createWaitSuccess(subj1, h)
+
+	sub, err := this_.conn.Subscribe(subj, f)
 	if err != nil {
-		logger.Log.Panic().Err(err).Str("subj", subj).Msg("Subscribe error")
+		logger.Log.Panic().Err(err).Str("subj", subj).Msg("SubscribeWaitSuccess error")
 		return false
 	}
 
 	if !this_.subs.SetIfAbsent(subj, sub) {
 		err = sub.Unsubscribe()
 		if err != nil {
-			logger.Log.Error().Err(err).Str("subj", subj).Msg("Subscribe for Unsubscribe")
+			logger.Log.Error().Err(err).Str("subj", subj).Msg("SubscribeWaitSuccess for Unsubscribe")
 		}
 		return false
 	}
-	logger.Log.Info().Str("urls", this_.urls).Str("subj", subj).Msg("Subscribe")
+	logger.Log.Info().Str("urls", this_.urls).Str("subj", subj).Msg("SubscribeWaitSuccess")
 
 	// wait for success
-	_, err = this_.conn.Request(subj, nil, this_.timeout)
+	_, err = this_.conn.Request(subj1, nil, this_.timeout)
 	if err != nil {
 		logger.Log.Error().Err(err).Str("subj", subj).Msg("SubscribeWaitSuccess error")
 		return false
@@ -197,16 +247,31 @@ func (this_ *NatsClient) QueueSubscribe(subj string, h nats.MsgHandler) bool {
 	return true
 }
 
+func createWaitSuccess(subj1 string, h nats.MsgHandler) nats.MsgHandler {
+	return func(msg *nats.Msg) {
+		if msg.Subject == subj1 && msg.Reply != "" && len(msg.Data) == 0 {
+			err := msg.Respond(nil)
+			if err != nil {
+				logger.Log.Error().Err(err).Str("msgName", msg.Subject).Msg("deal wait success error")
+			}
+			return
+		}
+		h(msg)
+	}
+}
+
 // QueueSubscribeWaitSuccess QueueSubscribe and wait for success
 func (this_ *NatsClient) QueueSubscribeWaitSuccess(subj string, h nats.MsgHandler) bool {
 	if _, ok := this_.subs.Get(subj); ok {
 		logger.Log.Error().Str("subj", subj).Msg("subj had Subscribed")
 		return false
 	}
+	subj1 := subj + waitSuccessCheckStr
+	f := createWaitSuccess(subj1, h)
 	group := strings.ReplaceAll(subj, ">", "group")
-	sub, err := this_.conn.QueueSubscribe(subj, group, h)
+	sub, err := this_.conn.QueueSubscribe(subj, group, f)
 	if err != nil {
-		logger.Log.Panic().Err(err).Str("subj", subj).Msg("Subscribe error")
+		logger.Log.Panic().Err(err).Str("subj", subj).Msg("QueueSubscribeWaitSuccess error")
 		return false
 	}
 	if !this_.subs.SetIfAbsent(subj, sub) {
@@ -216,10 +281,11 @@ func (this_ *NatsClient) QueueSubscribeWaitSuccess(subj string, h nats.MsgHandle
 		}
 		return false
 	}
-	logger.Log.Info().Str("urls", this_.urls).Str("subj", subj).Msg("QueueSubscribe")
+	logger.Log.Info().Str("urls", this_.urls).Str("subj", subj).Msg("QueueSubscribeWaitSuccess")
 
 	// wait for success
-	_, err = this_.conn.Request(subj, nil, this_.timeout)
+
+	_, err = this_.conn.Request(subj1, nil, this_.timeout)
 	if err != nil {
 		logger.Log.Error().Err(err).Str("subj", subj).Msg("QueueSubscribeWaitSuccess error")
 		return false
