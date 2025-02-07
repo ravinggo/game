@@ -89,15 +89,15 @@ type BaseCtx[TraceData any, TP TracePtr[TraceData]] struct {
 	TD      TraceData
 }
 
-// NewMarkCtxWithMark create a new BaseCtx
-func NewMarkCtxWithMark[TraceData any, TP TracePtr[TraceData]](traceData TraceData) *BaseCtx[TraceData, TP] {
+// NewBaseCtxWithTrace create a new BaseCtx
+func NewBaseCtxWithTrace[TraceData any, TP TracePtr[TraceData]](traceData TraceData) *BaseCtx[TraceData, TP] {
 	c := objectpool.Get[BaseCtx[TraceData, TP]]()
 	c.TD = traceData
 	return c
 }
 
-// NewMarkCtx create a new BaseCtx
-func NewMarkCtx[TraceData any, TP TracePtr[TraceData]]() *BaseCtx[TraceData, TP] {
+// NewBaseCtx create a new BaseCtx
+func NewBaseCtx[TraceData any, TP TracePtr[TraceData]]() *BaseCtx[TraceData, TP] {
 	c := objectpool.Get[BaseCtx[TraceData, TP]]()
 	return c
 }
