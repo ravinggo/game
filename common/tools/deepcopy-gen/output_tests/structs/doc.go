@@ -38,3 +38,10 @@ type Ttest struct {
 	Inner1 *Inner
 	Inner2 Inner
 }
+
+type Unlock struct {
+	RoleId     int64                     `json:"role_id" bson:"_id"`
+	Progress   map[int32]map[int64]int64 `json:"progress" bson:"progress"` // map[条件枚举][条件目标id]进度
+	Unlocked   map[int32]map[int64]bool  `json:"unlocked" bson:"unlocked"` // map[解锁目标枚举][解锁目标id]是否已解锁
+	DateFields `json:",inline" bson:",inline"`
+}

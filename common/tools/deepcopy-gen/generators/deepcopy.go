@@ -375,7 +375,10 @@ func deepCopyIntoMethod(t *types.Type) (*types.Signature, error) {
 		return nil, fmt.Errorf("type %v: invalid DeepCopy signature, expected no result type", t)
 	}
 
-	ptrParam := f.Signature.Parameters[0].Type.Kind == types.Pointer && f.Signature.Parameters[0].Type.Elem.Name == t.Name
+	ptrParam := (f.Signature.Parameters[0].Type.Kind == types.Pointer && f.Signature.Parameters[0].Type.Elem.Name == t.Name) ||
+		(len(f.Signature.Parameters) == 2 && f.Signature.Parameters[0].Type.Kind == types.Pointer &&
+			f.Signature.Parameters[0].Type.Elem.Name.Name == "KeepAlive" &&
+			f.Signature.Parameters[1].Type.Kind == types.Pointer && f.Signature.Parameters[1].Type.Elem.Name == t.Name)
 
 	if !ptrParam {
 		return nil, fmt.Errorf("type %v: invalid DeepCopy signature, expected parameter of type *%s", t, t.Name.Name)
