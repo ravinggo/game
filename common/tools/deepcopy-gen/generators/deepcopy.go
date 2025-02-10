@@ -240,7 +240,7 @@ type genDeepCopy struct {
 }
 
 func NewGenDeepCopy(outputFilename, targetPackage string, boundingDirs []string, allTypes, registerTypes, keepalive bool) generator.Generator {
-	return &genDeepCopy{
+	dc := &genDeepCopy{
 		GoGenerator: generator.GoGenerator{
 			OutputFilename: outputFilename,
 		},
@@ -252,6 +252,12 @@ func NewGenDeepCopy(outputFilename, targetPackage string, boundingDirs []string,
 		typesForInit:  make([]*types.Type, 0),
 		keepalive:     keepalive,
 	}
+	if dc.keepalive {
+		dc.imports = generator.NewImportTrackerForPackage(targetPackage, &types.Type{Name: types.Name{Package: "github.com/ravinggo/objectpool"}})
+	} else {
+		dc.imports = generator.NewImportTrackerForPackage(targetPackage)
+	}
+	return dc
 }
 
 func (g *genDeepCopy) Namers(c *generator.Context) namer.NameSystems {

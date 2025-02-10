@@ -1,5 +1,5 @@
 /*
-Copyright 2024 The Kubernetes Authors.
+Copyright 2016 The Kubernetes Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -14,5 +14,22 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-//go:generate go run github.com/ravinggo/game/common/tools/deepcopy-gen --output-file zz_generated.deepcopy.go --go-header-file=../boilerplate.go.txt github.com/ravinggo/game/common/tools/deepcopy-gen/output_tests/...
-package outputtests
+// +k8s:deepcopy-gen=package
+
+// This is a test package.
+package builtins
+
+type Ttest struct {
+	Byte byte
+	// Int8    int8 // TODO: int8 becomes byte in SnippetWriter
+	Int16   int16
+	Int32   int32
+	Int64   int64
+	Uint8   uint8
+	Uint16  uint16
+	Uint32  uint32
+	Uint64  uint64
+	Float32 float32
+	Float64 float64
+	String  string
+}
