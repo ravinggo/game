@@ -26,13 +26,13 @@ type Args struct {
 	OutputFile   string
 	BoundingDirs []string // Only deal with types rooted under these dirs.
 	GoHeaderFile string
-	KeepAlive    bool
+	UsePool      bool
 }
 
 // New returns default arguments for the generator.
 func New() *Args {
 	return &Args{
-		KeepAlive: true,
+		UsePool: true,
 	}
 }
 
@@ -51,7 +51,7 @@ func (args *Args) AddFlags(fs *pflag.FlagSet) {
 		"the path to a file containing boilerplate header text; the string \"YEAR\" will be replaced with the current 4-digit year",
 	)
 	fs.BoolVar(
-		&args.KeepAlive, "keepalive", true, "keep alive mode",
+		&args.UsePool, "use-pool", true, "use sync.Pool mode",
 	)
 }
 

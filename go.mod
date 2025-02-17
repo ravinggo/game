@@ -36,3 +36,5 @@ require (
 	gopkg.in/check.v1 v1.0.0-20201130134442-10cb98267c6c // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
+
+replace k8s.io/gengo/v2 v2.0.0-20250130153323-76c5745d3511 => github.com/ravinggo/gengo/v2 v2.0.1

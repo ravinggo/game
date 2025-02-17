@@ -24,8 +24,6 @@ import (
 	"testing"
 
 	fuzz "github.com/google/gofuzz"
-	"github.com/ravinggo/objectpool"
-
 	"k8s.io/apimachinery/pkg/util/dump"
 
 	"github.com/ravinggo/game/common/tools/deepcopy-gen/output_tests/aliases"
@@ -52,7 +50,6 @@ func TestWithValueFuzzer(t *testing.T) {
 	fuzzer.NilChance(0.5)
 	fuzzer.NumElements(0, 2)
 	fuzzer.Funcs(interfaceFuzzers...)
-	ka := objectpool.NewKeepAlive(1000)
 	for _, test := range tests {
 		t.Run(
 			fmt.Sprintf("%T", test), func(t *testing.T) {
@@ -70,7 +67,7 @@ func TestWithValueFuzzer(t *testing.T) {
 						)
 					}
 
-					deepCopy := reflect.ValueOf(original).MethodByName("DeepCopy").Call([]reflect.Value{reflect.ValueOf(ka)})[0].Interface()
+					deepCopy := reflect.ValueOf(original).MethodByName("DeepCopy").Call(nil)[0].Interface()
 
 					if !reflect.DeepEqual(original, deepCopy) {
 						t.Fatalf("original and deepCopy are different:\n\n  original = %s\n\n  deepCopy() = %s", dump.Pretty(original), dump.Pretty(deepCopy))
@@ -82,7 +79,6 @@ func TestWithValueFuzzer(t *testing.T) {
 						t.Fatalf("reflectCopy and deepCopy are different:\n\n  origin = %s\n\n  jsonCopy() = %s", dump.Pretty(original), dump.Pretty(deepCopy))
 					}
 				}
-				ka.Reset()
 			},
 		)
 	}
@@ -170,19 +166,17 @@ func BenchmarkReflectDeepCopy(b *testing.B) {
 			fmt.Sprintf("%T", test), func(b *testing.B) {
 				b.ReportAllocs()
 				b.ResetTimer()
-				ka := objectpool.NewKeepAlive(128)
 				for i := 0; i < b.N; i++ {
 					switch t := test.(type) {
 					case maps.Ttest:
-						t.DeepCopy(ka)
+						t.DeepCopy()
 					case slices.Ttest:
-						t.DeepCopy(ka)
+						t.DeepCopy()
 					case pointer.Ttest:
-						t.DeepCopy(ka)
+						t.DeepCopy()
 					default:
 						b.Fatalf("missing type case in switch for %T", t)
 					}
-					ka.Reset()
 				}
 			},
 		)

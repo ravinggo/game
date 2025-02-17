@@ -20,12 +20,13 @@ limitations under the License.
 package maps
 
 type Ttest struct {
-	Byte map[string]byte
-	// Int8    map[string]int8 //TODO: int8 becomes byte in SnippetWriter
-	Int16        map[string]int16
-	Int32        map[string]int32
-	Int64        map[string]int64
-	Uint8        map[string]uint8
+	Byte  map[string]byte
+	Uint8 map[string]uint8
+	Int8  map[string]int8 // TODO: int8 becomes byte in SnippetWriter
+	Int16 map[string]int16
+	Int32 map[string]int32
+	Int64 map[string]int64
+
 	Uint16       map[string]uint16
 	Uint32       map[string]uint32
 	Uint64       map[string]uint64

@@ -125,6 +125,89 @@ func (k *KANamer) Name(t *types.Type) string {
 	return fmt.Sprintf("objectpool.GetKA[%s]", k.name.Name(t))
 }
 
+type PoolRawNamer struct {
+	name  namer.Namer
+	tMap  map[*types.Type]int
+	slice bool
+}
+
+func NewPoolRawNamer(pkg string, tracker namer.ImportTracker, slice bool, m map[*types.Type]int) *PoolRawNamer {
+	return &PoolRawNamer{
+		name:  namer.NewRawNamer(pkg, tracker),
+		tMap:  m,
+		slice: slice,
+	}
+}
+
+func genName(t *types.Type) (*types.Type, string) {
+	for t.Kind == types.Pointer {
+		if t.Elem.Kind == types.Builtin && "*"+t.Elem.Name.Name != t.Name.Name {
+			return t, t.Name.Name + "p_"
+		}
+		t, name := genName(t.Elem)
+		return t, name + "p_"
+	}
+	if t.Kind == types.Slice {
+		t, name := genName(t.Elem)
+		return t, "s_" + name
+	}
+	if t.Kind == types.Map {
+		_, key := genName(t.Key)
+		_, value := genName(t.Elem)
+		return t, "map_" + key + "_" + value + "_"
+	}
+	return t, t.Name.Name
+}
+
+func SliceCount(t *types.Type) (*types.Type, int) {
+	count := 0
+	for t.Kind == types.Slice {
+		t = t.Elem
+		count++
+	}
+	return t, count
+}
+
+func (p *PoolRawNamer) Name(t *types.Type) string {
+	p.tMap[t]++
+	_, name := genName(t)
+	if p.slice {
+		return name + "SPool.Get"
+	}
+	if t.Kind == types.Map {
+		return name + "Pool.Get().(" + p.name.Name(t) + ")"
+	}
+	if t.Kind == types.Pointer {
+		return name + "Pool.Get().(*" + p.name.Name(t.Elem) + ")"
+	}
+	return name + "Pool.Get().(*" + p.name.Name(t) + ")"
+}
+
+func getMapName(s string) string {
+	s = strings.ReplaceAll(s, "[", "_")
+	return strings.ReplaceAll(s, "]", "_")
+}
+
+type GenPoolRawNamer struct {
+	name  namer.Namer
+	slice bool
+}
+
+func NewGenPoolRawNamer(pkg string, tracker namer.ImportTracker, slice bool) *GenPoolRawNamer {
+	return &GenPoolRawNamer{
+		name:  namer.NewRawNamer(pkg, tracker),
+		slice: slice,
+	}
+}
+
+func (p *GenPoolRawNamer) Name(t *types.Type) string {
+	_, name := genName(t)
+	if p.slice {
+		return name + "SPool"
+	}
+	return name + "Pool"
+}
+
 // NameSystems returns the name system used by the generators in this package.
 func NameSystems() namer.NameSystems {
 	return namer.NameSystems{
@@ -217,7 +300,7 @@ func GetTargets(context *generator.Context, args *args.Args) []generator.Target 
 					},
 					GeneratorsFunc: func(c *generator.Context) (generators []generator.Generator) {
 						return []generator.Generator{
-							NewGenDeepCopy(args.OutputFile, pkg.Path, boundingDirs, (ptagValue == tagValuePackage), ptagRegister, args.KeepAlive),
+							NewGenDeepCopy(args.OutputFile, pkg.Path, boundingDirs, (ptagValue == tagValuePackage), ptagRegister, args.UsePool),
 						}
 					},
 				},
@@ -236,10 +319,12 @@ type genDeepCopy struct {
 	registerTypes bool
 	imports       namer.ImportTracker
 	typesForInit  []*types.Type
-	keepalive     bool
+	usePool       bool
+	tMap          map[*types.Type]int
+	sMap          map[*types.Type]int
 }
 
-func NewGenDeepCopy(outputFilename, targetPackage string, boundingDirs []string, allTypes, registerTypes, keepalive bool) generator.Generator {
+func NewGenDeepCopy(outputFilename, targetPackage string, boundingDirs []string, allTypes, registerTypes, usePool bool) generator.Generator {
 	dc := &genDeepCopy{
 		GoGenerator: generator.GoGenerator{
 			OutputFilename: outputFilename,
@@ -248,12 +333,17 @@ func NewGenDeepCopy(outputFilename, targetPackage string, boundingDirs []string,
 		boundingDirs:  boundingDirs,
 		allTypes:      allTypes,
 		registerTypes: registerTypes,
-		imports:       generator.NewImportTrackerForPackage(targetPackage, &types.Type{Name: types.Name{Package: "github.com/ravinggo/objectpool"}}),
 		typesForInit:  make([]*types.Type, 0),
-		keepalive:     keepalive,
+		usePool:       usePool,
+		tMap:          make(map[*types.Type]int),
+		sMap:          make(map[*types.Type]int),
 	}
-	if dc.keepalive {
-		dc.imports = generator.NewImportTrackerForPackage(targetPackage, &types.Type{Name: types.Name{Package: "github.com/ravinggo/objectpool"}})
+	if dc.usePool {
+		dc.imports = generator.NewImportTrackerForPackage(
+			targetPackage,
+			&types.Type{Name: types.Name{Package: "sync"}},
+			&types.Type{Name: types.Name{Package: "math/bits"}},
+		)
 	} else {
 		dc.imports = generator.NewImportTrackerForPackage(targetPackage)
 	}
@@ -305,13 +395,7 @@ func deepCopyMethod(t *types.Type) (*types.Signature, error) {
 		return nil, nil
 	}
 	if len(f.Signature.Parameters) != 0 {
-		if len(f.Signature.Parameters) == 1 {
-			if f.Signature.Parameters[0].Type.Name.Name != "*github.com/ravinggo/objectpool.KeepAlive" {
-				return nil, fmt.Errorf("type %v: invalid DeepCopy signature, expected no parameters", t)
-			}
-		} else {
-			return nil, fmt.Errorf("type %v: invalid DeepCopy signature, expected no parameters", t)
-		}
+		return nil, fmt.Errorf("type %v: invalid DeepCopy signature, expected no parameters", t)
 	}
 	if len(f.Signature.Results) != 1 {
 		return nil, fmt.Errorf("type %v: invalid DeepCopy signature, expected exactly one result", t)
@@ -363,22 +447,13 @@ func deepCopyIntoMethod(t *types.Type) (*types.Signature, error) {
 		return nil, nil
 	}
 	if len(f.Signature.Parameters) != 1 {
-		if len(f.Signature.Parameters) == 2 {
-			if f.Signature.Parameters[0].Type.Name.Name != "*github.com/ravinggo/objectpool.KeepAlive" {
-				return nil, fmt.Errorf("type %v: invalid DeepCopy signature, expected no parameters", t)
-			}
-		} else {
-			return nil, fmt.Errorf("type %v: invalid DeepCopy signature, expected exactly one parameter", t)
-		}
+		return nil, fmt.Errorf("type %v: invalid DeepCopy signature, expected exactly one parameter", t)
 	}
 	if len(f.Signature.Results) != 0 {
 		return nil, fmt.Errorf("type %v: invalid DeepCopy signature, expected no result type", t)
 	}
 
-	ptrParam := (f.Signature.Parameters[0].Type.Kind == types.Pointer && f.Signature.Parameters[0].Type.Elem.Name == t.Name) ||
-		(len(f.Signature.Parameters) == 2 && f.Signature.Parameters[0].Type.Kind == types.Pointer &&
-			f.Signature.Parameters[0].Type.Elem.Name.Name == "KeepAlive" &&
-			f.Signature.Parameters[1].Type.Kind == types.Pointer && f.Signature.Parameters[1].Type.Elem.Name == t.Name)
+	ptrParam := f.Signature.Parameters[0].Type.Kind == types.Pointer && f.Signature.Parameters[0].Type.Elem.Name == t.Name
 
 	if !ptrParam {
 		return nil, fmt.Errorf("type %v: invalid DeepCopy signature, expected parameter of type *%s", t, t.Name.Name)
@@ -474,9 +549,65 @@ func argsFromType(ts ...*types.Type) generator.Args {
 func (g *genDeepCopy) Init(c *generator.Context, w io.Writer) error {
 	c.Namers["ka"] = &KANamer{name: namer.NewRawNamer(g.targetPackage, g.imports)}
 	c.Namers["kaa"] = &KANamer{name: namer.NewRawNamer(g.targetPackage, g.imports), justKA: true}
+	c.Namers["pool"] = NewPoolRawNamer(g.targetPackage, g.imports, false, g.tMap)
+	c.Namers["poolslice"] = NewPoolRawNamer(g.targetPackage, g.imports, true, g.sMap)
+	c.Namers["genpool"] = NewGenPoolRawNamer(g.targetPackage, g.imports, false)
+	c.Namers["genspool"] = NewGenPoolRawNamer(g.targetPackage, g.imports, true)
 	return nil
 }
+func (g *genDeepCopy) Finalize(c *generator.Context, w io.Writer) error {
+	if g.usePool {
 
+		sw := generator.NewSnippetWriter(w, c, "$", "$")
+		for t := range g.tMap {
+			if t.Kind == types.Map {
+				sw.Do("var $.|genpool$ = sync.Pool{New:func()any{return make($.|raw$,16)}}\n", t)
+			} else if t.Kind == types.Pointer {
+				ut := underlyingType(t)
+				sw.Do("var $.|genpool$ = sync.Pool{New:func()any{return new($.Elem|raw$)}}\n", ut)
+			} else {
+				sw.Do("var $.|genpool$ = sync.Pool{New:func()any{return new($.|raw$)}}\n", t)
+			}
+		}
+
+		for t := range g.sMap {
+			sw.Do("var $.|genspool$ = newSlicePool[$.Elem|raw$]()\n", t)
+		}
+		sw.Do(
+			`
+type slicePool[T any] struct {
+	pools [32]sync.Pool
+}
+
+func newSlicePool[T any]() slicePool[T] {
+	return slicePool[T]{}
+}
+
+func index(n uint32) uint32 {
+	return uint32(bits.Len32(n - 1))
+}
+
+func (p *slicePool[T]) Get(size int) []T  {
+	c:=size
+	if c < 16 {
+		c = 16
+	}
+	idx := index(uint32(c))
+	if v := p.pools[idx].Get(); v != nil {
+		return v.([]T)[:size]
+	}
+	return make([]T, size, 1<<idx)
+}
+
+func (p *slicePool[T]) Put(value []T)  {
+	idx := index(uint32(cap(value)))
+	clear(value)
+	p.pools[idx].Put(value)
+}`, nil,
+		)
+	}
+	return nil
+}
 func (g *genDeepCopy) needsGeneration(t *types.Type) bool {
 	tag := extractEnabledTypeTag(t)
 	tv := ""
@@ -608,35 +739,17 @@ func (g *genDeepCopy) GenerateType(c *generator.Context, t *types.Type, w io.Wri
 	if deepCopyIntoMethodOrDie(t) == nil {
 		sw.Do("// DeepCopyInto is an autogenerated deepcopy function, copying the receiver, writing into out. in must be non-nil.\n", args)
 		if isReference(t) {
-			if g.keepalive {
-				sw.Do("func (in $.type|raw$) DeepCopyInto(ka* objectpool.KeepAlive, out *$.type|raw$) {\n", args)
-			} else {
-				sw.Do("func (in $.type|raw$) DeepCopyInto(out *$.type|raw$) {\n", args)
-			}
+			sw.Do("func (in $.type|raw$) DeepCopyInto(out *$.type|raw$) {\n", args)
 			sw.Do("{in:=&in\n", nil)
 		} else {
-			if g.keepalive {
-				sw.Do("func (in *$.type|raw$) DeepCopyInto(ka* objectpool.KeepAlive, out *$.type|raw$) {\n", args)
-			} else {
-				sw.Do("func (in *$.type|raw$) DeepCopyInto(out *$.type|raw$) {\n", args)
-			}
-
+			sw.Do("func (in *$.type|raw$) DeepCopyInto(out *$.type|raw$) {\n", args)
 		}
 		if deepCopyMethodOrDie(t) != nil {
 			if t.Methods["DeepCopy"].Signature.Receiver.Kind == types.Pointer {
-				if g.keepalive {
-					sw.Do("clone := in.DeepCopy(ka)\n", nil)
-				} else {
-					sw.Do("clone := in.DeepCopy()\n", nil)
-				}
-
+				sw.Do("clone := in.DeepCopy()\n", nil)
 				sw.Do("*out = *clone\n", nil)
 			} else {
-				if g.keepalive {
-					sw.Do("*out = in.DeepCopy(ka)\n", nil)
-				} else {
-					sw.Do("*out = in.DeepCopy()\n", nil)
-				}
+				sw.Do("*out = in.DeepCopy()\n", nil)
 			}
 			sw.Do("return\n", nil)
 		} else {
@@ -652,27 +765,18 @@ func (g *genDeepCopy) GenerateType(c *generator.Context, t *types.Type, w io.Wri
 	if deepCopyMethodOrDie(t) == nil {
 		sw.Do("// DeepCopy is an autogenerated deepcopy function, copying the receiver, creating a new $.type|raw$.\n", args)
 		if isReference(t) {
-			if g.keepalive {
-				sw.Do("func (in $.type|raw$) DeepCopy(ka* objectpool.KeepAlive) $.type|raw$ {\n", args)
-			} else {
-				sw.Do("func (in $.type|raw$) DeepCopy() $.type|raw$ {\n", args)
-			}
+			sw.Do("func (in $.type|raw$) DeepCopy() $.type|raw$ {\n", args)
 		} else {
-			if g.keepalive {
-				sw.Do("func (in *$.type|raw$) DeepCopy(ka* objectpool.KeepAlive) *$.type|raw$ {\n", args)
-			} else {
-				sw.Do("func (in *$.type|raw$) DeepCopy() *$.type|raw$ {\n", args)
-			}
+			sw.Do("func (in *$.type|raw$) DeepCopy() *$.type|raw$ {\n", args)
 		}
 		sw.Do("if in == nil { return nil }\n", nil)
-		if g.keepalive {
-			sw.Do("out := $.type|kaa$(ka)\n", args)
-			sw.Do("in.DeepCopyInto(ka, out)\n", nil)
+		if g.usePool {
+			sw.Do("out := $.type|pool$\n", args)
 		} else {
 			sw.Do("out := new($.type|raw$)\n", args)
-			sw.Do("in.DeepCopyInto(out)\n", nil)
-		}
 
+		}
+		sw.Do("in.DeepCopyInto(out)\n", nil)
 		if isReference(t) {
 			sw.Do("return *out\n", nil)
 		} else {
@@ -691,22 +795,12 @@ func (g *genDeepCopy) GenerateType(c *generator.Context, t *types.Type, w io.Wri
 			argsFromType(t, intf),
 		)
 		if nonPointerReceiver {
-			if g.keepalive {
-				sw.Do(fmt.Sprintf("func (in $.type|raw$) DeepCopy%s(ka*objectpool.KeepAlive) $.type2|raw$ {\n", intf.Name.Name), argsFromType(t, intf))
-				sw.Do("return *in.DeepCopy(ka)", nil)
-			} else {
-				sw.Do(fmt.Sprintf("func (in $.type|raw$) DeepCopy%s() $.type2|raw$ {\n", intf.Name.Name), argsFromType(t, intf))
-				sw.Do("return *in.DeepCopy()", nil)
-			}
+			sw.Do(fmt.Sprintf("func (in $.type|raw$) DeepCopy%s() $.type2|raw$ {\n", intf.Name.Name), argsFromType(t, intf))
+			sw.Do("return *in.DeepCopy()", nil)
 			sw.Do("}\n\n", nil)
 		} else {
-			if g.keepalive {
-				sw.Do(fmt.Sprintf("func (in *$.type|raw$) DeepCopy%s(ka*objectpool.KeepAlive) $.type2|raw$ {\n", intf.Name.Name), argsFromType(t, intf))
-				sw.Do("if c := in.DeepCopy(ka); c != nil {\n", nil)
-			} else {
-				sw.Do(fmt.Sprintf("func (in *$.type|raw$) DeepCopy%s() $.type2|raw$ {\n", intf.Name.Name), argsFromType(t, intf))
-				sw.Do("if c := in.DeepCopy(); c != nil {\n", nil)
-			}
+			sw.Do(fmt.Sprintf("func (in *$.type|raw$) DeepCopy%s() $.type2|raw$ {\n", intf.Name.Name), argsFromType(t, intf))
+			sw.Do("if c := in.DeepCopy(); c != nil {\n", nil)
 
 			sw.Do("return c\n", nil)
 			sw.Do("}\n", nil)
@@ -762,11 +856,7 @@ func (g *genDeepCopy) generateFor(t *types.Type, sw *generator.SnippetWriter) {
 // is the same for both cases, i.e. it's the code for the underlying type.
 func (g *genDeepCopy) doBuiltin(t *types.Type, sw *generator.SnippetWriter) {
 	if deepCopyMethodOrDie(t) != nil || deepCopyIntoMethodOrDie(t) != nil {
-		if g.keepalive {
-			sw.Do("*out = in.DeepCopy(ka)\n", nil)
-		} else {
-			sw.Do("*out = in.DeepCopy()\n", nil)
-		}
+		sw.Do("*out = in.DeepCopy()\n", nil)
 		return
 	}
 
@@ -780,24 +870,15 @@ func (g *genDeepCopy) doMap(t *types.Type, sw *generator.SnippetWriter) {
 	uet := underlyingType(ut.Elem)
 
 	if deepCopyMethodOrDie(t) != nil || deepCopyIntoMethodOrDie(t) != nil {
-		if g.keepalive {
-			sw.Do("*out = in.DeepCopy(ka)\n", nil)
-		} else {
-			sw.Do("*out = in.DeepCopy()\n", nil)
-		}
+		sw.Do("*out = in.DeepCopy()\n", nil)
 		return
 	}
 
 	if !ut.Key.IsAssignable() {
 		klog.Fatalf("Hit an unsupported type %v for: %v", uet, t)
 	}
-	if g.keepalive {
-		if t.Kind == types.Alias {
-			sw.Do("*out = $.|raw$(", t)
-			sw.Do("$.|ka$(ka))\n", ut)
-		} else {
-			sw.Do("*out = $.|ka$(ka)\n", t)
-		}
+	if g.usePool {
+		sw.Do("*out = $.|pool$\n", ut)
 	} else {
 		sw.Do("*out = make($.|raw$, len(*in))\n", t)
 	}
@@ -812,24 +893,12 @@ func (g *genDeepCopy) doMap(t *types.Type, sw *generator.SnippetWriter) {
 			rightPointer = dc.Results[0].Type.Kind == types.Pointer
 		}
 		if leftPointer == rightPointer {
-			if g.keepalive {
-				sw.Do("(*out)[key] = val.DeepCopy(ka)\n", nil)
-			} else {
-				sw.Do("(*out)[key] = val.DeepCopy()\n", nil)
-			}
+			sw.Do("(*out)[key] = val.DeepCopy()\n", nil)
 		} else if leftPointer {
-			if g.keepalive {
-				sw.Do("x := val.DeepCopy(ka)\n", nil)
-			} else {
-				sw.Do("x := val.DeepCopy()\n", nil)
-			}
+			sw.Do("x := val.DeepCopy()\n", nil)
 			sw.Do("(*out)[key] = &x\n", nil)
 		} else {
-			if g.keepalive {
-				sw.Do("(*out)[key] = *val.DeepCopy(ka)\n", nil)
-			} else {
-				sw.Do("(*out)[key] = *val.DeepCopy()\n", nil)
-			}
+			sw.Do("(*out)[key] = *val.DeepCopy()\n", nil)
 		}
 	case ut.Elem.IsAnonymousStruct(): // not uet here because it needs type cast
 		sw.Do("(*out)[key] = val\n", nil)
@@ -844,11 +913,7 @@ func (g *genDeepCopy) doMap(t *types.Type, sw *generator.SnippetWriter) {
 		// Note: if t.Elem has been an alias "J" of an interface "I" in Go, we will see it
 		// as kind Interface of name "J" here, i.e. generate val.DeepCopyJ(). The golang
 		// parser does not give us the underlying interface name. So we cannot do any better.
-		if g.keepalive {
-			sw.Do(fmt.Sprintf("(*out)[key] = val.DeepCopy%s(ka)\n", uet.Name.Name), nil)
-		} else {
-			sw.Do(fmt.Sprintf("(*out)[key] = val.DeepCopy%s()\n", uet.Name.Name), nil)
-		}
+		sw.Do(fmt.Sprintf("(*out)[key] = val.DeepCopy%s()\n", uet.Name.Name), nil)
 		sw.Do("}\n", nil)
 	case uet.Kind == types.Slice || uet.Kind == types.Map || uet.Kind == types.Pointer:
 		sw.Do("var outVal $.|raw$\n", uet)
@@ -858,11 +923,7 @@ func (g *genDeepCopy) doMap(t *types.Type, sw *generator.SnippetWriter) {
 		sw.Do("}\n", nil)
 		sw.Do("(*out)[key] = outVal\n", nil)
 	case uet.Kind == types.Struct:
-		if g.keepalive {
-			sw.Do("(*out)[key] = *val.DeepCopy(ka)\n", uet)
-		} else {
-			sw.Do("(*out)[key] = *val.DeepCopy()\n", uet)
-		}
+		sw.Do("(*out)[key] = *val.DeepCopy()\n", uet)
 	default:
 		klog.Fatalf("Hit an unsupported type %v for %v", uet, t)
 	}
@@ -876,27 +937,18 @@ func (g *genDeepCopy) doSlice(t *types.Type, sw *generator.SnippetWriter) {
 	uet := underlyingType(ut.Elem)
 
 	if deepCopyMethodOrDie(t) != nil || deepCopyIntoMethodOrDie(t) != nil {
-		if g.keepalive {
-			sw.Do("*out = in.DeepCopy(ka)\n", nil)
-		} else {
-			sw.Do("*out = in.DeepCopy()\n", nil)
-		}
-
+		sw.Do("*out = in.DeepCopy()\n", nil)
 		return
 	}
-	if g.keepalive {
-		sw.Do("*out = $.|ka$(ka,len(*in),len(*in)).Data\n", ut)
+	if g.usePool {
+		sw.Do("*out = $.|poolslice$(len(*in))\n", ut)
 	} else {
 		sw.Do("*out = make($.|raw$, len(*in))\n", ut)
 	}
 	if deepCopyMethodOrDie(ut.Elem) != nil || deepCopyIntoMethodOrDie(ut.Elem) != nil {
 		sw.Do("for i := range *in {\n", nil)
 		// Note: a DeepCopyInto exists because it is added if DeepCopy is manually defined
-		if g.keepalive {
-			sw.Do("(*in)[i].DeepCopyInto(ka, &(*out)[i])\n", nil)
-		} else {
-			sw.Do("(*in)[i].DeepCopyInto(&(*out)[i])\n", nil)
-		}
+		sw.Do("(*in)[i].DeepCopyInto(&(*out)[i])\n", nil)
 		sw.Do("}\n", nil)
 	} else if uet.Kind == types.Builtin || uet.IsAssignable() {
 		sw.Do("copy(*out, *in)\n", nil)
@@ -916,18 +968,10 @@ func (g *genDeepCopy) doSlice(t *types.Type, sw *generator.SnippetWriter) {
 			// Note: if t.Elem has been an alias "J" of an interface "I" in Go, we will see it
 			// as kind Interface of name "J" here, i.e. generate val.DeepCopyJ(). The golang
 			// parser does not give us the underlying interface name. So we cannot do any better.
-			if g.keepalive {
-				sw.Do(fmt.Sprintf("(*out)[i] = (*in)[i].DeepCopy%s(ka)\n", uet.Name.Name), nil)
-			} else {
-				sw.Do(fmt.Sprintf("(*out)[i] = (*in)[i].DeepCopy%s()\n", uet.Name.Name), nil)
-			}
+			sw.Do(fmt.Sprintf("(*out)[i] = (*in)[i].DeepCopy%s()\n", uet.Name.Name), nil)
 			sw.Do("}\n", nil)
 		} else if uet.Kind == types.Struct {
-			if g.keepalive {
-				sw.Do("(*in)[i].DeepCopyInto(ka,&(*out)[i])\n", nil)
-			} else {
-				sw.Do("(*in)[i].DeepCopyInto(&(*out)[i])\n", nil)
-			}
+			sw.Do("(*in)[i].DeepCopyInto(&(*out)[i])\n", nil)
 		} else {
 			klog.Fatalf("Hit an unsupported type %v for %v", uet, t)
 		}
@@ -944,7 +988,6 @@ func (g *genDeepCopy) doStruct(t *types.Type, sw *generator.SnippetWriter) {
 		sw.Do("*out = in.DeepCopy()\n", nil)
 		return
 	}
-
 	// Simple copy covers a lot of cases.
 	sw.Do("*out = *in\n", nil)
 
@@ -968,25 +1011,13 @@ func (g *genDeepCopy) doStruct(t *types.Type, sw *generator.SnippetWriter) {
 				rightPointer = dc.Results[0].Type.Kind == types.Pointer
 			}
 			if leftPointer == rightPointer {
-				if g.keepalive {
-					sw.Do("out.$.name$ = in.$.name$.DeepCopy(ka)\n", args)
-				} else {
-					sw.Do("out.$.name$ = in.$.name$.DeepCopy()\n", args)
-				}
+				sw.Do("out.$.name$ = in.$.name$.DeepCopy()\n", args)
 			} else if leftPointer {
-				if g.keepalive {
-					sw.Do("x := in.$.name$.DeepCopy(ka)\n", args)
-				} else {
-					sw.Do("x := in.$.name$.DeepCopy()\n", args)
-				}
+				sw.Do("x := in.$.name$.DeepCopy()\n", args)
 
-				sw.Do("out.$.name$ =  = &x\n", args)
+				sw.Do("out.$.name$ = &x\n", args)
 			} else {
-				if g.keepalive {
-					sw.Do("in.$.name$.DeepCopyInto(ka,&out.$.name$)\n", args)
-				} else {
-					sw.Do("in.$.name$.DeepCopyInto(&out.$.name$)\n", args)
-				}
+				sw.Do("in.$.name$.DeepCopyInto(&out.$.name$)\n", args)
 			}
 		case uft.Kind == types.Builtin:
 			// the initial *out = *in was enough
@@ -1002,11 +1033,7 @@ func (g *genDeepCopy) doStruct(t *types.Type, sw *generator.SnippetWriter) {
 			if ft.IsAssignable() {
 				sw.Do("out.$.name$ = in.$.name$\n", args)
 			} else {
-				if g.keepalive {
-					sw.Do("in.$.name$.DeepCopyInto(ka,&out.$.name$)\n", args)
-				} else {
-					sw.Do("in.$.name$.DeepCopyInto(&out.$.name$)\n", args)
-				}
+				sw.Do("in.$.name$.DeepCopyInto(&out.$.name$)\n", args)
 			}
 		case uft.Kind == types.Interface:
 			// Note: do not generate code that won't compile as `DeepCopyinterface{}()` is not a valid function
@@ -1017,11 +1044,7 @@ func (g *genDeepCopy) doStruct(t *types.Type, sw *generator.SnippetWriter) {
 			// Note: if t.Elem has been an alias "J" of an interface "I" in Go, we will see it
 			// as kind Interface of name "J" here, i.e. generate val.DeepCopyJ(). The golang
 			// parser does not give us the underlying interface name. So we cannot do any better.
-			if g.keepalive {
-				sw.Do(fmt.Sprintf("out.$.name$ = in.$.name$.DeepCopy%s(ka)\n", uft.Name.Name), args)
-			} else {
-				sw.Do(fmt.Sprintf("out.$.name$ = in.$.name$.DeepCopy%s()\n", uft.Name.Name), args)
-			}
+			sw.Do(fmt.Sprintf("out.$.name$ = in.$.name$.DeepCopy%s()\n", uft.Name.Name), args)
 			sw.Do("}\n", nil)
 		default:
 			klog.Fatalf("Hit an unsupported type '%v' for '%v', from %v.%v", uft, ft, t, m.Name)
@@ -1043,44 +1066,35 @@ func (g *genDeepCopy) doPointer(t *types.Type, sw *generator.SnippetWriter) {
 			rightPointer = dc.Results[0].Type.Kind == types.Pointer
 		}
 		if rightPointer {
-			if g.keepalive {
-				sw.Do("*out = (*in).DeepCopy(ka)\n", nil)
-			} else {
-				sw.Do("*out = (*in).DeepCopy()\n", nil)
-			}
+			sw.Do("*out = (*in).DeepCopy()\n", nil)
 		} else {
-			if g.keepalive {
-				sw.Do("x := (*in).DeepCopy(ka)\n", nil)
-			} else {
-				sw.Do("x := (*in).DeepCopy()\n", nil)
-			}
+			sw.Do("x := (*in).DeepCopy()\n", nil)
 			sw.Do("*out = &x\n", nil)
 		}
 	case uet.IsAssignable():
-		if g.keepalive {
-			sw.Do("*out = $.Elem|ka$(ka)\n", ut)
+		if g.usePool {
+			sw.Do("*out =$.|pool$\n", ut)
 		} else {
 			sw.Do("*out = new($.Elem|raw$)\n", ut)
 		}
 		sw.Do("**out = **in", nil)
 	case uet.Kind == types.Map, uet.Kind == types.Slice, uet.Kind == types.Pointer:
-		if g.keepalive {
-			sw.Do("*out = $.Elem|kaa$(ka)\n", ut)
+		if g.usePool {
+			sw.Do("*out = $.|pool$\n", ut)
 		} else {
-			sw.Do("*out = new($.Elem|raw$)\n", ut)
+			sw.Do("*out =new($.Elem|raw$)\n", ut)
 		}
 		sw.Do("if **in != nil {\n", nil)
 		sw.Do("in, out := *in, *out\n", nil)
 		g.generateFor(uet, sw)
 		sw.Do("}\n", nil)
 	case uet.Kind == types.Struct:
-		if g.keepalive {
-			sw.Do("*out = $.Elem|ka$(ka)\n", ut)
-			sw.Do("(*in).DeepCopyInto(ka,*out)\n", nil)
+		if g.usePool {
+			sw.Do("*out = $.|pool$\n", uet)
 		} else {
-			sw.Do("*out = new($.Elem|raw$)\n", ut)
-			sw.Do("(*in).DeepCopyInto(*out)\n", nil)
+			sw.Do("*out =new($.Elem|raw$)\n", ut)
 		}
+		sw.Do("(*in).DeepCopyInto(*out)\n", nil)
 	default:
 		klog.Fatalf("Hit an unsupported type %v for %v", uet, t)
 	}

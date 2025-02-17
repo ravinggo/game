@@ -19,10 +19,6 @@ limitations under the License.
 // This is a test package.
 package aliases
 
-import (
-	"github.com/ravinggo/objectpool"
-)
-
 // Note: the following AliasInterface and AliasAliasInterface +k8s:deepcopy-gen:interfaces tags
 // are necessary because Golang flattens interface alias in the type system. I.e. an alias J of
 // an interface I is actually equivalent to I. So support deepcopies of those aliases, we have
@@ -36,9 +32,9 @@ type Foo struct {
 }
 
 type Interface interface {
-	DeepCopyInterface(*objectpool.KeepAlive) Interface
-	DeepCopyAliasInterface(*objectpool.KeepAlive) AliasInterface
-	DeepCopyAliasAliasInterface(*objectpool.KeepAlive) AliasAliasInterface
+	DeepCopyInterface() Interface
+	DeepCopyAliasInterface() AliasInterface
+	DeepCopyAliasAliasInterface() AliasAliasInterface
 }
 
 type Builtin int

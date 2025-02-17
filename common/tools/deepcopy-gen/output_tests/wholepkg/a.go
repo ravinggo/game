@@ -17,8 +17,6 @@ limitations under the License.
 package wholepkg
 
 import (
-	"github.com/ravinggo/objectpool"
-
 	"github.com/ravinggo/game/common/tools/deepcopy-gen/output_tests/otherpkg"
 )
 
@@ -48,7 +46,7 @@ type ManualStruct struct {
 	StringField string
 }
 
-func (m ManualStruct) DeepCopy(ka *objectpool.KeepAlive) ManualStruct {
+func (m ManualStruct) DeepCopy() ManualStruct {
 	return m
 }
 
@@ -79,7 +77,7 @@ type StructStructPrimitivePointers struct {
 // Manual DeepCopy method
 type ManualSlice []string
 
-func (m ManualSlice) DeepCopy(ka *objectpool.KeepAlive) ManualSlice {
+func (m ManualSlice) DeepCopy() ManualSlice {
 	r := make(ManualSlice, len(m))
 	copy(r, m)
 	return r

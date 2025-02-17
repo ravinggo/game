@@ -18,7 +18,6 @@ package outputtests
 
 import (
 	"github.com/google/gofuzz"
-	"github.com/ravinggo/objectpool"
 
 	"github.com/ravinggo/game/common/tools/deepcopy-gen/output_tests/aliases"
 	"github.com/ravinggo/game/common/tools/deepcopy-gen/output_tests/interfaces"
@@ -91,7 +90,7 @@ type aliasAliasInterfaceInstance struct {
 	X int
 }
 
-func (i *aliasAliasInterfaceInstance) DeepCopyInterface(ka *objectpool.KeepAlive) aliases.Interface {
+func (i *aliasAliasInterfaceInstance) DeepCopyInterface() aliases.Interface {
 	if i == nil {
 		return nil
 	}
@@ -99,7 +98,7 @@ func (i *aliasAliasInterfaceInstance) DeepCopyInterface(ka *objectpool.KeepAlive
 	return &aliasAliasInterfaceInstance{X: i.X}
 }
 
-func (i *aliasAliasInterfaceInstance) DeepCopyAliasInterface(ka *objectpool.KeepAlive) aliases.AliasInterface {
+func (i *aliasAliasInterfaceInstance) DeepCopyAliasInterface() aliases.AliasInterface {
 	if i == nil {
 		return nil
 	}
@@ -107,7 +106,7 @@ func (i *aliasAliasInterfaceInstance) DeepCopyAliasInterface(ka *objectpool.Keep
 	return &aliasAliasInterfaceInstance{X: i.X}
 }
 
-func (i *aliasAliasInterfaceInstance) DeepCopyAliasAliasInterface(ka *objectpool.KeepAlive) aliases.AliasAliasInterface {
+func (i *aliasAliasInterfaceInstance) DeepCopyAliasAliasInterface() aliases.AliasAliasInterface {
 	if i == nil {
 		return nil
 	}
@@ -119,7 +118,7 @@ type interfacesInnerInstance struct {
 	X float64
 }
 
-func (i *interfacesInnerInstance) DeepCopyInner(ka *objectpool.KeepAlive) interfaces.Inner {
+func (i *interfacesInnerInstance) DeepCopyInner() interfaces.Inner {
 	if i == nil {
 		return nil
 	}

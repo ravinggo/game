@@ -16,10 +16,6 @@ limitations under the License.
 
 package wholepkg
 
-import (
-	"github.com/ravinggo/objectpool"
-)
-
 type Selector interface {
-	DeepCopySelector(*objectpool.KeepAlive) Selector
+	DeepCopySelector() Selector
 }

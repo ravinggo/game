@@ -41,7 +41,7 @@ func TestDeepCopyPrimitives(t *testing.T) {
 		t.Errorf("objects should not be equal, but are")
 	}
 
-	x.DeepCopyInto(ka, &y)
+	x.DeepCopyInto(&y)
 	if !reflect.DeepEqual(&x, &y) {
 		t.Errorf("objects should be equal, but are not")
 	}
@@ -70,7 +70,7 @@ func TestDeepCopyInterfaceFields(t *testing.T) {
 	}
 	ka := objectpool.NewKeepAlive(1)
 	defer ka.Reset()
-	x.DeepCopyInto(ka, &y)
+	x.DeepCopyInto(&y)
 	if !reflect.DeepEqual(&x, &y) {
 		t.Errorf("objects should be equal, but are not")
 	}
@@ -78,7 +78,7 @@ func TestDeepCopyInterfaceFields(t *testing.T) {
 
 func TestNilCopy(t *testing.T) {
 	var x *StructB
-	y := x.DeepCopy(nil)
+	y := x.DeepCopy()
 	if y != nil {
 		t.Errorf("Expected nil as deepcopy of nil, got %+v", y)
 	}
@@ -122,7 +122,7 @@ func TestInterfaceDeepCopy(t *testing.T) {
 	fuzzer.Fuzz(&x)
 	ka := objectpool.NewKeepAlive(1)
 	defer ka.Reset()
-	yObj := x.DeepCopyObject(ka)
+	yObj := x.DeepCopyObject()
 	y, ok := yObj.(*StructExplicitObject)
 	if !ok {
 		t.Fatalf("epxected StructExplicitObject from StructExplicitObject.DeepCopyObject, got: %t", yObj)
@@ -139,7 +139,7 @@ func TestInterfaceNonPointerDeepCopy(t *testing.T) {
 	fuzzer.Fuzz(&x)
 	ka := objectpool.NewKeepAlive(1)
 	defer ka.Reset()
-	yObj := x.DeepCopyObject(ka)
+	yObj := x.DeepCopyObject()
 	y, ok := yObj.(StructNonPointerExplicitObject)
 	if !ok {
 		t.Fatalf("epxected StructNonPointerExplicitObject from StructNonPointerExplicitObject.DeepCopyObject, got: %t", yObj)

@@ -16,14 +16,10 @@ limitations under the License.
 
 package otherpkg
 
-import (
-	"github.com/ravinggo/objectpool"
-)
-
 type Object interface {
-	DeepCopyObject(alive *objectpool.KeepAlive) Object
+	DeepCopyObject() Object
 }
 
 type List interface {
-	DeepCopyList(alive *objectpool.KeepAlive) List
+	DeepCopyList() List
 }

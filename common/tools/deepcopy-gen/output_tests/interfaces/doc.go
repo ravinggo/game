@@ -19,13 +19,9 @@ limitations under the License.
 // This is a test package.
 package interfaces
 
-import (
-	"github.com/ravinggo/objectpool"
-)
-
 type Inner interface {
 	Function() float64
-	DeepCopyInner(*objectpool.KeepAlive) Inner
+	DeepCopyInner() Inner
 }
 
 type Ttest struct {
