@@ -18,4 +18,5 @@ package wholepkg
 
 type Selector interface {
 	DeepCopySelector() Selector
+	ResetSelector()
 }

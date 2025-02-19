@@ -22,6 +22,7 @@ package interfaces
 type Inner interface {
 	Function() float64
 	DeepCopyInner() Inner
+	ResetInner()
 }
 
 type Ttest struct {

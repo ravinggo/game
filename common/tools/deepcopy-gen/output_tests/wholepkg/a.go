@@ -50,6 +50,10 @@ func (m ManualStruct) DeepCopy() ManualStruct {
 	return m
 }
 
+func (m ManualStruct) Reset() {
+
+}
+
 type ManualStructAlias ManualStruct
 
 type StructEmbedManualStruct struct {
@@ -81,6 +85,10 @@ func (m ManualSlice) DeepCopy() ManualSlice {
 	r := make(ManualSlice, len(m))
 	copy(r, m)
 	return r
+}
+
+func (m ManualSlice) Reset() {
+
 }
 
 // Slices

@@ -18,8 +18,10 @@ package otherpkg
 
 type Object interface {
 	DeepCopyObject() Object
+	ResetObject()
 }
 
 type List interface {
 	DeepCopyList() List
+	ResetList()
 }

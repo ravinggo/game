@@ -114,6 +114,13 @@ func (i *aliasAliasInterfaceInstance) DeepCopyAliasAliasInterface() aliases.Alia
 	return &aliasAliasInterfaceInstance{X: i.X}
 }
 
+func (i *aliasAliasInterfaceInstance) ResetAliasAliasInterface() {
+
+}
+func (i *aliasAliasInterfaceInstance) ResetAliasInterface() {
+
+}
+
 type interfacesInnerInstance struct {
 	X float64
 }
@@ -128,4 +135,8 @@ func (i *interfacesInnerInstance) DeepCopyInner() interfaces.Inner {
 
 func (i *interfacesInnerInstance) Function() float64 {
 	return i.X
+}
+
+func (i *interfacesInnerInstance) ResetInner() {
+
 }

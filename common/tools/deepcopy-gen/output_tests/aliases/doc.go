@@ -35,6 +35,8 @@ type Interface interface {
 	DeepCopyInterface() Interface
 	DeepCopyAliasInterface() AliasInterface
 	DeepCopyAliasAliasInterface() AliasAliasInterface
+	ResetAliasInterface()
+	ResetAliasAliasInterface()
 }
 
 type Builtin int

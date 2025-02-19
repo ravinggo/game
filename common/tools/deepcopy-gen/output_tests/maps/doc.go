@@ -41,4 +41,9 @@ type Ttest struct {
 	SlicePtr     map[string]*[]string
 	Struct       map[string]Ttest
 	StructPtr    map[string]*Ttest
+	StructTest2  map[string]Test2
+}
+
+type Test2 struct {
+	a int
 }
