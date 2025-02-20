@@ -9,7 +9,7 @@ require (
 	github.com/kelseyhightower/envconfig v1.4.0
 	github.com/nats-io/nats.go v1.39.0
 	github.com/petermattis/goid v0.0.0-20250121172306-05bcfb9a85dc
-	github.com/ravinggo/objectpool v0.0.6
+	github.com/ravinggo/objectpool v1.0.1
 	github.com/ravinggo/zerolog v0.0.2
 	github.com/spf13/pflag v1.0.6
 	github.com/stretchr/testify v1.10.0

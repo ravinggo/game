@@ -380,15 +380,15 @@ func (this_ *NatsClient) PublishToServer(c ctx.IContext, toServerId int64, pubMs
 	b := objectpool.GetSlice[byte](size)
 	defer objectpool.PutSlice(b)
 
-	data := b.Data
+	data := b
 	if toServerId > 0 {
-		data = b.Data[msgNameSize : cap(b.Data)-msgNameSize][:0]
+		data = b[msgNameSize : cap(b)-msgNameSize][:0]
 		index := strings.LastIndexByte(msgName, '.')
-		b.Data = append(b.Data, msgName[:index]...) // index != -1
-		b.Data = append(b.Data, '.')
-		b.Data = strconv.AppendInt(b.Data, toServerId, 10)
-		b.Data = append(b.Data, msgName[index:]...)
-		msgName = utils.BytesToString(b.Data)
+		b = append(b, msgName[:index]...) // index != -1
+		b = append(b, '.')
+		b = strconv.AppendInt(b, toServerId, 10)
+		b = append(b, msgName[index:]...)
+		msgName = utils.BytesToString(b)
 	}
 
 	if traceSize > 0 {
@@ -437,15 +437,15 @@ func (this_ *NatsClient) PublishRawData(c ctx.IContext, toServerId int64, msgNam
 	b := objectpool.GetSlice[byte](size)
 	defer objectpool.PutSlice(b)
 
-	data := b.Data
+	data := b
 	if toServerId > 0 {
-		data = b.Data[msgNameSize:]
+		data = b[msgNameSize:]
 		index := strings.LastIndexByte(msgName, '.')
-		b.Data = append(b.Data, msgName[:index]...) // index != -1
-		b.Data = append(b.Data, '.')
-		b.Data = strconv.AppendInt(b.Data, toServerId, 10)
-		b.Data = append(b.Data, msgName[index:]...)
-		msgName = utils.BytesToString(b.Data)
+		b = append(b, msgName[:index]...) // index != -1
+		b = append(b, '.')
+		b = strconv.AppendInt(b, toServerId, 10)
+		b = append(b, msgName[index:]...)
+		msgName = utils.BytesToString(b)
 	}
 
 	if traceSize > 0 {
@@ -537,15 +537,15 @@ func (this_ *NatsClient) RequestToServer(c ctx.IContext, toServerId int64, reqMs
 	b := objectpool.GetSlice[byte](size)
 	defer objectpool.PutSlice(b)
 
-	data := b.Data
+	data := b
 	if toServerId > 0 {
-		data = b.Data[msgNameSize : cap(b.Data)-msgNameSize][:0]
+		data = b[msgNameSize : cap(b)-msgNameSize][:0]
 		index := strings.LastIndexByte(msgName, '.')
-		b.Data = append(b.Data, msgName[:index]...) // index != -1
-		b.Data = append(b.Data, '.')
-		b.Data = strconv.AppendInt(b.Data, toServerId, 10)
-		b.Data = append(b.Data, msgName[index:]...)
-		msgName = utils.BytesToString(b.Data)
+		b = append(b, msgName[:index]...) // index != -1
+		b = append(b, '.')
+		b = strconv.AppendInt(b, toServerId, 10)
+		b = append(b, msgName[index:]...)
+		msgName = utils.BytesToString(b)
 	}
 
 	if traceSize > 0 {
@@ -648,7 +648,7 @@ func NatsMsgReply(reply *nats.Msg, respMsgS ...proto.Message) *berror.ErrMsg {
 			return err
 		}
 	}
-	return berror.NewProtocolErr(reply.Respond(b.Data))
+	return berror.NewProtocolErr(reply.Respond(b))
 }
 
 func natsMsgReplyOne(reply *nats.Msg, respMsg proto.Message) *berror.ErrMsg {
@@ -667,11 +667,11 @@ func natsMsgReplyOne(reply *nats.Msg, respMsg proto.Message) *berror.ErrMsg {
 	b.WriteBytes(byte(msgSize), byte(msgSize>>8), byte(msgSize>>16))
 	b.WriteString(msgName)
 	var err error
-	b.Data, err = proto.MarshalOptions{}.MarshalAppend(b.Data, respMsg)
+	b, err = proto.MarshalOptions{}.MarshalAppend(b, respMsg)
 	if err != nil {
 		return berror.NewProtocolErr(err)
 	}
-	return berror.NewProtocolErr(reply.Respond(b.Data))
+	return berror.NewProtocolErr(reply.Respond(b))
 }
 
 func natsMarshalResponseSize(respMsg proto.Message) (int, *berror.ErrMsg) {
@@ -682,7 +682,7 @@ func natsMarshalResponseSize(respMsg proto.Message) (int, *berror.ErrMsg) {
 	return totalSizeLen + len(proto.MessageName(respMsg)) + msgSize, nil
 }
 
-func natsMarshalAppendResponse(b *objectpool.Bytes, respMsg proto.Message) *berror.ErrMsg {
+func natsMarshalAppendResponse(b objectpool.Bytes, respMsg proto.Message) *berror.ErrMsg {
 	msgName := string(proto.MessageName(respMsg))
 	msgNameLen := len(msgName)
 	if msgNameLen > math.MaxUint8 {
@@ -693,7 +693,7 @@ func natsMarshalAppendResponse(b *objectpool.Bytes, respMsg proto.Message) *berr
 	b.WriteBytes(byte(msgSize), byte(msgSize>>8), byte(msgSize>>16))
 	b.WriteString(msgName)
 	var err error
-	b.Data, err = proto.MarshalOptions{}.MarshalAppend(b.Data, respMsg)
+	b, err = proto.MarshalOptions{}.MarshalAppend(b, respMsg)
 	if err != nil {
 		return berror.NewProtocolErr(err)
 	}
@@ -727,15 +727,15 @@ func (this_ *NatsClient) RequestRaw(c ctx.IContext, toServerId int64, reqMsgName
 	b := objectpool.GetSlice[byte](size)
 	defer objectpool.PutSlice(b)
 
-	data := b.Data
+	data := b
 	if toServerId > 0 {
-		data = b.Data[msgNameSize:]
+		data = b[msgNameSize:]
 		index := strings.LastIndexByte(reqMsgName, '.')
-		b.Data = append(b.Data, reqMsgName[:index]...) // index != -1
-		b.Data = append(b.Data, '.')
-		b.Data = strconv.AppendInt(b.Data, toServerId, 10)
-		b.Data = append(b.Data, reqMsgName[index:]...)
-		reqMsgName = utils.BytesToString(b.Data)
+		b = append(b, reqMsgName[:index]...) // index != -1
+		b = append(b, '.')
+		b = strconv.AppendInt(b, toServerId, 10)
+		b = append(b, reqMsgName[index:]...)
+		reqMsgName = utils.BytesToString(b)
 	}
 
 	if traceSize > 0 {

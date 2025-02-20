@@ -21,14 +21,11 @@ import (
 	"testing"
 
 	fuzz "github.com/google/gofuzz"
-	"github.com/ravinggo/objectpool"
 )
 
 func TestDeepCopyPrimitives(t *testing.T) {
 	x := StructPrimitives{}
 	y := StructPrimitives{}
-	ka := objectpool.NewKeepAlive(1)
-	defer ka.Reset()
 	if !reflect.DeepEqual(&x, &y) {
 		t.Errorf("objects should be equal to start, but are not")
 	}
@@ -68,8 +65,6 @@ func TestDeepCopyInterfaceFields(t *testing.T) {
 	if reflect.DeepEqual(&x, &y) {
 		t.Errorf("objects should not be equal, but are")
 	}
-	ka := objectpool.NewKeepAlive(1)
-	defer ka.Reset()
 	x.DeepCopyInto(&y)
 	if !reflect.DeepEqual(&x, &y) {
 		t.Errorf("objects should be equal, but are not")
@@ -120,8 +115,6 @@ func TestInterfaceDeepCopy(t *testing.T) {
 
 	fuzzer := fuzz.New()
 	fuzzer.Fuzz(&x)
-	ka := objectpool.NewKeepAlive(1)
-	defer ka.Reset()
 	yObj := x.DeepCopyObject()
 	y, ok := yObj.(*StructExplicitObject)
 	if !ok {
@@ -137,8 +130,6 @@ func TestInterfaceNonPointerDeepCopy(t *testing.T) {
 
 	fuzzer := fuzz.New()
 	fuzzer.Fuzz(&x)
-	ka := objectpool.NewKeepAlive(1)
-	defer ka.Reset()
 	yObj := x.DeepCopyObject()
 	y, ok := yObj.(StructNonPointerExplicitObject)
 	if !ok {

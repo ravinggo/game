@@ -235,7 +235,7 @@ func (nc *ServerUserNatsClient[T, US]) startUserChan() {
 func (nc *ServerUserNatsClient[T, US]) SubscribeUser(us US) bool {
 	b := objectpool.GetBytes(0)
 	defer objectpool.PutBytes(b)
-	us.CreateSubj(b)
+	us.CreateSubj(&b)
 	subj := string(b.Bytes())
 	if _, ok := nc.subs.Get(subj); ok {
 		return false
@@ -261,7 +261,7 @@ func (nc *ServerUserNatsClient[T, US]) SubscribeUser(us US) bool {
 func (nc *ServerUserNatsClient[T, US]) SubscribeUserWaitSuccess(us US) bool {
 	b := objectpool.GetBytes(0)
 	defer objectpool.PutBytes(b)
-	us.CreateSubj(b)
+	us.CreateSubj(&b)
 	subj := string(b.Bytes())
 	if _, ok := nc.subs.Get(subj); ok {
 		return false
@@ -294,7 +294,7 @@ func (nc *ServerUserNatsClient[T, US]) SubscribeUserWaitSuccess(us US) bool {
 func (nc *ServerUserNatsClient[T, US]) QueueSubscribeUser(us US, handler nats.MsgHandler) bool {
 	b := objectpool.GetBytes(0)
 	defer objectpool.PutBytes(b)
-	us.CreateSubj(b)
+	us.CreateSubj(&b)
 	subj := string(b.Bytes())
 	if _, ok := nc.subs.Get(subj); ok {
 		return false
@@ -320,7 +320,7 @@ func (nc *ServerUserNatsClient[T, US]) QueueSubscribeUser(us US, handler nats.Ms
 func (nc *ServerUserNatsClient[T, US]) QueueSubscribeUserWaitSuccess(us US) bool {
 	b := objectpool.GetBytes(0)
 	defer objectpool.PutBytes(b)
-	us.CreateSubj(b)
+	us.CreateSubj(&b)
 	subj := string(b.Bytes())
 	if _, ok := nc.subs.Get(subj); ok {
 		return false
@@ -353,7 +353,7 @@ func (nc *ServerUserNatsClient[T, US]) QueueSubscribeUserWaitSuccess(us US) bool
 func (nc *ServerUserNatsClient[T, US]) UnsubscribeUser(us US) {
 	b := objectpool.GetBytes(0)
 	defer objectpool.PutBytes(b)
-	us.CreateSubj(b)
+	us.CreateSubj(&b)
 	subj := b.String()
 	if v, ok := nc.subs.GetAndRemove(subj); ok {
 		if v.IsValid() {
@@ -390,24 +390,24 @@ func (nc *ServerUserNatsClient[T, US]) PublishUser(c ctx.IContext, us US, pubMsg
 	msgSize := proto.Size(pubMsg)
 	b := objectpool.GetBytes(size + 2 + traceSize + msgSize)
 	defer objectpool.PutBytes(b)
-	us.CreateSubjForCall(b)
+	us.CreateSubjForCall(&b)
 	b.WriteBytes('.')
 	b.WriteString(messageName)
 	if traceSize > 0 {
-		b.Data = append(b.Data, byte(traceSize), byte(traceSize>>8))
-		b.Data, err = traceCtx.TraceMarshalAppend(b.Data)
+		b = append(b, byte(traceSize), byte(traceSize>>8))
+		b, err = traceCtx.TraceMarshalAppend(b)
 		if err != nil {
 			return berror.NewProtocolErr(err)
 		}
 	} else {
-		b.Data = append(b.Data, 0, 0)
+		b = append(b, 0, 0)
 	}
-	b.Data, err = proto.MarshalOptions{}.MarshalAppend(b.Data, pubMsg)
+	b, err = proto.MarshalOptions{}.MarshalAppend(b, pubMsg)
 	if err != nil {
 		return berror.NewProtocolErr(err)
 	}
 
-	err = nc.conn.Publish(utils.BytesToString(b.Data[:size]), b.Data[size:])
+	err = nc.conn.Publish(utils.BytesToString(b[:size]), b[size:])
 	return berror.NewProtocolErr(err)
 }
 
@@ -435,25 +435,25 @@ func (nc *ServerUserNatsClient[T, US]) RequestUser(c ctx.IContext, us US, reqMsg
 	msgSize := proto.Size(reqMsg)
 	b := objectpool.GetBytes(size + 2 + traceSize + msgSize)
 	defer objectpool.PutBytes(b)
-	us.CreateSubjForCall(b)
+	us.CreateSubjForCall(&b)
 	b.WriteBytes('.')
 	b.WriteString(messageName)
 	if traceSize > 0 {
-		b.Data = append(b.Data, byte(traceSize), byte(traceSize>>8))
-		b.Data, err = traceCtx.TraceMarshalAppend(b.Data)
+		b = append(b, byte(traceSize), byte(traceSize>>8))
+		b, err = traceCtx.TraceMarshalAppend(b)
 		if err != nil {
 			return berror.NewProtocolErr(err)
 		}
 	} else {
-		b.Data = append(b.Data, 0, 0)
+		b = append(b, 0, 0)
 	}
-	b.Data, err = proto.MarshalOptions{}.MarshalAppend(b.Data, reqMsg)
+	b, err = proto.MarshalOptions{}.MarshalAppend(b, reqMsg)
 	if err != nil {
 		return berror.NewProtocolErr(err)
 	}
-	outMsg, err := nc.conn.Request(utils.BytesToString(b.Data[:size]), b.Data[size:], nc.timeout)
+	outMsg, err := nc.conn.Request(utils.BytesToString(b[:size]), b[size:], nc.timeout)
 	if err != nil {
-		return berror.NewProtocolStr(utils.BytesToString(b.Data[:size]) + "[" + nc.conn.ConnectedAddr() + "]:" + err.Error())
+		return berror.NewProtocolStr(utils.BytesToString(b[:size]) + "[" + nc.conn.ConnectedAddr() + "]:" + err.Error())
 	}
 
 	return NatsUnmarshalResponseWithout(outMsg.Data, out)
