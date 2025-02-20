@@ -34,9 +34,9 @@ For the functions that I don’t have time to complete for now, users can integr
 Welcome friends who are interested to participate in the development<br>
 欢迎有兴趣的朋友一起参与开发<br>
 
-## (正在开发(90%))next step
-Use objectpool to generate go structure deep copy function, modified from [deepcopy-gen](https://github.com/kubernetes/code-generator/tree/master/cmd/deepcopy-gen)<br>
-用objectpool 生成 go 结构体深拷贝函数, 从 [deepcopy-gen](https://github.com/kubernetes/code-generator/tree/master/cmd/deepcopy-gen) 修改
+## [deepcopy-gen](https://github.com/ravinggo/tools/deepcopy-gen)
+Use sync.Pool to generate go structure deep copy function, modified from [deepcopy-gen](https://github.com/kubernetes/code-generator/tree/master/cmd/deepcopy-gen)<br>
+用sync.Pool 生成 go 结构体深拷贝函数, 从 [deepcopy-gen](https://github.com/kubernetes/code-generator/tree/master/cmd/deepcopy-gen) 修改
 
 ### 游戏配置文件接入(Game configuration file access)
 请暂时自己实现或者用(Please implement it yourself or use) [luban](https://luban.doc.code-philosophy.com/docs/intro)
