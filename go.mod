@@ -2,6 +2,8 @@ module github.com/ravinggo/game
 
 go 1.24
 
+tool github.com/ravinggo/tools/protoc-gen-gogogame
+
 require (
 	github.com/gogo/protobuf v1.3.2
 	github.com/kelseyhightower/envconfig v1.4.0
