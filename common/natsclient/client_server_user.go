@@ -385,9 +385,9 @@ func (nc *ServerUserNatsClient[T, US]) PublishUser(c ctx.IContext, us US, pubMsg
 	if traceSize > math.MaxUint16 {
 		return berror.NewProtocolStr("trace data too long,max size is 65535")
 	}
-	messageName := string(proto.MessageName(pubMsg))
+	messageName := string(define.ProtoMessageName(pubMsg))
 	size := us.CreateSubjForCallSize() + 1 + len(messageName)
-	msgSize := proto.Size(pubMsg)
+	msgSize := define.ProtoSize(pubMsg)
 	b := objectpool.GetBytes(size + 2 + traceSize + msgSize)
 	defer objectpool.PutBytes(b)
 	us.CreateSubjForCall(&b)
@@ -402,7 +402,7 @@ func (nc *ServerUserNatsClient[T, US]) PublishUser(c ctx.IContext, us US, pubMsg
 	} else {
 		b = append(b, 0, 0)
 	}
-	b, err = proto.MarshalOptions{}.MarshalAppend(b, pubMsg)
+	b, err = define.ProtoMarshalAppend(b, pubMsg)
 	if err != nil {
 		return berror.NewProtocolErr(err)
 	}
@@ -430,9 +430,9 @@ func (nc *ServerUserNatsClient[T, US]) RequestUser(c ctx.IContext, us US, reqMsg
 	if traceSize > math.MaxUint16 {
 		return berror.NewProtocolStr("trace data too long,max size is 65535")
 	}
-	messageName := string(proto.MessageName(reqMsg))
+	messageName := string(define.ProtoMessageName(reqMsg))
 	size := us.CreateSubjForCallSize() + 1 + len(messageName)
-	msgSize := proto.Size(reqMsg)
+	msgSize := define.ProtoSize(reqMsg)
 	b := objectpool.GetBytes(size + 2 + traceSize + msgSize)
 	defer objectpool.PutBytes(b)
 	us.CreateSubjForCall(&b)
@@ -447,7 +447,7 @@ func (nc *ServerUserNatsClient[T, US]) RequestUser(c ctx.IContext, us US, reqMsg
 	} else {
 		b = append(b, 0, 0)
 	}
-	b, err = proto.MarshalOptions{}.MarshalAppend(b, reqMsg)
+	b, err = define.ProtoMarshalAppend(b, reqMsg)
 	if err != nil {
 		return berror.NewProtocolErr(err)
 	}

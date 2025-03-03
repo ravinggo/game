@@ -5,12 +5,11 @@ import (
 	"fmt"
 	"unsafe"
 
-	"google.golang.org/protobuf/proto"
-
 	"github.com/ravinggo/objectpool"
 
 	baseenv "github.com/ravinggo/game/common/base-env"
 	"github.com/ravinggo/game/common/basepb"
+	"github.com/ravinggo/game/common/define"
 	"github.com/ravinggo/game/common/utils"
 )
 
@@ -19,7 +18,7 @@ const (
 )
 
 var (
-	ErrMsgName = string(proto.MessageName(&basepb.ErrorMessage{}))
+	ErrMsgName = string(define.ProtoMessageName(&basepb.ErrorMessage{}))
 	errPool    = objectpool.GetTypePool[ErrMsg]()
 	GetErr     = func() *ErrMsg {
 		return errPool.Get().(*ErrMsg)

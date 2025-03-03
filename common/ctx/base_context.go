@@ -170,7 +170,7 @@ func (i *IntTrace) TraceMarshalSize() int {
 		i.id = xid.NewIDString()
 		i.TraceId = i.id.String()
 	}
-	return proto.Size(i)
+	return define.ProtoSize(i)
 }
 
 func (i *IntTrace) TraceMarshalAppend(b []byte) ([]byte, error) {
@@ -178,11 +178,11 @@ func (i *IntTrace) TraceMarshalAppend(b []byte) ([]byte, error) {
 		i.id = xid.NewIDString()
 		i.TraceId = i.id.String()
 	}
-	return proto.MarshalOptions{}.MarshalAppend(b, i)
+	return define.ProtoMarshalAppend(b, i)
 }
 
 func (i *IntTrace) TraceMarshalFrom(b []byte) error {
-	err := proto.Unmarshal(b, i)
+	err := define.ProtoUnmarshal(b, i)
 	if err != nil {
 		return err
 	}
@@ -229,7 +229,7 @@ func (i *StringTrace) TraceMarshalSize() int {
 		i.id = xid.NewIDString()
 		i.TraceId = i.id.String()
 	}
-	return proto.Size(i)
+	return define.ProtoSize(i)
 }
 
 func (i *StringTrace) TraceMarshalAppend(b []byte) ([]byte, error) {
@@ -237,11 +237,11 @@ func (i *StringTrace) TraceMarshalAppend(b []byte) ([]byte, error) {
 		i.id = xid.NewIDString()
 		i.TraceId = i.id.String()
 	}
-	return proto.MarshalOptions{}.MarshalAppend(b, i)
+	return define.ProtoMarshalAppend(b, i)
 }
 
 func (i *StringTrace) TraceMarshalFrom(b []byte) error {
-	err := proto.Unmarshal(b, i)
+	err := define.ProtoUnmarshal(b, i)
 	if err != nil {
 		return err
 	}

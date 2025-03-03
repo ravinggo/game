@@ -30,13 +30,7 @@ func NewTestService() *TestService {
 	t := &TestService{
 		svc: service.NewServerUserService[natsclient.ServerIntUserSubject, ctx.IntTrace](
 			[]string{
-				"nats://192.168.0.168:4222",
-				"nats://192.168.0.166:4222",
-				"nats://192.168.0.141:4222",
-				"nats://192.168.0.168:4222",
-				"nats://192.168.0.166:4222",
-				"nats://192.168.0.168:4222",
-				"nats://192.168.0.141:4222",
+				"nats://192.168.0.160:4224",
 			},
 			true,
 			0, 0, time.Second*10, handler.LoggerAndRecover[ctx.IntTrace, *ctx.IntTrace],
@@ -44,13 +38,7 @@ func NewTestService() *TestService {
 	}
 	t.nc = natsclient.NewClusterClientServerUser[natsclient.ServerIntUserSubject](
 		[]string{
-			"nats://192.168.0.168:4222",
-			"nats://192.168.0.166:4222",
-			"nats://192.168.0.141:4222",
-			"nats://192.168.0.168:4222",
-			"nats://192.168.0.166:4222",
-			"nats://192.168.0.168:4222",
-			"nats://192.168.0.141:4222",
+			"nats://192.168.0.160:4224",
 		},
 		t.svc.DealServerUserNatsMsg,
 	)

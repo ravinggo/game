@@ -119,7 +119,7 @@ func (s *ServerUserService[T1, TraceData, TP, US]) DealServerUserNatsMsg(msg *na
 	}
 
 	c.Req = elem.ReqPool().Get().(proto.Message)
-	err = proto.Unmarshal(data[2+traceSize:], c.Req)
+	err = define.ProtoUnmarshal(data[2+traceSize:], c.Req)
 	if err != nil {
 		if msg.Reply == "" {
 			e := natsclient.NatsMsgReplyError(msg, berror.NewProtocolErr(err))

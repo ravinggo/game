@@ -6,11 +6,11 @@ import (
 	"testing"
 
 	"github.com/nats-io/nats.go"
-	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/reflect/protoreflect"
 	"google.golang.org/protobuf/reflect/protoregistry"
 
 	"github.com/ravinggo/game/common/basepb"
+	"github.com/ravinggo/game/common/define"
 	"github.com/ravinggo/game/common/logger"
 )
 
@@ -31,7 +31,7 @@ func TestNatsClient(t *testing.T) {
 				panic(err)
 			}
 			m := typ.New().Interface()
-			err = proto.Unmarshal(msg.Data[2:], m)
+			err = define.ProtoUnmarshal(msg.Data[2:], m)
 			if err != nil {
 				panic(err)
 			}
@@ -70,7 +70,7 @@ func TestNatsClient(t *testing.T) {
 				panic(err)
 			}
 			m := typ.New().Interface()
-			err = proto.Unmarshal(msg.Data[2:], m)
+			err = define.ProtoUnmarshal(msg.Data[2:], m)
 			if err != nil {
 				panic(err)
 			}
@@ -134,7 +134,7 @@ func TestClusterClient(t *testing.T) {
 				panic(err)
 			}
 			m := typ.New().Interface()
-			err = proto.Unmarshal(msg.Data[2:], m)
+			err = define.ProtoUnmarshal(msg.Data[2:], m)
 			if err != nil {
 				panic(err)
 			}

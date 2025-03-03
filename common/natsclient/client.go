@@ -359,7 +359,7 @@ func (this_ *NatsClient) Publish(c ctx.IContext, pubMsg proto.Message) *berror.E
 // if toServerId == 0, PublishToServer == Publish
 // // recommended use ClientPublish.PublishToServer
 func (this_ *NatsClient) PublishToServer(c ctx.IContext, toServerId int64, pubMsg proto.Message) *berror.ErrMsg {
-	msgName := string(proto.MessageName(pubMsg))
+	msgName := string(define.ProtoMessageName(pubMsg))
 	msgNameSize := 21 + len(msgName)
 	traceSize := 0
 	var err error
@@ -373,7 +373,7 @@ func (this_ *NatsClient) PublishToServer(c ctx.IContext, toServerId int64, pubMs
 			traceSize = traceCtx.TraceMarshalSize()
 		}
 	}
-	size := 2 + proto.Size(pubMsg) + traceSize
+	size := 2 + define.ProtoSize(pubMsg) + traceSize
 	if toServerId > 0 {
 		size += msgNameSize
 	}
@@ -403,7 +403,7 @@ func (this_ *NatsClient) PublishToServer(c ctx.IContext, toServerId int64, pubMs
 	} else {
 		data = append(data, 0, 0)
 	}
-	data, err = proto.MarshalOptions{}.MarshalAppend(data, pubMsg)
+	data, err = define.ProtoMarshalAppend(data, pubMsg)
 	if err != nil {
 		return berror.NewProtocolErr(err)
 	}
@@ -516,7 +516,7 @@ func (r *ClientRequest[T, T1, REQ, RESP]) RequestToServer(nc *NatsClient, c ctx.
 // if toServerId == 0, RequestToServer == Request
 // req,resp : Will definitely escape to the heap because proto.MessageName and proto.Marshal and proto.Unmarshal
 func (this_ *NatsClient) RequestToServer(c ctx.IContext, toServerId int64, reqMsg proto.Message, respMsg proto.Message) *berror.ErrMsg {
-	msgName := string(proto.MessageName(reqMsg))
+	msgName := string(define.ProtoMessageName(reqMsg))
 	msgNameSize := 21 + len(msgName)
 	traceSize := 0
 	var err error
@@ -530,7 +530,7 @@ func (this_ *NatsClient) RequestToServer(c ctx.IContext, toServerId int64, reqMs
 			traceSize = traceCtx.TraceMarshalSize()
 		}
 	}
-	size := 2 + proto.Size(reqMsg) + traceSize
+	size := 2 + define.ProtoSize(reqMsg) + traceSize
 	if toServerId > 0 {
 		size += msgNameSize
 	}
@@ -560,7 +560,7 @@ func (this_ *NatsClient) RequestToServer(c ctx.IContext, toServerId int64, reqMs
 	} else {
 		data = append(data, 0, 0)
 	}
-	data, err = proto.MarshalOptions{}.MarshalAppend(data, reqMsg)
+	data, err = define.ProtoMarshalAppend(data, reqMsg)
 	if err != nil {
 		return berror.NewProtocolErr(err)
 	}
@@ -597,17 +597,17 @@ func NatsUnmarshalResponseWithout(d []byte, respMsg proto.Message) *berror.ErrMs
 	}
 	if msgName == berror.ErrMsgName {
 		errMsg := &basepb.ErrorMessage{}
-		e := proto.Unmarshal(data, errMsg)
+		e := define.ProtoUnmarshal(data, errMsg)
 		if e != nil {
 			return berror.NewProtocolErr(e)
 		}
 		return (*berror.ErrMsg)(errMsg)
 	}
-	outMsgName := string(proto.MessageName(respMsg))
+	outMsgName := string(define.ProtoMessageName(respMsg))
 	if outMsgName != msgName {
 		return berror.NewProtocolStr("response msg is " + msgName + ", not is " + outMsgName)
 	}
-	e := proto.Unmarshal(data, respMsg)
+	e := define.ProtoUnmarshal(data, respMsg)
 	if e != nil {
 		return berror.NewProtocolErr(e)
 	}
@@ -652,12 +652,12 @@ func NatsMsgReply(reply *nats.Msg, respMsgS ...proto.Message) *berror.ErrMsg {
 }
 
 func natsMsgReplyOne(reply *nats.Msg, respMsg proto.Message) *berror.ErrMsg {
-	msgName := string(proto.MessageName(respMsg))
+	msgName := string(define.ProtoMessageName(respMsg))
 	msgNameSize := len(msgName)
 	if msgNameSize > math.MaxUint8 {
 		return berror.NewProtocolStr("respMsg name too long")
 	}
-	msgSize := proto.Size(respMsg)
+	msgSize := define.ProtoSize(respMsg)
 	if msgSize > maxProtoMsgSize {
 		return berror.NewProtocolStr("respMsg data too long")
 	}
@@ -667,7 +667,7 @@ func natsMsgReplyOne(reply *nats.Msg, respMsg proto.Message) *berror.ErrMsg {
 	b.WriteBytes(byte(msgSize), byte(msgSize>>8), byte(msgSize>>16))
 	b.WriteString(msgName)
 	var err error
-	b, err = proto.MarshalOptions{}.MarshalAppend(b, respMsg)
+	b, err = define.ProtoMarshalAppend(b, respMsg)
 	if err != nil {
 		return berror.NewProtocolErr(err)
 	}
@@ -675,25 +675,25 @@ func natsMsgReplyOne(reply *nats.Msg, respMsg proto.Message) *berror.ErrMsg {
 }
 
 func natsMarshalResponseSize(respMsg proto.Message) (int, *berror.ErrMsg) {
-	msgSize := proto.Size(respMsg)
+	msgSize := define.ProtoSize(respMsg)
 	if msgSize > maxProtoMsgSize {
 		return 0, berror.NewProtocolStr("respMsg data too long")
 	}
-	return totalSizeLen + len(proto.MessageName(respMsg)) + msgSize, nil
+	return totalSizeLen + len(define.ProtoMessageName(respMsg)) + msgSize, nil
 }
 
 func natsMarshalAppendResponse(b objectpool.Bytes, respMsg proto.Message) *berror.ErrMsg {
-	msgName := string(proto.MessageName(respMsg))
+	msgName := string(define.ProtoMessageName(respMsg))
 	msgNameLen := len(msgName)
 	if msgNameLen > math.MaxUint8 {
 		return berror.NewProtocolStr("respMsg name too long")
 	}
 	b.WriteBytes(byte(msgNameLen))
-	msgSize := proto.Size(respMsg)
+	msgSize := define.ProtoSize(respMsg)
 	b.WriteBytes(byte(msgSize), byte(msgSize>>8), byte(msgSize>>16))
 	b.WriteString(msgName)
 	var err error
-	b, err = proto.MarshalOptions{}.MarshalAppend(b, respMsg)
+	b, err = define.ProtoMarshalAppend(b, respMsg)
 	if err != nil {
 		return berror.NewProtocolErr(err)
 	}

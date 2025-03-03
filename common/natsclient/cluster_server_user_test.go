@@ -6,7 +6,6 @@ import (
 	"testing"
 
 	"github.com/nats-io/nats.go"
-	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/reflect/protoreflect"
 	"google.golang.org/protobuf/reflect/protoregistry"
 
@@ -35,7 +34,7 @@ func TestNewClusterClientServerUser(t *testing.T) {
 				panic(err)
 			}
 			m := typ.New().Interface()
-			err = proto.Unmarshal(msg.Data[2:], m)
+			err = define.ProtoUnmarshal(msg.Data[2:], m)
 			if err != nil {
 				panic(err)
 			}

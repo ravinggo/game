@@ -7,7 +7,6 @@ import (
 	"strings"
 	"sync"
 
-	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/reflect/protoreflect"
 
 	"github.com/ravinggo/objectpool"
@@ -175,7 +174,7 @@ func registerRPC[TP ctx.TracePtr[TraceData], REQ define.ProtoMessagePtr[T1], RES
 	middlewares ...Middleware[TraceData, TP],
 ) {
 	var req REQ
-	msgName := proto.MessageName(req)
+	msgName := define.ProtoMessageName(req)
 	if v, ok := h.handle[msgName]; ok {
 		panic(fmt.Sprintf("Handler %s already registered![%s]", msgName, v.String()))
 	} else {
@@ -245,7 +244,7 @@ func registerRPCResp[TP ctx.TracePtr[TraceData], REQ define.ProtoMessagePtr[T1],
 	middlewares ...Middleware[TraceData, TP],
 ) {
 	var req REQ
-	msgName := proto.MessageName(req)
+	msgName := define.ProtoMessageName(req)
 	if v, ok := h.handle[msgName]; ok {
 		panic(fmt.Sprintf("Handler %s already registered![%s]", msgName, v.String()))
 	} else {
@@ -321,7 +320,7 @@ func registerEvent[TP ctx.TracePtr[TraceData], REQ define.ProtoMessagePtr[T1], T
 	middlewares ...Middleware[TraceData, TP],
 ) {
 	var req REQ
-	msgName := proto.MessageName(req)
+	msgName := define.ProtoMessageName(req)
 	if v, ok := h.handle[msgName]; ok {
 		panic(fmt.Sprintf("Handler %s already registered![%s]", msgName, v.String()))
 	} else {

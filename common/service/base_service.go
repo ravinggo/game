@@ -17,6 +17,7 @@ import (
 	"github.com/ravinggo/game/common/berror"
 	"github.com/ravinggo/game/common/cmap"
 	"github.com/ravinggo/game/common/ctx"
+	"github.com/ravinggo/game/common/define"
 	"github.com/ravinggo/game/common/eventloop"
 	"github.com/ravinggo/game/common/handler"
 	"github.com/ravinggo/game/common/localevent"
@@ -304,7 +305,7 @@ func (s *BaseService[TraceData, TP]) dealNatsMsg(msg *nats.Msg) {
 	}
 
 	c.Req = elem.ReqPool().Get().(proto.Message)
-	err := proto.Unmarshal(data[2+traceSize:], c.Req)
+	err := define.ProtoUnmarshal(data[2+traceSize:], c.Req)
 	if err != nil {
 		if msg.Reply == "" {
 			e := natsclient.NatsMsgReplyError(msg, berror.NewProtocolErr(err))
