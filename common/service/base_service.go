@@ -40,29 +40,6 @@ type BaseService[TraceData any, TP ctx.TracePtr[TraceData]] struct {
 	serverType    string
 }
 
-// HashRunMode 0: FixedHashPoolMode, 1: OneHashOneGo
-// FixedHashPoolMode use hash to run task,
-// OneHashOneGo use one hash one goroutine
-type HashRunMode int
-
-const (
-	// FixedHashPoolMode fixed((runtime.NumCPU()+1)*1024) task group pool
-	// by ToHash() distribute task to task_group.TaskGroup
-	FixedHashPoolMode HashRunMode = 0
-
-	// OneHashOneGo one hash one goroutine
-	OneHashOneGo HashRunMode = 1
-)
-
-type TaskRunMode int
-
-const (
-	// TaskPool all task run in task_group.TaskPool
-	TaskPool TaskRunMode = 0
-	// OneTaskOneGo one task one goroutine
-	OneTaskOneGo TaskRunMode = 1
-)
-
 type ce[TraceData any, TP ctx.TracePtr[TraceData]] struct {
 	Data *ctx.BaseCtx[TraceData, TP]
 	Elem *handler.Elem[TraceData, TP]
@@ -71,22 +48,25 @@ type ce[TraceData any, TP ctx.TracePtr[TraceData]] struct {
 // NewBaseService create a new BaseService
 func NewBaseService[TraceData any, TP ctx.TracePtr[TraceData]](
 	natsUrls []string,
-	lockQueueThread bool,
-	hashMode HashRunMode,
-	taskMode TaskRunMode,
-	rpcTimeout time.Duration,
-	middlewares ...handler.Middleware[TraceData, TP],
+	ops ...Option[TraceData, TP],
 ) *BaseService[TraceData, TP] {
+	c := config[TraceData, TP]{}
+	for _, op := range ops {
+		op(&c)
+	}
+	if c.rpcTimeout <= 0 {
+		c.rpcTimeout = time.Second * 10
+	}
 	s := &BaseService[TraceData, TP]{
-		h:           handler.NewHandler[TraceData](middlewares...),
-		natsCluster: natsclient.NewClusterClient(natsUrls, nats.Timeout(rpcTimeout)),
-		el:          eventloop.NewDoubleBuffQueue(lockQueueThread),
+		h:           handler.NewHandler[TraceData](c.middles...),
+		natsCluster: natsclient.NewClusterClient(natsUrls, nats.Timeout(c.rpcTimeout)),
+		el:          eventloop.NewDoubleBuffQueue(c.lockQueueThread),
 		taskMap: cmap.NewWithCustomShardingFunction[uint64, *task_group.TaskGroup[ce[TraceData, TP]]](
 			func(key uint64) uint32 {
 				return uint32(key)
 			},
 		),
-		taskGroupPool: objectpool.GetTypePool[task_group.TaskGroup[*ctx.BaseCtx[TraceData, TP]]](),
+		taskGroupPool: objectpool.GetTypePool[task_group.TaskGroup[ce[TraceData, TP]]](),
 		serverId:      baseenv.GetConfig().ServerId,
 		serverType:    baseenv.GetConfig().ServerType,
 	}
@@ -96,10 +76,10 @@ func NewBaseService[TraceData any, TP ctx.TracePtr[TraceData]](
 		numCpu++
 	}
 	taskPoolSize := numCpu * 1024
-	if hashMode < FixedHashPoolMode || hashMode > OneHashOneGo {
-		hashMode = FixedHashPoolMode
+	if c.hashRunMode < OneHashOneGo || c.hashRunMode > FixedHashPoolMode {
+		c.hashRunMode = OneHashOneGo
 	}
-	switch hashMode {
+	switch c.hashRunMode {
 	case FixedHashPoolMode:
 		numCpu := uint64(runtime.NumCPU())
 		if numCpu&1 == 1 {
@@ -114,7 +94,7 @@ func NewBaseService[TraceData any, TP ctx.TracePtr[TraceData]](
 		}
 	}
 
-	if taskMode == TaskPool {
+	if c.taskRunMode == TaskPool {
 		s.taskPool = task_group.NewTaskPool(int64(taskPoolSize), int64(taskPoolSize*10))
 	}
 

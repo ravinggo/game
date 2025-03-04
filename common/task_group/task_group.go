@@ -34,8 +34,12 @@ func NewTaskGroup[T any](f func(TaskGroupElem[T]), maxCap int) *TaskGroup[T] {
 
 // SetOnStop why add this function? for sync.Pool
 func (this_ *TaskGroup[T]) SetOnStop(f func(*TaskGroup[T])) {
-	this_.onStop = func() {
-		f(this_)
+	if f == nil && this_.onStop != nil {
+		this_.onStop = nil
+	} else if f != nil {
+		this_.onStop = func() {
+			f(this_)
+		}
 	}
 }
 

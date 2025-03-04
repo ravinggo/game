@@ -2,7 +2,6 @@ package service
 
 import (
 	"strings"
-	"time"
 
 	"github.com/nats-io/nats.go"
 	"google.golang.org/protobuf/proto"
@@ -12,7 +11,6 @@ import (
 	"github.com/ravinggo/game/common/berror"
 	"github.com/ravinggo/game/common/ctx"
 	"github.com/ravinggo/game/common/define"
-	"github.com/ravinggo/game/common/handler"
 	"github.com/ravinggo/game/common/logger"
 	"github.com/ravinggo/game/common/natsclient"
 	"github.com/ravinggo/game/common/task_group"
@@ -27,20 +25,12 @@ type ServerUserService[T1 any, TraceData any, TP ctx.TracePtr[TraceData], US nat
 // NewServerUserService create a ServerUserService.
 func NewServerUserService[T1 any, TraceData any, TP ctx.TracePtr[TraceData], US natsclient.ServerUserSubjectPtr[T1]](
 	natsUrls []string,
-	lockQueueThread bool,
-	hashMode HashRunMode,
-	taskMode TaskRunMode,
-	rpcTimeout time.Duration,
-	middlewares ...handler.Middleware[TraceData, TP],
+	ops ...Option[TraceData, TP],
 ) *ServerUserService[T1, TraceData, TP, US] {
 	s := &ServerUserService[T1, TraceData, TP, US]{
 		BaseService: NewBaseService[TraceData, TP](
 			natsUrls,
-			lockQueueThread,
-			hashMode,
-			taskMode,
-			rpcTimeout,
-			middlewares...,
+			ops...,
 		),
 	}
 	s.userNatsCluster = natsclient.NewClusterClientServerUser2[T1, US](s.BaseService.natsCluster, s.DealServerUserNatsMsg)
