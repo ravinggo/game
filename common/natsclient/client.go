@@ -631,22 +631,16 @@ func NatsMsgReply(reply *nats.Msg, respMsgS ...proto.Message) *berror.ErrMsg {
 		return natsMsgReplyOne(reply, respMsgS[0])
 	}
 
-	totalSize := 0
-	for _, m := range respMsgS {
-		s, err := natsMarshalResponseSize(m)
-		if err != nil {
-			return err
-		}
-		totalSize += s
+	totalSize, err := NatsMarshalManySize(respMsgS...)
+	if err != nil {
+		return err
 	}
 	b := objectpool.GetBytes(totalSize)
 	defer objectpool.PutBytes(b)
 
-	for _, m := range respMsgS {
-		err := natsMarshalAppendResponse(b, m)
-		if err != nil {
-			return err
-		}
+	err = NatsMarshalManyAppend(&b, respMsgS...)
+	if err != nil {
+		return err
 	}
 	return berror.NewProtocolErr(reply.Respond(b))
 }
@@ -674,28 +668,51 @@ func natsMsgReplyOne(reply *nats.Msg, respMsg proto.Message) *berror.ErrMsg {
 	return berror.NewProtocolErr(reply.Respond(b))
 }
 
-func natsMarshalResponseSize(respMsg proto.Message) (int, *berror.ErrMsg) {
-	msgSize := define.ProtoSize(respMsg)
+func NatsMarshalSize(msg proto.Message) (int, *berror.ErrMsg) {
+	msgSize := define.ProtoSize(msg)
 	if msgSize > maxProtoMsgSize {
-		return 0, berror.NewProtocolStr("respMsg data too long")
+		return 0, berror.NewProtocolStr("msg data too long")
 	}
-	return totalSizeLen + len(define.ProtoMessageName(respMsg)) + msgSize, nil
+	msgNameLen := len(define.ProtoMessageName(msg))
+	if msgNameLen > math.MaxUint8 {
+		return 0, berror.NewProtocolStr("message name too long")
+	}
+	return totalSizeLen + len(define.ProtoMessageName(msg)) + msgSize, nil
 }
 
-func natsMarshalAppendResponse(b objectpool.Bytes, respMsg proto.Message) *berror.ErrMsg {
-	msgName := string(define.ProtoMessageName(respMsg))
-	msgNameLen := len(msgName)
-	if msgNameLen > math.MaxUint8 {
-		return berror.NewProtocolStr("respMsg name too long")
+func NatsMarshalManySize(msgS ...proto.Message) (int, *berror.ErrMsg) {
+	total := 0
+	for _, msg := range msgS {
+		size, err := NatsMarshalSize(msg)
+		if err != nil {
+			return 0, err
+		}
+		total += size
 	}
+	return total, nil
+}
+
+func NatsMarshalAppend(b *objectpool.Bytes, msg proto.Message) *berror.ErrMsg {
+	msgName := string(define.ProtoMessageName(msg))
+	msgNameLen := len(msgName)
 	b.WriteBytes(byte(msgNameLen))
-	msgSize := define.ProtoSize(respMsg)
+	msgSize := define.ProtoSize(msg)
 	b.WriteBytes(byte(msgSize), byte(msgSize>>8), byte(msgSize>>16))
 	b.WriteString(msgName)
 	var err error
-	b, err = define.ProtoMarshalAppend(b, respMsg)
+	*b, err = define.ProtoMarshalAppend(*b, msg)
 	if err != nil {
 		return berror.NewProtocolErr(err)
+	}
+	return nil
+}
+
+func NatsMarshalManyAppend(b *objectpool.Bytes, msgS ...proto.Message) *berror.ErrMsg {
+	for _, msg := range msgS {
+		err := NatsMarshalAppend(b, msg)
+		if err != nil {
+			return err
+		}
 	}
 	return nil
 }
