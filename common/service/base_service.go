@@ -38,6 +38,7 @@ type BaseService[TraceData any, TP ctx.TracePtr[TraceData]] struct {
 	taskPool      *task_group.TaskPool
 	serverId      int64
 	serverType    string
+	ctxPool       *sync.Pool
 }
 
 type ce[TraceData any, TP ctx.TracePtr[TraceData]] struct {
@@ -69,6 +70,7 @@ func NewBaseService[TraceData any, TP ctx.TracePtr[TraceData]](
 		taskGroupPool: objectpool.GetTypePool[task_group.TaskGroup[ce[TraceData, TP]]](),
 		serverId:      baseenv.GetConfig().ServerId,
 		serverType:    baseenv.GetConfig().ServerType,
+		ctxPool:       objectpool.GetTypePool[ctx.BaseCtx[TraceData, TP]](),
 	}
 
 	numCpu := uint64(runtime.NumCPU())
@@ -99,6 +101,15 @@ func NewBaseService[TraceData any, TP ctx.TracePtr[TraceData]](
 	}
 
 	return s
+}
+
+func (s *BaseService[TraceData, TP]) GetCtxFromPool() *ctx.BaseCtx[TraceData, TP] {
+	return s.ctxPool.Get().(*ctx.BaseCtx[TraceData, TP])
+}
+
+func (s *BaseService[TraceData, TP]) PutCtxToPool(c *ctx.BaseCtx[TraceData, TP]) {
+	c.Reset()
+	s.ctxPool.Put(c)
 }
 
 func (s *BaseService[TraceData, TP]) taskFunc(e task_group.TaskGroupElem[ce[TraceData, TP]]) {
@@ -159,7 +170,7 @@ func (s *BaseService[TraceData, TP]) handleCtx(c *ctx.BaseCtx[TraceData, TP], e 
 		c.Req = nil
 	}
 
-	objectpool.Put(c)
+	s.PutCtxToPool(c)
 }
 
 func (s *BaseService[TraceData, TP]) call(c *ctx.BaseCtx[TraceData, TP], e *handler.Elem[TraceData, TP]) {
@@ -268,7 +279,7 @@ func (s *BaseService[TraceData, TP]) dealNatsMsg(msg *nats.Msg) {
 	}
 
 	traceSize := int(data[0]) | int(data[1])<<8
-	c := objectpool.Get[ctx.BaseCtx[TraceData, TP]]()
+	c := s.GetCtxFromPool()
 	traceCtx := c.GetTrace()
 	if traceSize > 0 && traceCtx != nil {
 		err := traceCtx.TraceMarshalFrom(msg.Data[2 : 2+traceSize])
@@ -311,8 +322,8 @@ func (s *BaseService[TraceData, TP]) dealNatsMsg(msg *nats.Msg) {
 					} else {
 						if !s.taskGroupHash[hash&s.taskPoolMark].Put(ce[TraceData, TP]{Data: c, Elem: elem}, nil) {
 							ReplyTaskPoolFull(c)
-							objectpool.Put(c)
 							c.Warn().Err(err).Msg("task group full")
+							s.PutCtxToPool(c)
 						}
 					}
 
@@ -337,8 +348,8 @@ func (s *BaseService[TraceData, TP]) dealNatsMsg(msg *nats.Msg) {
 				} else {
 					if !tg.Put(ce[TraceData, TP]{Data: c, Elem: elem}, nil) {
 						ReplyTaskPoolFull(c)
-						objectpool.Put(c)
 						c.Warn().Err(err).Msg("task group full")
+						s.PutCtxToPool(c)
 					}
 				}
 				return
@@ -359,8 +370,8 @@ func (s *BaseService[TraceData, TP]) dealNatsMsg(msg *nats.Msg) {
 					},
 				) {
 					ReplyTaskPoolFull(c)
-					objectpool.Put(c)
 					c.Warn().Err(err).Msg("task group full")
+					s.PutCtxToPool(c)
 				}
 			}
 			return

@@ -138,8 +138,8 @@ func (s *ServerUserService[T1, TraceData, TP, US]) DealServerUserNatsMsg(msg *na
 				} else {
 					if !s.taskGroupHash[hash&s.taskPoolMark].Put(ce[TraceData, TP]{Data: c, Elem: elem}, nil) {
 						ReplyTaskPoolFull(c)
-						objectpool.Put(c)
 						c.Warn().Err(err).Msg("task group full")
+						s.PutCtxToPool(c)
 					}
 				}
 
@@ -164,8 +164,8 @@ func (s *ServerUserService[T1, TraceData, TP, US]) DealServerUserNatsMsg(msg *na
 			} else {
 				if !tg.Put(ce[TraceData, TP]{Data: c, Elem: elem}, nil) {
 					ReplyTaskPoolFull(c)
-					objectpool.Put(c)
 					c.Warn().Err(err).Msg("task group full")
+					s.PutCtxToPool(c)
 				}
 			}
 			return
