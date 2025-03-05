@@ -20,6 +20,7 @@ import (
 type ServerUserService[T1 any, TraceData any, TP ctx.TracePtr[TraceData], US natsclient.ServerUserSubjectPtr[T1]] struct {
 	*BaseService[TraceData, TP]
 	userNatsCluster *natsclient.ClusterClientServerUser[T1, US]
+	hookUserMsg     func(msgName string, msgData []byte, msg *nats.Msg)
 }
 
 // NewServerUserService create a ServerUserService.
@@ -32,6 +33,9 @@ func NewServerUserService[T1 any, TraceData any, TP ctx.TracePtr[TraceData], US 
 			natsUrls,
 			ops...,
 		),
+	}
+	if s.cnf.hookUserMsg != nil {
+		s.hookUserMsg = s.cnf.hookUserMsg
 	}
 	s.userNatsCluster = natsclient.NewClusterClientServerUser2[T1, US](s.BaseService.natsCluster, s.DealServerUserNatsMsg)
 	return s
@@ -91,7 +95,10 @@ func (s *ServerUserService[T1, TraceData, TP, US]) DealServerUserNatsMsg(msg *na
 	if len(data) < 2 {
 		return
 	}
-
+	if s.hookUserMsg != nil { // hook
+		s.hookUserMsg(msgName, msg.Data, msg)
+		return
+	}
 	traceSize := int(data[0]) | int(data[1])<<8
 	c := objectpool.Get[ctx.BaseCtx[TraceData, TP]]()
 	traceCtx := c.GetTrace()

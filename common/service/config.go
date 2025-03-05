@@ -3,9 +3,13 @@ package service
 import (
 	"time"
 
+	"github.com/nats-io/nats.go"
+
 	"github.com/ravinggo/game/common/ctx"
 	"github.com/ravinggo/game/common/handler"
 )
+
+type HookUserMsg = func(msgName string, msgData []byte, msg *nats.Msg)
 
 // HashRunMode 0: FixedHashPoolMode, 1: OneHashOneGo
 // FixedHashPoolMode use hash to run task,
@@ -36,6 +40,7 @@ type config[TraceData any, TP ctx.TracePtr[TraceData]] struct {
 	taskRunMode     TaskRunMode
 	rpcTimeout      time.Duration
 	middles         []handler.Middleware[TraceData, TP]
+	hookUserMsg     HookUserMsg
 }
 
 type Option[TraceData any, TP ctx.TracePtr[TraceData]] func(*config[TraceData, TP])
@@ -67,5 +72,11 @@ func RPCTimeoutOption[TraceData any, TP ctx.TracePtr[TraceData]](timeout time.Du
 func MiddlesOption[TraceData any, TP ctx.TracePtr[TraceData]](middles ...handler.Middleware[TraceData, TP]) Option[TraceData, TP] {
 	return func(c *config[TraceData, TP]) {
 		c.middles = append(c.middles, middles...)
+	}
+}
+
+func ServerUserHookUserMsg[TraceData any, TP ctx.TracePtr[TraceData]](hook HookUserMsg) Option[TraceData, TP] {
+	return func(c *config[TraceData, TP]) {
+		c.hookUserMsg = hook
 	}
 }

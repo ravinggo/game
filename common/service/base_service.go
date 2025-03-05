@@ -39,6 +39,7 @@ type BaseService[TraceData any, TP ctx.TracePtr[TraceData]] struct {
 	serverId      int64
 	serverType    string
 	ctxPool       *sync.Pool
+	cnf           config[TraceData, TP]
 }
 
 type ce[TraceData any, TP ctx.TracePtr[TraceData]] struct {
@@ -71,6 +72,7 @@ func NewBaseService[TraceData any, TP ctx.TracePtr[TraceData]](
 		serverId:      baseenv.GetConfig().ServerId,
 		serverType:    baseenv.GetConfig().ServerType,
 		ctxPool:       objectpool.GetTypePool[ctx.BaseCtx[TraceData, TP]](),
+		cnf:           c,
 	}
 
 	numCpu := uint64(runtime.NumCPU())
