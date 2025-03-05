@@ -29,6 +29,7 @@ const (
 	ErrorStackTrace = "ERROR_STACK_TRACE"
 	PprofAddr       = "PPROF_ADDR"
 	LogConsoleColor = "LOG_CONSOLE_COLOR"
+	GameTLS         = "GAME_TLS"
 )
 
 type Config struct {
@@ -87,6 +88,8 @@ type Config struct {
 	LogNoCaller bool `envconfig:"LOG_NO_CALLER"`
 	// ErrorStackTrace output berror caller stack trace
 	ErrorStackTrace bool `envconfig:"ERROR_STACK_TRACE"`
+
+	GameTLS bool `envconfig:"GAME_TLS"`
 }
 
 var (
