@@ -32,7 +32,9 @@ func NewTestService() *TestService {
 			[]string{
 				"nats://192.168.0.160:4224",
 			},
-			service.MiddlesOption(handler.LoggerAndRecover[ctx.IntTrace, *ctx.IntTrace]),
+			service.ServerUserBase[natsclient.ServerIntUserSubject, ctx.IntTrace](
+				service.MiddlesOption(handler.LoggerAndRecover[ctx.IntTrace, *ctx.IntTrace]),
+			),
 		),
 	}
 	t.nc = natsclient.NewClusterClientServerUser[natsclient.ServerIntUserSubject](

@@ -7,9 +7,10 @@ import (
 
 	"github.com/ravinggo/game/common/ctx"
 	"github.com/ravinggo/game/common/handler"
+	"github.com/ravinggo/game/common/natsclient"
 )
 
-type HookUserMsg = func(msgName string, msgData []byte, msg *nats.Msg)
+type HookUserMsg[T1 any, US natsclient.ServerUserSubjectPtr[T1]] = func(us US, msgName string, msgData []byte, msg *nats.Msg)
 
 // HashRunMode 0: FixedHashPoolMode, 1: OneHashOneGo
 // FixedHashPoolMode use hash to run task,
@@ -40,7 +41,6 @@ type config[TraceData any, TP ctx.TracePtr[TraceData]] struct {
 	taskRunMode     TaskRunMode
 	rpcTimeout      time.Duration
 	middles         []handler.Middleware[TraceData, TP]
-	hookUserMsg     HookUserMsg
 }
 
 type Option[TraceData any, TP ctx.TracePtr[TraceData]] func(*config[TraceData, TP])
@@ -75,8 +75,21 @@ func MiddlesOption[TraceData any, TP ctx.TracePtr[TraceData]](middles ...handler
 	}
 }
 
-func ServerUserHookUserMsg[TraceData any, TP ctx.TracePtr[TraceData]](hook HookUserMsg) Option[TraceData, TP] {
-	return func(c *config[TraceData, TP]) {
-		c.hookUserMsg = hook
+type ServerUserOption[T1 any, TraceData any, TP ctx.TracePtr[TraceData], US natsclient.ServerUserSubjectPtr[T1]] func(*serverUserConfig[T1, TraceData, TP, US])
+
+type serverUserConfig[T1 any, TraceData any, TP ctx.TracePtr[TraceData], US natsclient.ServerUserSubjectPtr[T1]] struct {
+	options     []Option[TraceData, TP]
+	hookUserMsg HookUserMsg[T1, US]
+}
+
+func ServerUserBase[T1 any, TraceData any, TP ctx.TracePtr[TraceData], US natsclient.ServerUserSubjectPtr[T1]](options ...Option[TraceData, TP]) ServerUserOption[T1, TraceData, TP, US] {
+	return func(s *serverUserConfig[T1, TraceData, TP, US]) {
+		s.options = append(s.options, options...)
+	}
+}
+
+func ServerUserHookUserMsgOption[T1 any, TraceData any, TP ctx.TracePtr[TraceData], US natsclient.ServerUserSubjectPtr[T1]](hook HookUserMsg[T1, US]) ServerUserOption[T1, TraceData, TP, US] {
+	return func(s *serverUserConfig[T1, TraceData, TP, US]) {
+		s.hookUserMsg = hook
 	}
 }

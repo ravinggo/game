@@ -20,22 +20,26 @@ import (
 type ServerUserService[T1 any, TraceData any, TP ctx.TracePtr[TraceData], US natsclient.ServerUserSubjectPtr[T1]] struct {
 	*BaseService[TraceData, TP]
 	userNatsCluster *natsclient.ClusterClientServerUser[T1, US]
-	hookUserMsg     func(msgName string, msgData []byte, msg *nats.Msg)
+	hookUserMsg     func(us US, msgName string, msgData []byte, msg *nats.Msg)
 }
 
 // NewServerUserService create a ServerUserService.
 func NewServerUserService[T1 any, TraceData any, TP ctx.TracePtr[TraceData], US natsclient.ServerUserSubjectPtr[T1]](
 	natsUrls []string,
-	ops ...Option[TraceData, TP],
+	ops ...ServerUserOption[T1, TraceData, TP, US],
 ) *ServerUserService[T1, TraceData, TP, US] {
+	serverCnf := &serverUserConfig[T1, TraceData, TP, US]{}
+	for _, op := range ops {
+		op(serverCnf)
+	}
 	s := &ServerUserService[T1, TraceData, TP, US]{
 		BaseService: NewBaseService[TraceData, TP](
 			natsUrls,
-			ops...,
+			serverCnf.options...,
 		),
 	}
-	if s.cnf.hookUserMsg != nil {
-		s.hookUserMsg = s.cnf.hookUserMsg
+	if serverCnf.hookUserMsg != nil {
+		s.hookUserMsg = serverCnf.hookUserMsg
 	}
 	s.userNatsCluster = natsclient.NewClusterClientServerUser2[T1, US](s.BaseService.natsCluster, s.DealServerUserNatsMsg)
 	return s
@@ -96,7 +100,7 @@ func (s *ServerUserService[T1, TraceData, TP, US]) DealServerUserNatsMsg(msg *na
 		return
 	}
 	if s.hookUserMsg != nil { // hook
-		s.hookUserMsg(msgName, msg.Data, msg)
+		s.hookUserMsg(us, msgName, msg.Data, msg)
 		return
 	}
 	traceSize := int(data[0]) | int(data[1])<<8
