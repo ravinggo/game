@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/nats-io/nats.go"
 	"google.golang.org/protobuf/reflect/protoreflect"
@@ -15,7 +16,7 @@ import (
 )
 
 func TestNatsClient(t *testing.T) {
-	nc := NewNatsClient("nats://127.0.0.1:4224", nats.Name("test"))
+	nc := NewNatsClient("nats://127.0.0.1:4224", time.Second*10, nats.Name("test"))
 	wg := &sync.WaitGroup{}
 	testData := &basepb.IntTrace{
 		RoleId:         1,
@@ -117,7 +118,7 @@ func TestNatsClient(t *testing.T) {
 }
 
 func TestClusterClient(t *testing.T) {
-	cnc := NewClusterClient([]string{"nats://127.0.0.1:4224"}, nats.Name("test"))
+	cnc := NewClusterClient([]string{"nats://127.0.0.1:4224"}, time.Second*10, nats.Name("test"))
 	wg := &sync.WaitGroup{}
 	testData := &basepb.IntTrace{
 		RoleId:         1,

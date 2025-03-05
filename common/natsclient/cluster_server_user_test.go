@@ -4,12 +4,14 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/nats-io/nats.go"
 	"google.golang.org/protobuf/reflect/protoreflect"
 	"google.golang.org/protobuf/reflect/protoregistry"
 
 	"github.com/ravinggo/game/common/basepb"
+	"github.com/ravinggo/game/common/define"
 	"github.com/ravinggo/game/common/logger"
 )
 
@@ -22,7 +24,7 @@ func TestNewClusterClientServerUser(t *testing.T) {
 		TraceId:        "xasdasda",
 	}
 	cuc := NewClusterClientServerUser[ServerIntUserSubject](
-		[]string{"nats://127.0.0.1:4224"}, func(msg *nats.Msg) {
+		[]string{"nats://127.0.0.1:4224"}, time.Second*10, func(msg *nats.Msg) {
 			defer wg.Done()
 			index := strings.IndexByte(msg.Subject, '.')
 			if index == -1 {

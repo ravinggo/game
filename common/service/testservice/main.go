@@ -41,6 +41,7 @@ func NewTestService() *TestService {
 		[]string{
 			"nats://192.168.0.160:4224",
 		},
+		time.Second*10,
 		t.svc.DealServerUserNatsMsg,
 	)
 	t.Router()

@@ -47,10 +47,14 @@ type NatsClient struct {
 // param name Usually the server name ( baseenv.Config.ServerType )
 // param urls a nats cluster urls
 // param timeout for request
-func NewNatsClient(urls string, options ...nats.Option) *NatsClient {
+func NewNatsClient(urls string, rpcTimeout time.Duration, options ...nats.Option) *NatsClient {
+	if rpcTimeout <= 0 {
+		rpcTimeout = time.Second * 10
+	}
 	nc := &NatsClient{
-		subs: cmap.New[*nats.Subscription](),
-		urls: urls,
+		subs:    cmap.New[*nats.Subscription](),
+		urls:    urls,
+		timeout: rpcTimeout,
 	}
 	opts := nats.GetDefaultOptions()
 

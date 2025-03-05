@@ -2,6 +2,7 @@ package natsclient
 
 import (
 	"strings"
+	"time"
 
 	"github.com/nats-io/nats.go"
 	"google.golang.org/protobuf/proto"
@@ -27,7 +28,7 @@ type ClusterClientServerUser[T any, US ServerUserSubjectPtr[T]] struct {
 
 // NewClusterClientServerUser create a ClusterClientServerUser.
 func NewClusterClientServerUser[T any, US ServerUserSubjectPtr[T]](
-	urls []string, userHandler nats.MsgHandler, opts ...UNOption,
+	urls []string, rpcTimeout time.Duration, userHandler nats.MsgHandler, opts ...UNOption,
 ) *ClusterClientServerUser[T, US] {
 	if userHandler == nil {
 		panic("handler is nil")
@@ -67,7 +68,7 @@ func NewClusterClientServerUser[T any, US ServerUserSubjectPtr[T]](
 		isCreateQueues = true
 	}
 
-	cnc := NewClusterClient(urls, un.opts...)
+	cnc := NewClusterClient(urls, rpcTimeout, un.opts...)
 	clusterClient := &ClusterClientServerUser[T, US]{
 		ClusterClient:  cnc,
 		queues:         queues,

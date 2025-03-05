@@ -13,6 +13,7 @@ import (
 	"github.com/ravinggo/game/common/define"
 	"github.com/ravinggo/game/common/logger"
 	"github.com/ravinggo/game/common/natsclient"
+	"github.com/ravinggo/game/common/safego"
 	"github.com/ravinggo/game/common/task_group"
 )
 
@@ -20,7 +21,7 @@ import (
 type ServerUserService[T1 any, TraceData any, TP ctx.TracePtr[TraceData], US natsclient.ServerUserSubjectPtr[T1]] struct {
 	*BaseService[TraceData, TP]
 	userNatsCluster *natsclient.ClusterClientServerUser[T1, US]
-	hookUserMsg     func(us US, msgName string, msgData []byte, msg *nats.Msg)
+	hookUserMsg     HookUserMsg[T1, US]
 }
 
 // NewServerUserService create a ServerUserService.
@@ -41,7 +42,9 @@ func NewServerUserService[T1 any, TraceData any, TP ctx.TracePtr[TraceData], US 
 	if serverCnf.hookUserMsg != nil {
 		s.hookUserMsg = serverCnf.hookUserMsg
 	}
-	s.userNatsCluster = natsclient.NewClusterClientServerUser2[T1, US](s.BaseService.natsCluster, s.DealServerUserNatsMsg)
+	s.userNatsCluster = natsclient.NewClusterClientServerUser2[T1, US](
+		s.BaseService.natsCluster, s.DealServerUserNatsMsg, serverCnf.unOptions...,
+	)
 	return s
 }
 
@@ -99,15 +102,19 @@ func (s *ServerUserService[T1, TraceData, TP, US]) DealServerUserNatsMsg(msg *na
 	if len(data) < 2 {
 		return
 	}
+	traceSize := int(data[0]) | int(data[1])<<8
 	if s.hookUserMsg != nil { // hook
-		s.hookUserMsg(us, msgName, msg.Data, msg)
+		var traceData []byte
+		if traceSize > 0 {
+			traceData = data[2 : 2+traceSize]
+		}
+		s.doHook(us, traceData, msgName, data[2+traceSize:], msg)
 		return
 	}
-	traceSize := int(data[0]) | int(data[1])<<8
 	c := objectpool.Get[ctx.BaseCtx[TraceData, TP]]()
-	traceCtx := c.GetTrace()
-	if traceSize > 0 && traceCtx != nil {
-		err := traceCtx.TraceMarshalFrom(msg.Data[2 : 2+traceSize])
+	trace := c.GetTrace()
+	if traceSize > 0 && trace != nil {
+		err := trace.TraceMarshalFrom(data[2 : 2+traceSize])
 		if err != nil {
 			if msg.Reply == "" {
 				e := natsclient.NatsMsgReplyError(msg, berror.NewProtocolErr(err))
@@ -139,8 +146,8 @@ func (s *ServerUserService[T1, TraceData, TP, US]) DealServerUserNatsMsg(msg *na
 	} else {
 		l := len(s.taskGroupHash)
 		hash := us.ToHash()
-		if hash == 0 && traceCtx != nil {
-			hash = traceCtx.ToHash()
+		if hash == 0 && trace != nil {
+			hash = trace.ToHash()
 		}
 		if hash != 0 {
 			if l > 0 {
@@ -190,4 +197,9 @@ func (s *ServerUserService[T1, TraceData, TP, US]) DealServerUserNatsMsg(msg *na
 			}
 		}
 	}
+}
+
+func (s *ServerUserService[T1, TraceData, TP, US]) doHook(us US, traceData []byte, msgName string, msgData []byte, msg *nats.Msg) {
+	defer safego.Recover()
+	s.hookUserMsg(us, traceData, msgName, msgData, msg)
 }

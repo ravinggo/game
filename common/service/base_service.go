@@ -59,9 +59,10 @@ func NewBaseService[TraceData any, TP ctx.TracePtr[TraceData]](
 	if c.rpcTimeout <= 0 {
 		c.rpcTimeout = time.Second * 10
 	}
+
 	s := &BaseService[TraceData, TP]{
 		h:           handler.NewHandler[TraceData](c.middles...),
-		natsCluster: natsclient.NewClusterClient(natsUrls, nats.Timeout(c.rpcTimeout)),
+		natsCluster: natsclient.NewClusterClient(natsUrls, c.rpcTimeout),
 		el:          eventloop.NewDoubleBuffQueue(c.lockQueueThread),
 		taskMap: cmap.NewWithCustomShardingFunction[uint64, *task_group.TaskGroup[ce[TraceData, TP]]](
 			func(key uint64) uint32 {

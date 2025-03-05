@@ -6,6 +6,7 @@ import (
 	"math"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/nats-io/nats.go"
 	"google.golang.org/protobuf/proto"
@@ -59,7 +60,7 @@ type ServerUserNatsClient[T any, US ServerUserSubjectPtr[T]] struct {
 }
 
 func NewServerUserNatsClient[T any, US ServerUserSubjectPtr[T]](
-	urls string, userHandler nats.MsgHandler, opts ...UNOption,
+	urls string, rpcTimeout time.Duration, userHandler nats.MsgHandler, opts ...UNOption,
 ) *ServerUserNatsClient[T, US] {
 	if userHandler == nil {
 		panic("handler is nil")
@@ -99,7 +100,7 @@ func NewServerUserNatsClient[T any, US ServerUserSubjectPtr[T]](
 	}
 
 	unc := &ServerUserNatsClient[T, US]{
-		NatsClient:     NewNatsClient(urls, un.opts...),
+		NatsClient:     NewNatsClient(urls, rpcTimeout, un.opts...),
 		queues:         queues,
 		userHandler:    uh,
 		isCreateQueues: isCreateQueues,

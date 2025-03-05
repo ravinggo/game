@@ -10,7 +10,7 @@ import (
 	"github.com/ravinggo/game/common/natsclient"
 )
 
-type HookUserMsg[T1 any, US natsclient.ServerUserSubjectPtr[T1]] = func(us US, msgName string, msgData []byte, msg *nats.Msg)
+type HookUserMsg[T1 any, US natsclient.ServerUserSubjectPtr[T1]] = func(us US, traceData []byte, msgName string, msgData []byte, msg *nats.Msg)
 
 // HashRunMode 0: FixedHashPoolMode, 1: OneHashOneGo
 // FixedHashPoolMode use hash to run task,
@@ -41,9 +41,18 @@ type config[TraceData any, TP ctx.TracePtr[TraceData]] struct {
 	taskRunMode     TaskRunMode
 	rpcTimeout      time.Duration
 	middles         []handler.Middleware[TraceData, TP]
+	natsOptions     []nats.Option
 }
 
 type Option[TraceData any, TP ctx.TracePtr[TraceData]] func(*config[TraceData, TP])
+
+func NatsOptions[TraceData any, TP ctx.TracePtr[TraceData]](
+	opts ...nats.Option,
+) Option[TraceData, TP] {
+	return func(c *config[TraceData, TP]) {
+		c.natsOptions = append(c.natsOptions, opts...)
+	}
+}
 
 func LockQueueThreadOption[TraceData any, TP ctx.TracePtr[TraceData]]() Option[TraceData, TP] {
 	return func(c *config[TraceData, TP]) {
@@ -51,45 +60,68 @@ func LockQueueThreadOption[TraceData any, TP ctx.TracePtr[TraceData]]() Option[T
 	}
 }
 
-func HashRunModeOption[TraceData any, TP ctx.TracePtr[TraceData]](hm HashRunMode) Option[TraceData, TP] {
+func HashRunModeOption[TraceData any, TP ctx.TracePtr[TraceData]](
+	hm HashRunMode,
+) Option[TraceData, TP] {
 	return func(c *config[TraceData, TP]) {
 		c.hashRunMode = hm
 	}
 }
 
-func TaskRunModeOption[TraceData any, TP ctx.TracePtr[TraceData]](tm TaskRunMode) Option[TraceData, TP] {
+func TaskRunModeOption[TraceData any, TP ctx.TracePtr[TraceData]](
+	tm TaskRunMode,
+) Option[TraceData, TP] {
 	return func(c *config[TraceData, TP]) {
 		c.taskRunMode = tm
 	}
 }
 
-func RPCTimeoutOption[TraceData any, TP ctx.TracePtr[TraceData]](timeout time.Duration) Option[TraceData, TP] {
+func RPCTimeoutOption[TraceData any, TP ctx.TracePtr[TraceData]](
+	timeout time.Duration,
+) Option[TraceData, TP] {
 	return func(c *config[TraceData, TP]) {
 		c.rpcTimeout = timeout
 	}
 }
 
-func MiddlesOption[TraceData any, TP ctx.TracePtr[TraceData]](middles ...handler.Middleware[TraceData, TP]) Option[TraceData, TP] {
+func MiddlesOption[TraceData any, TP ctx.TracePtr[TraceData]](
+	middles ...handler.Middleware[TraceData, TP],
+) Option[TraceData, TP] {
 	return func(c *config[TraceData, TP]) {
 		c.middles = append(c.middles, middles...)
 	}
 }
 
-type ServerUserOption[T1 any, TraceData any, TP ctx.TracePtr[TraceData], US natsclient.ServerUserSubjectPtr[T1]] func(*serverUserConfig[T1, TraceData, TP, US])
+type ServerUserOption[
+T1 any, TraceData any, TP ctx.TracePtr[TraceData], US natsclient.ServerUserSubjectPtr[T1],
+] func(*serverUserConfig[T1, TraceData, TP, US])
 
 type serverUserConfig[T1 any, TraceData any, TP ctx.TracePtr[TraceData], US natsclient.ServerUserSubjectPtr[T1]] struct {
 	options     []Option[TraceData, TP]
 	hookUserMsg HookUserMsg[T1, US]
+	unOptions   []natsclient.UNOption
 }
 
-func ServerUserBase[T1 any, TraceData any, TP ctx.TracePtr[TraceData], US natsclient.ServerUserSubjectPtr[T1]](options ...Option[TraceData, TP]) ServerUserOption[T1, TraceData, TP, US] {
+func ServerUserBase[T1 any, TraceData any, TP ctx.TracePtr[TraceData], US natsclient.ServerUserSubjectPtr[T1]](
+	options ...Option[TraceData, TP],
+) ServerUserOption[T1, TraceData, TP, US] {
 	return func(s *serverUserConfig[T1, TraceData, TP, US]) {
 		s.options = append(s.options, options...)
 	}
 }
 
-func ServerUserHookUserMsgOption[T1 any, TraceData any, TP ctx.TracePtr[TraceData], US natsclient.ServerUserSubjectPtr[T1]](hook HookUserMsg[T1, US]) ServerUserOption[T1, TraceData, TP, US] {
+func ServerUserHookUserMsgOption[T1 any, TraceData any, TP ctx.TracePtr[TraceData], US natsclient.ServerUserSubjectPtr[T1]](
+	hook HookUserMsg[T1, US],
+) ServerUserOption[T1, TraceData, TP, US] {
 	return func(s *serverUserConfig[T1, TraceData, TP, US]) {
 		s.hookUserMsg = hook
+	}
+}
+
+func ServerUserUNOption[T1 any, TraceData any, TP ctx.TracePtr[TraceData], US natsclient.ServerUserSubjectPtr[T1]](
+	options ...natsclient.UNOption,
+) ServerUserOption[T1, TraceData, TP, US] {
+	return func(s *serverUserConfig[T1, TraceData, TP, US]) {
+		s.unOptions = append(s.unOptions, options...)
 	}
 }
