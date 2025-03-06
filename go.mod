@@ -12,8 +12,8 @@ require (
 	github.com/mailru/easyjson v0.9.0
 	github.com/nats-io/nats.go v1.39.1
 	github.com/petermattis/goid v0.0.0-20250211185408-f2b9d978cd7a
-	github.com/ravinggo/objectpool v1.0.1
-	github.com/ravinggo/tools v0.0.3
+	github.com/ravinggo/objectpool v1.0.2
+	github.com/ravinggo/tools v0.0.5
 	github.com/ravinggo/zerolog v0.0.2
 	github.com/stretchr/testify v1.10.0
 	google.golang.org/protobuf v1.36.5
