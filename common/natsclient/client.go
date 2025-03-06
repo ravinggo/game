@@ -576,7 +576,7 @@ func (this_ *NatsClient) RequestToServer(c ctx.IContext, toServerId int64, reqMs
 	return NatsUnmarshalResponseWithout(natsMsg.Data, respMsg)
 }
 
-func natsUnmarshalResponse(data []byte) (string, []byte, *berror.ErrMsg) {
+func NatsUnmarshalResponse(data []byte) (string, []byte, *berror.ErrMsg) {
 	if len(data) < totalSizeLen {
 		return "", nil, berror.NewProtocolStr("invalid message")
 	}
@@ -595,7 +595,7 @@ func natsUnmarshalResponse(data []byte) (string, []byte, *berror.ErrMsg) {
 
 // NatsUnmarshalResponseWithout Unmarshal response data from nats.Msg.Data
 func NatsUnmarshalResponseWithout(d []byte, respMsg proto.Message) *berror.ErrMsg {
-	msgName, data, err := natsUnmarshalResponse(d)
+	msgName, data, err := NatsUnmarshalResponse(d)
 	if err != nil {
 		return err
 	}

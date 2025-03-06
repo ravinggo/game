@@ -35,6 +35,18 @@ func ProtoMarshalAppend(b []byte, msg proto.Message) ([]byte, error) {
 	return proto.MarshalOptions{}.MarshalAppend(b, msg)
 }
 
+// func ProtoMarshal(msg proto.Message) ([]byte, error) {
+// 	if ma, ok := msg.(gogo.Marshaler); ok {
+// 		write := b[len(b):]
+// 		n, err := ma.MarshalTo(write)
+// 		if err != nil {
+// 			return nil, err
+// 		}
+// 		return b[:len(b)+n], nil
+// 	}
+//
+// }
+
 func ProtoUnmarshal(b []byte, msg proto.Message) error {
 	if unmarshaler, ok := msg.(gogo.Unmarshaler); ok {
 		return unmarshaler.Unmarshal(b)
