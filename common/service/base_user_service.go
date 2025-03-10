@@ -1,12 +1,9 @@
 package service
 
 import (
-	"strings"
-
 	"github.com/nats-io/nats.go"
-	"google.golang.org/protobuf/proto"
-
 	"github.com/ravinggo/objectpool"
+	"google.golang.org/protobuf/proto"
 
 	"github.com/ravinggo/game/common/berror"
 	"github.com/ravinggo/game/common/ctx"
@@ -81,19 +78,9 @@ func (s *ServerUserService[T1, TraceData, TP, US]) UserUnsubscribe(us US) {
 }
 
 func (s *ServerUserService[T1, TraceData, TP, US]) DealServerUserNatsMsg(msg *nats.Msg) {
-	index := strings.IndexByte(msg.Subject, '.')
-	if index == -1 {
-		return
-	}
-	msgName := msg.Subject[index+1:]
-	elem, ok := s.h.GetHandler(msgName)
-	if !ok {
-		logger.Log.Info().Str("msgName", msgName).Str("subj", msg.Subject).Msg("msg not registered")
-		return
-	}
 	us := (US)(objectpool.Get[T1]())
 	defer objectpool.Put[T1](us)
-	err := us.ParseSubjForCall(msg.Subject[:index])
+	err := us.ParseSubj(msg.Subject)
 	if err != nil {
 		return
 	}
@@ -102,104 +89,122 @@ func (s *ServerUserService[T1, TraceData, TP, US]) DealServerUserNatsMsg(msg *na
 	if len(data) < 2 {
 		return
 	}
-	traceSize := int(data[0]) | int(data[1])<<8
-	if s.hookUserMsg != nil { // hook
-		var traceData []byte
-		if traceSize > 0 {
-			traceData = data[2 : 2+traceSize]
-		}
-		s.doHook(us, traceData, msgName, data[2+traceSize:], msg)
+	traceData, msgData := natsclient.NatsParseUserMsgRaw(data)
+	bErr := natsclient.NatsCheckMsg(msgData)
+	if bErr != nil {
 		return
 	}
-	c := objectpool.Get[ctx.BaseCtx[TraceData, TP]]()
-	trace := c.GetTrace()
-	if traceSize > 0 && trace != nil {
-		err := trace.TraceMarshalFrom(data[2 : 2+traceSize])
-		if err != nil {
-			if msg.Reply == "" {
-				e := natsclient.NatsMsgReplyError(msg, berror.NewProtocolErr(err))
-				if e != nil {
-					logger.Log.Error().Err(e).Msg("nats reply error")
+	if s.hookUserMsg != nil { // hook
+		s.doHook(us, traceData, msgData, msg)
+		return
+	}
+	msgCount := 0
+	bErr = natsclient.NatsUnmarshalResponseMany(
+		msgData, func(msgName string, data []byte) *berror.ErrMsg {
+			msgCount++
+			elem, ok := s.h.GetHandler(msgName)
+			if !ok {
+				logger.Log.Info().Str("msgName", msgName).Str("subj", msg.Subject).Msg("msg not registered")
+				return nil
+			}
+			if elem.IsRPC() && msgCount > 1 {
+				return berror.NewProtocolStr("invalid rpc request")
+			}
+
+			c := objectpool.Get[ctx.BaseCtx[TraceData, TP]]()
+			trace := c.GetTrace()
+			if len(traceData) > 0 {
+				err := trace.TraceMarshalFrom(traceData)
+				if err != nil {
+					if msg.Reply == "" {
+						e := natsclient.NatsMsgReplyError(msg, berror.NewProtocolErr(err))
+						if e != nil {
+							logger.Log.Error().Err(e).Msg("nats reply error")
+						}
+					}
+					return berror.NewProtocolErr(err)
 				}
 			}
-			return
-		}
-	}
-
-	c.Req = elem.ReqPool().Get().(proto.Message)
-	err = define.ProtoUnmarshal(data[2+traceSize:], c.Req)
-	if err != nil {
-		if msg.Reply == "" {
-			e := natsclient.NatsMsgReplyError(msg, berror.NewProtocolErr(err))
-			if e != nil {
-				c.Error().Err(e).Msg("nats reply error")
-			}
-		}
-		return
-	}
-	if elem.IsRPC() {
-		c.NatsMsg = msg
-	}
-
-	if elem.IsSingle() {
-		s.el.PostEventQueue(ce[TraceData, TP]{Data: c, Elem: elem})
-	} else {
-		l := len(s.taskGroupHash)
-		hash := us.ToHash()
-		if hash == 0 && trace != nil {
-			hash = trace.ToHash()
-		}
-		if hash != 0 {
-			if l > 0 {
-				if elem.IsForce() {
-					s.taskGroupHash[hash&s.taskPoolMark].PutForce(ce[TraceData, TP]{Data: c, Elem: elem}, nil)
-				} else {
-					if !s.taskGroupHash[hash&s.taskPoolMark].Put(ce[TraceData, TP]{Data: c, Elem: elem}, nil) {
-						ReplyTaskPoolFull(c)
-						c.Warn().Err(err).Msg("task group full")
-						s.PutCtxToPool(c)
+			c.Req = elem.ReqPool().Get().(proto.Message)
+			err = define.ProtoUnmarshal(data, c.Req)
+			if err != nil {
+				if msg.Reply == "" {
+					e := natsclient.NatsMsgReplyError(msg, berror.NewProtocolErr(err))
+					if e != nil {
+						c.Error().Err(e).Msg("nats reply error")
 					}
 				}
-
-				return
+				return berror.NewProtocolErr(err)
 			}
-			tg, _ := s.taskMap.GetOrCreate(
-				hash, func() *task_group.TaskGroup[ce[TraceData, TP]] {
-					tg := s.taskGroupPool.Get().(*task_group.TaskGroup[ce[TraceData, TP]])
-					tg.SetTaskFunc(s.taskFunc)
-					tg.SetMaxCap(128)
-					tg.SetOnStop(
-						func(t *task_group.TaskGroup[ce[TraceData, TP]]) {
-							tg.SetOnStop(nil)
-							s.taskGroupPool.Put(tg)
+			if elem.IsRPC() {
+				c.NatsMsg = msg
+			}
+
+			if elem.IsSingle() {
+				s.el.PostEventQueue(ce[TraceData, TP]{Data: c, Elem: elem})
+			} else {
+				l := len(s.taskGroupHash)
+				hash := us.ToHash()
+				if hash == 0 && trace != nil {
+					hash = trace.ToHash()
+				}
+				if hash != 0 {
+					if l > 0 {
+						if elem.IsForce() {
+							s.taskGroupHash[hash&s.taskPoolMark].PutForce(ce[TraceData, TP]{Data: c, Elem: elem}, nil)
+						} else {
+							if !s.taskGroupHash[hash&s.taskPoolMark].Put(ce[TraceData, TP]{Data: c, Elem: elem}, nil) {
+								ReplyTaskPoolFull(c)
+								c.Warn().Err(err).Msg("task group full")
+								s.PutCtxToPool(c)
+							}
+						}
+
+						return nil
+					}
+					tg, _ := s.taskMap.GetOrCreate(
+						hash, func() *task_group.TaskGroup[ce[TraceData, TP]] {
+							tg := s.taskGroupPool.Get().(*task_group.TaskGroup[ce[TraceData, TP]])
+							tg.SetTaskFunc(s.taskFunc)
+							tg.SetMaxCap(128)
+							tg.SetOnStop(
+								func(t *task_group.TaskGroup[ce[TraceData, TP]]) {
+									tg.SetOnStop(nil)
+									s.taskGroupPool.Put(tg)
+								},
+							)
+							return tg
 						},
 					)
-					return tg
-				},
-			)
-			if elem.IsForce() {
-				tg.PutForce(ce[TraceData, TP]{Data: c, Elem: elem}, nil)
-			} else {
-				if !tg.Put(ce[TraceData, TP]{Data: c, Elem: elem}, nil) {
-					ReplyTaskPoolFull(c)
-					c.Warn().Err(err).Msg("task group full")
-					s.PutCtxToPool(c)
+					if elem.IsForce() {
+						tg.PutForce(ce[TraceData, TP]{Data: c, Elem: elem}, nil)
+					} else {
+						if !tg.Put(ce[TraceData, TP]{Data: c, Elem: elem}, nil) {
+							ReplyTaskPoolFull(c)
+							c.Warn().Err(err).Msg("task group full")
+							s.PutCtxToPool(c)
+						}
+					}
+					return nil
+				} else {
+					c.Error().Err(define.ErrInvalidToHash).Msg("DealServerUserNatsMsg not dispatch")
+					if msg.Reply != "" { // RPC
+						err := natsclient.NatsMsgReplyError(msg, berror.NewProtocolErr(define.ErrInvalidToHash))
+						if err != nil {
+							c.Error().Err(err).Msg("nats reply error")
+						}
+					}
 				}
 			}
-			return
-		} else {
-			c.Error().Err(define.ErrInvalidToHash).Msg("DealServerUserNatsMsg not dispatch")
-			if msg.Reply != "" { // RPC
-				err := natsclient.NatsMsgReplyError(msg, berror.NewProtocolErr(define.ErrInvalidToHash))
-				if err != nil {
-					c.Error().Err(err).Msg("nats reply error")
-				}
-			}
-		}
+			return nil
+		},
+	)
+	if bErr != nil {
+		logger.Log.Warn().Err(bErr).Str("subj", msg.Subject).Msg("DealServerUserNatsMsg error")
 	}
 }
 
-func (s *ServerUserService[T1, TraceData, TP, US]) doHook(us US, traceData []byte, msgName string, msgData []byte, msg *nats.Msg) {
+func (s *ServerUserService[T1, TraceData, TP, US]) doHook(us US, traceData []byte, data []byte, msg *nats.Msg) {
 	defer safego.Recover()
-	s.hookUserMsg(us, traceData, msgName, msgData, msg)
+	s.hookUserMsg(us, traceData, data, msg)
 }

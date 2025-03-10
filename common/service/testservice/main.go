@@ -30,7 +30,7 @@ func NewTestService() *TestService {
 	t := &TestService{
 		svc: service.NewServerUserService[natsclient.ServerIntUserSubject, ctx.IntTrace](
 			[]string{
-				"nats://192.168.0.160:4224",
+				"nats://192.168.0.160:4222",
 			},
 			service.ServerUserBase[natsclient.ServerIntUserSubject, ctx.IntTrace](
 				service.MiddlesOption(handler.LoggerAndRecover[ctx.IntTrace, *ctx.IntTrace]),
@@ -39,7 +39,7 @@ func NewTestService() *TestService {
 	}
 	t.nc = natsclient.NewClusterClientServerUser[natsclient.ServerIntUserSubject](
 		[]string{
-			"nats://192.168.0.160:4224",
+			"nats://192.168.0.160:4222",
 		},
 		time.Second*10,
 		t.svc.DealServerUserNatsMsg,
@@ -152,7 +152,6 @@ func (t *TestService) ReqTrace(roleId int64) {
 		logger.Log.Panic().Err(err).Msg("ReqTrace StringTrace")
 	}
 	if roleId%100 == 0 {
-
 		c = objectpool.Get[ctx.Int64TraceCtx]()
 		defer objectpool.Put[ctx.Int64TraceCtx](c)
 
@@ -183,7 +182,7 @@ func main() {
 	go func() {
 		http.ListenAndServe(":9090", nil)
 	}()
-	zerolog.SetGlobalLevel(zerolog.InfoLevel)
+	zerolog.SetGlobalLevel(zerolog.DebugLevel)
 	svc := NewTestService()
 	svc.Start()
 	for i := 0; i < 1; i++ {

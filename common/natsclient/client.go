@@ -24,10 +24,14 @@ import (
 )
 
 const (
-	totalSizeLen              = 4
-	maxProtoMsgSize           = math.MaxInt32 >> 8
-	waitSuccessCheckStr       = "///success/check///"
-	waitSuccessCheckStrSuffix = ".>///success/check///"
+	traceHeaderLen       = 2
+	msgNameSizeLen       = 1
+	msgDataSizeLen       = 3
+	totalSizeLen         = msgNameSizeLen + msgDataSizeLen
+	maxMsgDataSize       = math.MaxInt32 >> 8
+	waitSuccessCheckByte = '1'
+	waitSuccessCheckStr  = ".1"
+	normalCheckStr       = ".0"
 )
 
 type NatsClient struct {
@@ -288,7 +292,6 @@ func (this_ *NatsClient) QueueSubscribeWaitSuccess(subj string, h nats.MsgHandle
 	logger.Log.Info().Str("urls", this_.urls).Str("subj", subj).Msg("QueueSubscribeWaitSuccess")
 
 	// wait for success
-
 	_, err = this_.conn.Request(subj1, nil, this_.timeout)
 	if err != nil {
 		logger.Log.Error().Err(err).Str("subj", subj).Msg("QueueSubscribeWaitSuccess error")
@@ -590,7 +593,33 @@ func NatsUnmarshalResponse(data []byte) (string, []byte, *berror.ErrMsg) {
 		return "", nil, berror.NewProtocolStr("invalid msg data")
 	}
 	msgName := utils.BytesToString(data[totalSizeLen:dataIndex])
-	return msgName, data[dataIndex:], nil
+	return msgName, data[dataIndex : dataIndex+dataLen], nil
+}
+
+func NatsUnmarshalResponseMany(data []byte, f func(string, []byte) *berror.ErrMsg) *berror.ErrMsg {
+	for {
+		if len(data) == 0 {
+			return nil
+		}
+		if len(data) < totalSizeLen {
+			return berror.NewProtocolStr("invalid message")
+		}
+		msgNameLen := int(data[0])
+		if len(data) < totalSizeLen+msgNameLen {
+			return berror.NewProtocolStr("invalid msg data")
+		}
+		dataLen := int(data[1]) | (int(data[2]) << 8) | (int(data[3]) << 16)
+		dataIndex := totalSizeLen + msgNameLen
+		if len(data) != dataIndex+dataLen {
+			return berror.NewProtocolStr("invalid msg data")
+		}
+		msgName := utils.BytesToString(data[totalSizeLen:dataIndex])
+		err := f(msgName, data[dataIndex:dataIndex+dataLen])
+		if err != nil {
+			return err
+		}
+		data = data[:dataIndex+dataLen]
+	}
 }
 
 // NatsUnmarshalResponseWithout Unmarshal response data from nats.Msg.Data
@@ -656,7 +685,7 @@ func natsMsgReplyOne(reply *nats.Msg, respMsg proto.Message) *berror.ErrMsg {
 		return berror.NewProtocolStr("respMsg name too long")
 	}
 	msgSize := define.ProtoSize(respMsg)
-	if msgSize > maxProtoMsgSize {
+	if msgSize > maxMsgDataSize {
 		return berror.NewProtocolStr("respMsg data too long")
 	}
 	b := objectpool.GetBytes(totalSizeLen + msgNameSize + msgSize)
@@ -674,7 +703,7 @@ func natsMsgReplyOne(reply *nats.Msg, respMsg proto.Message) *berror.ErrMsg {
 
 func NatsMarshalSize(msg proto.Message) (int, *berror.ErrMsg) {
 	msgSize := define.ProtoSize(msg)
-	if msgSize > maxProtoMsgSize {
+	if msgSize > maxMsgDataSize {
 		return 0, berror.NewProtocolStr("msg data too long")
 	}
 	msgNameLen := len(define.ProtoMessageName(msg))

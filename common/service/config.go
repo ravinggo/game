@@ -10,7 +10,7 @@ import (
 	"github.com/ravinggo/game/common/natsclient"
 )
 
-type HookUserMsg[T1 any, US natsclient.ServerUserSubjectPtr[T1]] = func(us US, traceData []byte, msgName string, msgData []byte, msg *nats.Msg)
+type HookUserMsg[T1 any, US natsclient.ServerUserSubjectPtr[T1]] = func(us US, traceData []byte, data []byte, msg *nats.Msg)
 
 // HashRunMode 0: FixedHashPoolMode, 1: OneHashOneGo
 // FixedHashPoolMode use hash to run task,

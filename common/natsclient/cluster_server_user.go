@@ -35,11 +35,14 @@ func NewClusterClientServerUser[T any, US ServerUserSubjectPtr[T]](
 	}
 	uh := func(msg *nats.Msg) {
 		defer safego.Recover()
-		if strings.HasSuffix(msg.Subject, waitSuccessCheckStrSuffix) && msg.Reply != "" && len(msg.Data) == 0 {
+		if strings.HasSuffix(msg.Subject, waitSuccessCheckStr) && msg.Reply != "" && len(msg.Data) == 0 {
 			err := msg.Respond(nil)
 			if err != nil {
 				logger.Log.Error().Err(err).Str("msgName", msg.Subject).Msg("deal wait success error")
 			}
+			return
+		} else if !strings.HasSuffix(msg.Subject, normalCheckStr) {
+			// invalid msg
 			return
 		}
 		userHandler(msg)
@@ -95,11 +98,14 @@ func NewClusterClientServerUser2[T any, US ServerUserSubjectPtr[T]](
 	}
 	uh := func(msg *nats.Msg) {
 		defer safego.Recover()
-		if strings.HasSuffix(msg.Subject, waitSuccessCheckStrSuffix) && msg.Reply != "" && len(msg.Data) == 0 {
+		if strings.HasSuffix(msg.Subject, waitSuccessCheckStr) && msg.Reply != "" && len(msg.Data) == 0 {
 			err := msg.Respond(nil)
 			if err != nil {
 				logger.Log.Error().Err(err).Str("msgName", msg.Subject).Msg("deal wait success error")
 			}
+			return
+		} else if !strings.HasSuffix(msg.Subject, normalCheckStr) {
+			// invalid msg
 			return
 		}
 		userHandler(msg)
@@ -240,6 +246,16 @@ func (cnc *ClusterClientServerUser[T, US]) PublishUser(c ctx.IContext, us US, pu
 
 	client := cnc.natsClients[us.ToHash()%nsl]
 	return client.PublishUser(c, us, pubMsg)
+}
+
+func (cnc *ClusterClientServerUser[T, US]) PublishUserMany(c ctx.IContext, us US, pubMsg ...proto.Message) *berror.ErrMsg {
+	nsl := uint64(len(cnc.natsClients))
+	if nsl == 0 {
+		panic("nats client is empty")
+	}
+
+	client := cnc.natsClients[us.ToHash()%nsl]
+	return client.PublishUserMany(c, us, pubMsg...)
 }
 
 // RequestUser Request msg user topic for one NatsClient.

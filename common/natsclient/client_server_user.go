@@ -36,14 +36,11 @@ type ServerUserSubject interface {
 	// param b from objectpool.GetBytes
 	CreateSubj(*objectpool.Bytes)
 
-	// CreateSubjForCallSize calculate size of CreateSubjForCall
-	CreateSubjForCallSize() int
+	// CreateSubjSize calculate size of CreateSubj
+	CreateSubjSize() int
 
-	// CreateSubjForCall create subj for NatsClient.PublishServerUser and NatsClient.RequestUser
-	CreateSubjForCall(*objectpool.Bytes)
-
-	// ParseSubjForCall parse for subj
-	ParseSubjForCall(s string) error
+	// ParseSubj parse for subj
+	ParseSubj(s string) error
 }
 
 type ServerUserSubjectPtr[T any] interface {
@@ -67,13 +64,17 @@ func NewServerUserNatsClient[T any, US ServerUserSubjectPtr[T]](
 	}
 	uh := func(msg *nats.Msg) {
 		defer safego.Recover()
-		if strings.HasSuffix(msg.Subject, waitSuccessCheckStrSuffix) && msg.Reply != "" && len(msg.Data) == 0 {
+		if strings.HasSuffix(msg.Reply, waitSuccessCheckStr) && msg.Reply != "" && len(msg.Data) == 0 {
 			err := msg.Respond(nil)
 			if err != nil {
 				logger.Log.Error().Err(err).Str("msgName", msg.Subject).Msg("deal wait success error")
 			}
 			return
+		} else if !strings.HasSuffix(msg.Reply, normalCheckStr) {
+			// invalid msg
+			return
 		}
+
 		userHandler(msg)
 	}
 	var un UNOptions
@@ -128,36 +129,31 @@ type ServerIntUserSubject struct {
 }
 
 func (u *ServerIntUserSubject) CreateSubj(b *objectpool.Bytes) {
+	b.Reset()
 	b.WriteString(u.ServerType)
 	b.WriteBytes('/')
 	b.WriteInt(u.ServerId)
 	b.WriteBytes('/')
 	b.WriteInt(u.RoleId)
-	b.WriteString(".>")
 }
 func (u *ServerIntUserSubject) ToHash() uint64 {
 	return uint64(u.RoleId)
 }
 
-func (u *ServerIntUserSubject) CreateSubjForCallSize() int {
+func (u *ServerIntUserSubject) CreateSubjSize() int {
 	return len(u.ServerType) + utils.CountIntByte(u.ServerId) + utils.CountIntByte(u.RoleId) + 2
 }
 
-func (u *ServerIntUserSubject) CreateSubjForCall(bytes *objectpool.Bytes) {
-	bytes.Reset()
-	bytes.WriteString(u.ServerType)
-	bytes.WriteBytes('/')
-	bytes.WriteInt(u.ServerId)
-	bytes.WriteBytes('/')
-	bytes.WriteInt(u.RoleId)
-}
-
-func (u *ServerIntUserSubject) ParseSubjForCall(s string) error {
+func (u *ServerIntUserSubject) ParseSubj(s string) error {
 	i1 := strings.LastIndexByte(s, '/')
 	if i1 == -1 {
 		return define.ErrInvalidUserSubj
 	}
-	roleId, err := strconv.ParseInt(s[i1+1:], 10, 64)
+	i2 := strings.LastIndexByte(s, '.')
+	if i2 == -1 {
+		return define.ErrInvalidUserSubj
+	}
+	roleId, err := strconv.ParseInt(s[i1+1:i2], 10, 64)
 	if err != nil {
 		return errors.Join(define.ErrInvalidUserSubj, err)
 	}
@@ -177,33 +173,26 @@ func (u *ServerStringUserSubject) CreateSubj(b *objectpool.Bytes) {
 	b.WriteInt(u.ServerId)
 	b.WriteBytes('/')
 	b.WriteString(u.RoleId)
-	b.WriteString(".>")
 }
 
 func (u *ServerStringUserSubject) ToHash() uint64 {
 	return crc64.Checksum(utils.StringToBytes(u.RoleId), crc64.MakeTable(crc64.ECMA))
 }
 
-func (u *ServerStringUserSubject) CreateSubjForCallSize() int {
+func (u *ServerStringUserSubject) CreateSubjSize() int {
 	return len(u.ServerType) + utils.CountIntByte(u.ServerId) + len(u.RoleId) + 2
 }
 
-func (u *ServerStringUserSubject) CreateSubjForCall(bytes *objectpool.Bytes) {
-	bytes.Reset()
-	bytes.WriteString(u.ServerType)
-	bytes.WriteBytes('/')
-	bytes.WriteInt(u.ServerId)
-	bytes.WriteBytes('/')
-	bytes.WriteString(u.RoleId)
-}
-
-func (u *ServerStringUserSubject) ParseSubjForCall(s string) error {
+func (u *ServerStringUserSubject) ParseSubj(s string) error {
 	i1 := strings.LastIndexByte(s, '/')
 	if i1 == -1 {
 		return define.ErrInvalidUserSubj
 	}
-
-	u.RoleId = s[i1+1:]
+	i2 := strings.LastIndexByte(s, '.')
+	if i2 == -1 {
+		return define.ErrInvalidUserSubj
+	}
+	u.RoleId = s[i1+1 : i2]
 	return nil
 }
 
@@ -234,9 +223,10 @@ func (nc *ServerUserNatsClient[T, US]) startUserChan() {
 // SubscribeUser  subscribe user topic
 // param us not escapes to heap
 func (nc *ServerUserNatsClient[T, US]) SubscribeUser(us US) bool {
-	b := objectpool.GetBytes(0)
+	b := objectpool.GetBytes(us.CreateSubjSize())
 	defer objectpool.PutBytes(b)
 	us.CreateSubj(&b)
+	b = append(b, ".*"...)
 	subj := string(b.Bytes())
 	if _, ok := nc.subs.Get(subj); ok {
 		return false
@@ -260,9 +250,10 @@ func (nc *ServerUserNatsClient[T, US]) SubscribeUser(us US) bool {
 
 // SubscribeUserWaitSuccess SubscribeUser and wait for success
 func (nc *ServerUserNatsClient[T, US]) SubscribeUserWaitSuccess(us US) bool {
-	b := objectpool.GetBytes(0)
+	b := objectpool.GetBytes(us.CreateSubjSize())
 	defer objectpool.PutBytes(b)
 	us.CreateSubj(&b)
+	b = append(b, ".*"...)
 	subj := string(b.Bytes())
 	if _, ok := nc.subs.Get(subj); ok {
 		return false
@@ -282,7 +273,8 @@ func (nc *ServerUserNatsClient[T, US]) SubscribeUserWaitSuccess(us US) bool {
 	logger.Log.Debug().Str("subj", subj).Msg("ClientSubscribeServerUser")
 
 	// wait for success
-	_, err = nc.conn.Request(subj+waitSuccessCheckStr, nil, nc.timeout)
+	b[len(b)-1] = waitSuccessCheckByte
+	_, err = nc.conn.Request(b.String(), nil, nc.timeout)
 	if err != nil {
 		logger.Log.Error().Err(err).Str("subj", subj).Msg("SubscribeUserWaitSuccess error")
 		return false
@@ -293,9 +285,10 @@ func (nc *ServerUserNatsClient[T, US]) SubscribeUserWaitSuccess(us US) bool {
 // QueueSubscribeUser queue subscribe user topic
 // param us not escapes to heap
 func (nc *ServerUserNatsClient[T, US]) QueueSubscribeUser(us US, handler nats.MsgHandler) bool {
-	b := objectpool.GetBytes(0)
+	b := objectpool.GetBytes(us.CreateSubjSize())
 	defer objectpool.PutBytes(b)
 	us.CreateSubj(&b)
+	b = append(b, ".*"...)
 	subj := string(b.Bytes())
 	if _, ok := nc.subs.Get(subj); ok {
 		return false
@@ -319,9 +312,10 @@ func (nc *ServerUserNatsClient[T, US]) QueueSubscribeUser(us US, handler nats.Ms
 
 // QueueSubscribeUserWaitSuccess QueueSubscribeUser and wait for success
 func (nc *ServerUserNatsClient[T, US]) QueueSubscribeUserWaitSuccess(us US) bool {
-	b := objectpool.GetBytes(0)
+	b := objectpool.GetBytes(us.CreateSubjSize())
 	defer objectpool.PutBytes(b)
 	us.CreateSubj(&b)
+	b = append(b, ".*"...)
 	subj := string(b.Bytes())
 	if _, ok := nc.subs.Get(subj); ok {
 		return false
@@ -341,9 +335,10 @@ func (nc *ServerUserNatsClient[T, US]) QueueSubscribeUserWaitSuccess(us US) bool
 	}
 	logger.Log.Info().Str("subj", subj).Str("group", group).Msg("ClientQueueSubscribeServerUser")
 	// wait for success
-	_, err = nc.conn.Request(subj+waitSuccessCheckStr, nil, nc.timeout)
+	b[len(b)-1] = waitSuccessCheckByte
+	_, err = nc.conn.Request(b.String(), nil, nc.timeout)
 	if err != nil {
-		logger.Log.Error().Err(err).Str("subj", subj).Msg("QueueSubscribeUserWaitSuccess error")
+		logger.Log.Error().Err(err).Str("subj", subj).Msg("SubscribeUserWaitSuccess error")
 		return false
 	}
 	return true
@@ -355,6 +350,7 @@ func (nc *ServerUserNatsClient[T, US]) UnsubscribeUser(us US) {
 	b := objectpool.GetBytes(0)
 	defer objectpool.PutBytes(b)
 	us.CreateSubj(&b)
+	b = append(b, ".*"...)
 	subj := b.String()
 	if v, ok := nc.subs.GetAndRemove(subj); ok {
 		if v.IsValid() {
@@ -387,13 +383,20 @@ func (nc *ServerUserNatsClient[T, US]) PublishUser(c ctx.IContext, us US, pubMsg
 		return berror.NewProtocolStr("trace data too long,max size is 65535")
 	}
 	messageName := string(define.ProtoMessageName(pubMsg))
-	size := us.CreateSubjForCallSize() + 1 + len(messageName)
-	msgSize := define.ProtoSize(pubMsg)
-	b := objectpool.GetBytes(size + 2 + traceSize + msgSize)
+	lenMsgName := len(messageName)
+	if lenMsgName > math.MaxUint8 {
+		return berror.NewProtocolStr("message name too long,max size is 255")
+	}
+	topicSize := us.CreateSubjSize() + 2
+	msgDataSize := define.ProtoSize(pubMsg)
+	if msgDataSize > maxMsgDataSize {
+		return berror.NewProtocolStr("message data too long,max size is 8388607")
+	}
+	size := topicSize + traceHeaderLen + traceSize + totalSizeLen + lenMsgName + msgDataSize
+	b := objectpool.GetBytes(size)
 	defer objectpool.PutBytes(b)
-	us.CreateSubjForCall(&b)
-	b.WriteBytes('.')
-	b.WriteString(messageName)
+	us.CreateSubj(&b)
+	b = append(b, normalCheckStr...)
 	if traceSize > 0 {
 		b = append(b, byte(traceSize), byte(traceSize>>8))
 		b, err = traceCtx.TraceMarshalAppend(b)
@@ -403,13 +406,73 @@ func (nc *ServerUserNatsClient[T, US]) PublishUser(c ctx.IContext, us US, pubMsg
 	} else {
 		b = append(b, 0, 0)
 	}
+	b = append(b, byte(lenMsgName), byte(msgDataSize), byte(msgDataSize>>8), byte(msgDataSize>>16))
+	b = append(b, messageName...)
+
 	b, err = define.ProtoMarshalAppend(b, pubMsg)
 	if err != nil {
 		return berror.NewProtocolErr(err)
 	}
 
-	err = nc.conn.Publish(utils.BytesToString(b[:size]), b[size:])
+	err = nc.conn.Publish(utils.BytesToString(b[:topicSize]), b[topicSize:])
 	return berror.NewProtocolErr(err)
+}
+
+// PublishUserMany publish msg to user topic
+// param us,pubMsg escapes to heap
+// recommended use ClientPublishServerUser
+func (nc *ServerUserNatsClient[T, US]) PublishUserMany(c ctx.IContext, us US, pubMsg ...proto.Message) *berror.ErrMsg {
+	if len(pubMsg) == 0 {
+		return nil
+	}
+	if len(pubMsg) == 1 {
+		return nc.PublishUser(c, us, pubMsg[0])
+	}
+
+	traceSize := 0
+	var traceCtx ctx.Trace
+	if c != nil {
+		traceCtx = c.GetTrace()
+		if traceCtx != nil {
+			oldServerId, oldServerType := traceCtx.GetServerIdAndType()
+			traceCtx.SetServerIdAndType(baseenv.GetConfig().ServerId, baseenv.GetConfig().ServerType)
+			defer traceCtx.SetServerIdAndType(oldServerId, oldServerType)
+			traceSize = traceCtx.TraceMarshalSize()
+		}
+	}
+	if traceSize > math.MaxUint16 {
+		return berror.NewProtocolStr("trace data too long,max size is 65535")
+	}
+
+	allMsgSize, err := NatsMarshalManySize(pubMsg...)
+	if err != nil {
+		return err
+	}
+	topicSize := us.CreateSubjSize() + 2
+	size := topicSize + traceHeaderLen + traceSize + allMsgSize
+
+	b := objectpool.GetBytes(size)
+	defer objectpool.PutBytes(b)
+	us.CreateSubj(&b)
+	b = append(b, normalCheckStr...)
+	if traceSize > 0 {
+		b = append(b, byte(traceSize), byte(traceSize>>8))
+		var err error
+		b, err = traceCtx.TraceMarshalAppend(b)
+		if err != nil {
+			return berror.NewProtocolErr(err)
+		}
+	} else {
+		b = append(b, 0, 0)
+	}
+
+	err = NatsMarshalManyAppend(&b, pubMsg...)
+	if err != nil {
+		return err
+	}
+
+	e := nc.conn.Publish(utils.BytesToString(b[:topicSize]), b[topicSize:])
+	return berror.NewProtocolErr(e)
 }
 
 // RequestUser user topic rpc
@@ -432,13 +495,21 @@ func (nc *ServerUserNatsClient[T, US]) RequestUser(c ctx.IContext, us US, reqMsg
 		return berror.NewProtocolStr("trace data too long,max size is 65535")
 	}
 	messageName := string(define.ProtoMessageName(reqMsg))
-	size := us.CreateSubjForCallSize() + 1 + len(messageName)
-	msgSize := define.ProtoSize(reqMsg)
-	b := objectpool.GetBytes(size + 2 + traceSize + msgSize)
+	lenMsgName := len(messageName)
+	if lenMsgName > math.MaxUint8 {
+		return berror.NewProtocolStr("message name too long,max size is 255")
+	}
+	topicSize := us.CreateSubjSize() + 2
+	msgDataSize := define.ProtoSize(reqMsg)
+	if msgDataSize > maxMsgDataSize {
+		return berror.NewProtocolStr("message data too long,max size is 8388607")
+	}
+	size := topicSize + traceHeaderLen + traceSize + totalSizeLen + lenMsgName + msgDataSize
+
+	b := objectpool.GetBytes(size)
 	defer objectpool.PutBytes(b)
-	us.CreateSubjForCall(&b)
-	b.WriteBytes('.')
-	b.WriteString(messageName)
+	us.CreateSubj(&b)
+	b = append(b, normalCheckStr...)
 	if traceSize > 0 {
 		b = append(b, byte(traceSize), byte(traceSize>>8))
 		b, err = traceCtx.TraceMarshalAppend(b)
@@ -448,16 +519,39 @@ func (nc *ServerUserNatsClient[T, US]) RequestUser(c ctx.IContext, us US, reqMsg
 	} else {
 		b = append(b, 0, 0)
 	}
+	b = append(b, byte(lenMsgName), byte(msgDataSize), byte(msgDataSize>>8), byte(msgDataSize>>16))
+	b = append(b, messageName...)
 	b, err = define.ProtoMarshalAppend(b, reqMsg)
 	if err != nil {
 		return berror.NewProtocolErr(err)
 	}
-	outMsg, err := nc.conn.Request(utils.BytesToString(b[:size]), b[size:], nc.timeout)
+	outMsg, err := nc.conn.Request(utils.BytesToString(b[:topicSize]), b[topicSize:], nc.timeout)
 	if err != nil {
-		return berror.NewProtocolStr(utils.BytesToString(b[:size]) + "[" + nc.conn.ConnectedAddr() + "]:" + err.Error())
+		return berror.NewProtocolStr(utils.BytesToString(b[:topicSize]) + "[" + nc.conn.ConnectedAddr() + "]:" + err.Error())
 	}
 
 	return NatsUnmarshalResponseWithout(outMsg.Data, out)
+}
+
+func NatsParseUserMsgRaw(data []byte) ([]byte, []byte) {
+	traceSize := int(data[0]) | int(data[1])<<8
+	return data[traceHeaderLen : traceHeaderLen+traceSize], data[traceHeaderLen+traceSize:]
+}
+
+func NatsCheckMsg(data []byte) *berror.ErrMsg {
+	tempData := data
+	for {
+		if len(tempData) == 0 {
+			return nil
+		}
+		msgNameSize := int(tempData[0])
+		msgDataSize := int(tempData[1]) | int(tempData[2])<<8 | int(tempData[3])<<16
+		totalSize := msgNameSize + msgDataSize + totalSizeLen
+		if len(tempData) < totalSize {
+			return berror.NewProtocolStr("invalid msg")
+		}
+		tempData = tempData[totalSize:]
+	}
 }
 
 // ClientPublishServerUser publish msg to user topic
