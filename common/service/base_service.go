@@ -177,32 +177,7 @@ func (s *BaseService[TraceData, TP]) handleCtx(c *ctx.BaseCtx[TraceData, TP], e 
 }
 
 func (s *BaseService[TraceData, TP]) call(c *ctx.BaseCtx[TraceData, TP], e *handler.Elem[TraceData, TP]) {
-	var err *berror.ErrMsg
-	start := time.Now()
-	defer func() {
-		if err != nil {
-			logger.Log.Warn().
-				Str("req", e.MsgName()).
-				Err(err).
-				Dur("cost", time.Since(start)).
-				Msg("handle error")
-			if c.NatsMsg != nil {
-				errReply := natsclient.NatsMsgReplyError(c.NatsMsg, err)
-				if errReply != nil {
-					c.Error().Err(errReply).Msg("nats reply error")
-					berror.PutErr(errReply)
-				}
-			}
-			berror.PutErr(err)
-		}
-
-		c.Debug().
-			Str("req", e.MsgName()).
-			Dur("cost", time.Since(start)).
-			Msg("handle success")
-	}()
-	c.Debug().Str("req", e.MsgName()).Msg("handle start")
-	err = e.Call(c)
+	err := e.Call(c)
 	if err != nil {
 		return
 	}
@@ -214,7 +189,7 @@ func (s *BaseService[TraceData, TP]) call(c *ctx.BaseCtx[TraceData, TP], e *hand
 			e.RespPool().Put(c.Resp[last])
 		}
 		if err != nil {
-			return
+			logger.Log.Warn().Err(err).Msg("NatsMsgReply fail")
 		}
 	}
 }
