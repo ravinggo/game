@@ -1,4 +1,4 @@
-package localevent
+package publisherlocalevent
 
 import (
 	"math"

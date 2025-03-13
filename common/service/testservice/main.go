@@ -15,7 +15,7 @@ import (
 	"github.com/ravinggo/game/common/berror"
 	"github.com/ravinggo/game/common/ctx"
 	"github.com/ravinggo/game/common/handler"
-	"github.com/ravinggo/game/common/localevent"
+	callerlocalevent "github.com/ravinggo/game/common/localevent/caller-local-event"
 	"github.com/ravinggo/game/common/logger"
 	"github.com/ravinggo/game/common/natsclient"
 	"github.com/ravinggo/game/common/service"
@@ -52,8 +52,8 @@ func (t *TestService) Router() {
 	handler.RegisterRPCResp(t.svc.GetHandler(), "test1", t.Trace)
 	handler.RegisterEvent(t.svc.GetHandler(), "test2", t.TraceString)
 	handler.RegisterRPCResp(t.svc.GetHandler(), "test3", t.Error)
-	localevent.Register("test localevent eventString", t.eventString)
-	localevent.Register("test localevent eventInt", t.eventInt)
+	callerlocalevent.Register("test localevent eventString", t.eventString)
+	callerlocalevent.Register("test localevent eventInt", t.eventInt)
 }
 
 func (t *TestService) Start() {
@@ -82,7 +82,7 @@ func (t *TestService) Trace(c *ctx.Int64TraceCtx, req *basepb.IntTrace, resp *ba
 	}
 	atomic.AddInt64(&count, 1)
 	resp.RoleId = req.RoleId
-	return localevent.Call(c, req)
+	return callerlocalevent.Call(c, req)
 }
 
 func (t *TestService) eventString(c *ctx.Int64TraceCtx, req *basepb.StringTrace) *berror.ErrMsg {
@@ -94,7 +94,7 @@ func (t *TestService) eventInt(c *ctx.Int64TraceCtx, req *basepb.IntTrace) *berr
 }
 
 func (t *TestService) TraceString(c *ctx.Int64TraceCtx, req *basepb.StringTrace) *berror.ErrMsg {
-	err := localevent.Call(c, req)
+	err := callerlocalevent.Call(c, req)
 	if err != nil {
 		return err
 	}
@@ -182,10 +182,10 @@ func main() {
 	go func() {
 		http.ListenAndServe(":9090", nil)
 	}()
-	zerolog.SetGlobalLevel(zerolog.DebugLevel)
+	zerolog.SetGlobalLevel(zerolog.WarnLevel)
 	svc := NewTestService()
 	svc.Start()
-	for i := 0; i < 1; i++ {
+	for i := 0; i < 1000; i++ {
 		go func() {
 			for {
 				roleId := atomic.AddInt64(&userCount, 1)

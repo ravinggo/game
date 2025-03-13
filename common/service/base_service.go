@@ -20,7 +20,6 @@ import (
 	"github.com/ravinggo/game/common/define"
 	"github.com/ravinggo/game/common/eventloop"
 	"github.com/ravinggo/game/common/handler"
-	"github.com/ravinggo/game/common/localevent"
 	"github.com/ravinggo/game/common/logger"
 	"github.com/ravinggo/game/common/natsclient"
 	"github.com/ravinggo/game/common/safego"
@@ -148,7 +147,6 @@ func (s *BaseService[TraceData, TP]) Start(f func(any)) {
 		}
 	}
 	s.GetHandler().Logger()
-	localevent.Logger()
 	s.subscribe()
 	s.el.Start(
 		func(e any) {

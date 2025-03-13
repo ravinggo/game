@@ -618,7 +618,7 @@ func NatsUnmarshalResponseMany(data []byte, f func(string, []byte) *berror.ErrMs
 		if err != nil {
 			return err
 		}
-		data = data[:dataIndex+dataLen]
+		data = data[dataIndex+dataLen:]
 	}
 }
 

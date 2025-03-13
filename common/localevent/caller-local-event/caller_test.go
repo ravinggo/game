@@ -1,4 +1,4 @@
-package localevent
+package callerlocalevent
 
 import (
 	"testing"
@@ -23,23 +23,6 @@ func BenchmarkLocalEvent(b *testing.B) {
 
 	for i := 0; i < b.N; i++ {
 		err := Call(&c, testStruct{Id: i})
-		if err != nil {
-			panic(err)
-		}
-	}
-}
-
-func BenchmarkLocalEvent1(b *testing.B) {
-	b.ReportAllocs()
-	b.ResetTimer()
-	call := MiddleLocalEvent[ctx.IntTrace](
-		func(ctx *ctx.Int64TraceCtx) *berror.ErrMsg {
-			return nil
-		},
-	)
-	for i := 0; i < b.N; i++ {
-		Publish(&c, testStruct{Id: 1})
-		err := call(&c)
 		if err != nil {
 			panic(err)
 		}
