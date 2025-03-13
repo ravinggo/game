@@ -13,7 +13,7 @@ require (
 	github.com/nats-io/nats.go v1.39.1
 	github.com/petermattis/goid v0.0.0-20250303134427-723919f7f203
 	github.com/ravinggo/objectpool v1.0.2
-	github.com/ravinggo/tools v0.0.10
+	github.com/ravinggo/tools v0.0.11
 	github.com/ravinggo/zerolog v0.0.2
 	github.com/stretchr/testify v1.10.0
 	google.golang.org/protobuf v1.36.5
