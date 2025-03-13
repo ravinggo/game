@@ -97,11 +97,11 @@ func Register[CP ctx.IContextPtr[CTX], T, CTX any](desc string, f func(CP, T) *b
 }
 
 // Call sync call local event
-func Call[TraceData, T any, TP ctx.TracePtr[TraceData]](c *ctx.BaseCtx[TraceData, TP], data T) *berror.ErrMsg {
+func Call[CP ctx.IContextPtr[CTX], CTX, T any](c CP, data T) *berror.ErrMsg {
 	ptr, index := objectpool.GetPtrAndIndex[T]()
 	es := getES(ptr, index)
 	for _, e := range es {
-		if err := e.f.(func(*ctx.BaseCtx[TraceData, TP], T) *berror.ErrMsg)(c, data); err != nil {
+		if err := e.f.(func(CP, T) *berror.ErrMsg)(c, data); err != nil {
 			return err
 		}
 	}
