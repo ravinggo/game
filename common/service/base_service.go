@@ -26,6 +26,8 @@ import (
 	"github.com/ravinggo/game/common/task_group"
 )
 
+var ErrNotFoundHandler = berror.NewProtocolStr("not found handler")
+
 type BaseService[TraceData any, TP ctx.TracePtr[TraceData]] struct {
 	h             *handler.Handler[TraceData, TP]
 	natsCluster   *natsclient.ClusterClient
@@ -246,6 +248,9 @@ func (s *BaseService[TraceData, TP]) dealNatsMsg(msg *nats.Msg) {
 	elem, ok := s.h.GetHandler(msgName)
 	if !ok {
 		logger.Log.Info().Str("msgName", msgName).Str("subj", msg.Subject).Msg("msg not registered")
+		if msg.Reply != "" {
+			_ = natsclient.NatsMsgReplyError(msg, ErrNotFoundHandler)
+		}
 		return
 	}
 
