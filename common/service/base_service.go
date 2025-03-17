@@ -179,6 +179,15 @@ func (s *BaseService[TraceData, TP]) handleCtx(c *ctx.BaseCtx[TraceData, TP], e 
 func (s *BaseService[TraceData, TP]) call(c *ctx.BaseCtx[TraceData, TP], e *handler.Elem[TraceData, TP]) {
 	err := e.Call(c)
 	if err != nil {
+		if e.IsRPCResp() {
+			err = natsclient.NatsMsgReplyError(c.NatsMsg, err)
+			if err != nil {
+				logger.Log.Warn().Err(err).Msg("NatsMsgReplyError fail")
+			}
+			last := len(c.Resp) - 1
+			e.RespPool().Put(c.Resp[last])
+		}
+
 		return
 	}
 
