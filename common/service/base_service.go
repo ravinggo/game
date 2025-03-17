@@ -184,8 +184,6 @@ func (s *BaseService[TraceData, TP]) call(c *ctx.BaseCtx[TraceData, TP], e *hand
 			if err != nil {
 				logger.Log.Warn().Err(err).Msg("NatsMsgReplyError fail")
 			}
-			last := len(c.Resp) - 1
-			e.RespPool().Put(c.Resp[last])
 		}
 
 		return
