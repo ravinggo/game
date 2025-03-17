@@ -81,11 +81,9 @@ func NewNatsClient(urls string, rpcTimeout time.Duration, options ...nats.Option
 			}
 		}
 	}
-
-	if opts.Timeout == 0 {
-		opts.Timeout = time.Second * 10
+	if nc.timeout == 0 {
+		nc.timeout = time.Second * 10
 	}
-	nc.timeout = opts.Timeout
 
 	if opts.ReconnectWait == 0 {
 		opts.ReconnectWait = time.Millisecond * 10
