@@ -444,7 +444,7 @@ func (this_ *NatsClient) PublishRawData(c ctx.IContext, toServerId int64, msgNam
 
 	data := b
 	if toServerId > 0 {
-		data = b[msgNameSize:]
+		data = b[msgNameSize : cap(b)-msgNameSize][:0]
 		index := strings.LastIndexByte(msgName, '.')
 		b = append(b, msgName[:index]...) // index != -1
 		b = append(b, '.')
@@ -768,13 +768,16 @@ func (this_ *NatsClient) RequestRaw(c ctx.IContext, toServerId int64, reqMsgName
 		}
 	}
 
-	size := 2 + len(reqMsgData) + traceSize + msgNameSize
+	size := 2 + len(reqMsgData) + traceSize
+	if toServerId > 0 {
+		size += msgNameSize
+	}
 	b := objectpool.GetSlice[byte](size)
 	defer objectpool.PutSlice(b)
 
 	data := b
 	if toServerId > 0 {
-		data = b[msgNameSize:]
+		data = b[msgNameSize : cap(b)-msgNameSize][:0]
 		index := strings.LastIndexByte(reqMsgName, '.')
 		b = append(b, reqMsgName[:index]...) // index != -1
 		b = append(b, '.')
