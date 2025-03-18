@@ -185,7 +185,6 @@ func (s *BaseService[TraceData, TP]) call(c *ctx.BaseCtx[TraceData, TP], e *hand
 				logger.Log.Warn().Err(err).Msg("NatsMsgReplyError fail")
 			}
 		}
-
 		return
 	}
 
