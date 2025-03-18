@@ -768,10 +768,7 @@ func (this_ *NatsClient) RequestRaw(c ctx.IContext, toServerId int64, reqMsgName
 		}
 	}
 
-	size := 2 + len(reqMsgData) + traceSize
-	if toServerId > 0 {
-		size += msgNameSize
-	}
+	size := 2 + len(reqMsgData) + traceSize + msgNameSize
 	b := objectpool.GetSlice[byte](size)
 	defer objectpool.PutSlice(b)
 
