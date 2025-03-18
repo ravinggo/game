@@ -262,13 +262,13 @@ func registerRPCResp[TP ctx.TracePtr[TraceData], REQ define.ProtoMessagePtr[T1],
 	h.handle[msgName] = &Elem[TraceData, TP]{
 		h: func(c *ctx.BaseCtx[TraceData, TP]) *berror.ErrMsg {
 			resp := respPool.Get().(RESP)
+			c.Resp = append(c.Resp, resp)
 			err := f(c, c.Req.(REQ), resp)
 			if err != nil {
 				respPool.Put(resp)
 				return err
 			}
 
-			c.Resp = append(c.Resp, resp)
 			return nil
 		},
 		desc:      desc,

@@ -191,8 +191,7 @@ func (s *BaseService[TraceData, TP]) call(c *ctx.BaseCtx[TraceData, TP], e *hand
 	if c.NatsMsg != nil && len(c.Resp) != 0 {
 		err = natsclient.NatsMsgReply(c.NatsMsg, c.Resp...)
 		if e.IsRPCResp() {
-			last := len(c.Resp) - 1
-			e.RespPool().Put(c.Resp[last])
+			e.RespPool().Put(c.Resp[0])
 		}
 		if err != nil {
 			logger.Log.Warn().Err(err).Msg("NatsMsgReply fail")
