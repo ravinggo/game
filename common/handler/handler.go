@@ -190,11 +190,12 @@ func registerRPC[TP ctx.TracePtr[TraceData], REQ define.ProtoMessagePtr[T1], RES
 	midS = append(midS, middlewares...)
 	h.handle[msgName] = &Elem[TraceData, TP]{
 		h: func(c *ctx.BaseCtx[TraceData, TP]) *berror.ErrMsg {
+			c.Resp = append(c.Resp, nil)
 			ret, err := f(c, c.Req.(REQ))
 			if err != nil {
 				return err
 			}
-			c.Resp = append(c.Resp, ret)
+			c.Resp[0] = ret
 			return nil
 		},
 		desc:     desc,
