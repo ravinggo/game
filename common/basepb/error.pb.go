@@ -275,6 +275,9 @@ func (m *ErrorInfo) ProtoReflect() google_golang_org_protobuf_reflect_protorefle
 func (m *ErrorMessage) ProtoReflect() google_golang_org_protobuf_reflect_protoreflect.Message {
 	return nil
 }
+
+var _ google_golang_org_protobuf_reflect_protoreflect.FullName = ""
+
 func (m *ErrorInfo) Marshal() (dAtA []byte, err error) {
 	size := m.Size()
 	dAtA = make([]byte, size)
