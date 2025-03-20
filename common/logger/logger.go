@@ -37,10 +37,11 @@ type (
 )
 
 var (
-	Log *Logger
+	Log      *Logger
+	LogSkip3 Logger
 )
 
-func init() {
+func InitDefaultLogger() {
 	envCnf := baseenv.GetConfig()
 	if !envCnf.LogTimestamp {
 		zerolog.TimeFieldFormat = "2006-01-02T15:04:05.000Z07:00"
@@ -129,12 +130,14 @@ func init() {
 	}
 	log.Logger = ctx.Logger()
 	Log = &log.Logger
+	LogSkip3 = Log.With().CallerWithSkipFrameCount(3).Logger()
 }
 
 // SetLogger set default logger
 func SetLogger(l Logger) {
 	log.Logger = l
 	Log = &l
+	LogSkip3 = Log.With().CallerWithSkipFrameCount(3).Logger()
 }
 
 func getLoggerLevel() zerolog.Level {

@@ -179,6 +179,7 @@ var subCount int64
 var userCount int64 = 1
 
 func main() {
+	logger.InitDefaultLogger()
 	go func() {
 		http.ListenAndServe(":9090", nil)
 	}()

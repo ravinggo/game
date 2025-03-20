@@ -4,12 +4,6 @@ import (
 	"github.com/ravinggo/game/common/logger"
 )
 
-var log logger.Logger
-
-func init() {
-	log = logger.Log.With().CallerWithSkipFrameCount(3).Logger()
-}
-
 func (c *BaseCtx[TraceData, TP]) doTrace(e *logger.Event) *logger.Event {
 	trace := c.GetTrace()
 	if trace != nil {
@@ -19,35 +13,35 @@ func (c *BaseCtx[TraceData, TP]) doTrace(e *logger.Event) *logger.Event {
 }
 
 func (c *BaseCtx[TraceData, TP]) Trace() *logger.Event {
-	return c.doTrace(log.Trace())
+	return c.doTrace(logger.LogSkip3.Trace())
 }
 
 func (c *BaseCtx[TraceData, TP]) Debug() *logger.Event {
-	return c.doTrace(log.Debug())
+	return c.doTrace(logger.LogSkip3.Debug())
 }
 
 func (c *BaseCtx[TraceData, TP]) Info() *logger.Event {
-	return c.doTrace(log.Info())
+	return c.doTrace(logger.LogSkip3.Info())
 }
 
 func (c *BaseCtx[TraceData, TP]) Warn() *logger.Event {
-	return c.doTrace(log.Warn())
+	return c.doTrace(logger.LogSkip3.Warn())
 }
 
 func (c *BaseCtx[TraceData, TP]) Error() *logger.Event {
-	return c.doTrace(log.Error())
+	return c.doTrace(logger.LogSkip3.Error())
 }
 
 func (c *BaseCtx[TraceData, TP]) Fatal() *logger.Event {
-	return c.doTrace(log.Fatal())
+	return c.doTrace(logger.LogSkip3.Fatal())
 }
 
 func (c *BaseCtx[TraceData, TP]) Panic() *logger.Event {
-	return c.doTrace(log.Panic())
+	return c.doTrace(logger.LogSkip3.Panic())
 }
 
 func (c *BaseCtx[TraceData, TP]) NoLevel() *logger.Event {
-	return c.doTrace(log.Log())
+	return c.doTrace(logger.LogSkip3.Log())
 }
 
 func (c *BaseCtx[TraceData, TP]) Disabled() *logger.Event {
@@ -55,5 +49,5 @@ func (c *BaseCtx[TraceData, TP]) Disabled() *logger.Event {
 }
 
 func (c *BaseCtx[TraceData, TP]) WithLevel(level logger.Level) *logger.Event {
-	return c.doTrace(log.WithLevel(level))
+	return c.doTrace(logger.LogSkip3.WithLevel(level))
 }
