@@ -169,6 +169,7 @@ func (s *BaseService[TraceData, TP]) Start(f func(any)) {
 func (s *BaseService[TraceData, TP]) handleCtx(c *ctx.BaseCtx[TraceData, TP], e *handler.Elem[TraceData, TP]) {
 	s.call(c, e)
 	if c.Req != nil {
+		proto.Reset(c.Req)
 		e.ReqPool().Put(c.Req)
 		c.Req = nil
 	}
@@ -191,7 +192,9 @@ func (s *BaseService[TraceData, TP]) call(c *ctx.BaseCtx[TraceData, TP], e *hand
 	if c.NatsMsg != nil && len(c.Resp) != 0 {
 		err = natsclient.NatsMsgReply(c.NatsMsg, c.Resp...)
 		if e.IsRPCResp() {
-			e.RespPool().Put(c.Resp[0])
+			resp := c.Resp[0]
+			proto.Reset(resp)
+			e.RespPool().Put(resp)
 		}
 		if err != nil {
 			logger.Log.Warn().Err(err).Msg("NatsMsgReply fail")
