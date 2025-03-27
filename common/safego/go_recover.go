@@ -1,13 +1,17 @@
 package safego
 
 import (
+	"fmt"
+
+	"github.com/pkg/errors"
+
 	"github.com/ravinggo/game/common/logger"
 )
 
 // Recover panic of default logger
 func Recover() {
 	if e := recover(); e != nil {
-		logger.Log.Error().Any("panic info", e).Msg("panic")
+		logger.Log.Error().Err(errors.New(fmt.Sprintf("panic:%v", e))).Send()
 	}
 }
 
@@ -23,7 +27,7 @@ func RecoverFunc(panicHandler func(e interface{})) {
 // RecoverWithLogger panic of log
 func RecoverWithLogger(log logger.ILogger) {
 	if e := recover(); e != nil {
-		log.Error().Any("panic info", e).Msg("panic")
+		log.Error().Err(errors.New(fmt.Sprintf("panic:%v", e))).Send()
 	}
 }
 

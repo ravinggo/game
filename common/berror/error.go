@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"unsafe"
 
+	errors2 "github.com/pkg/errors"
+
 	baseenv "github.com/ravinggo/game/common/base-env"
 	"github.com/ravinggo/game/common/basepb"
 	"github.com/ravinggo/game/common/define"
@@ -92,6 +94,10 @@ func (this_ *ErrMsg) String() string {
 
 func (this_ *ErrMsg) WithStackTrace() {
 	this_.StackStace = *(*[]uint64)(unsafe.Pointer(utils.Callers()))
+}
+
+func (this_ *ErrMsg) StackTrace() errors2.StackTrace {
+	return *(*errors2.StackTrace)(unsafe.Pointer(&this_.StackStace))
 }
 
 func (this_ *ErrMsg) IsErrorNormal() bool {

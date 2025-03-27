@@ -12,9 +12,10 @@ require (
 	github.com/mailru/easyjson v0.9.0
 	github.com/nats-io/nats.go v1.39.1
 	github.com/petermattis/goid v0.0.0-20250319124200-ccd6737f222a
+	github.com/pkg/errors v0.9.1
 	github.com/ravinggo/objectpool v1.0.2
 	github.com/ravinggo/tools v0.0.17
-	github.com/ravinggo/zerolog v0.0.2
+	github.com/ravinggo/zerolog v0.0.3
 	github.com/stretchr/testify v1.10.0
 	google.golang.org/protobuf v1.36.5
 	gopkg.in/natefinch/lumberjack.v2 v2.2.1
@@ -28,7 +29,6 @@ require (
 	github.com/kr/text v0.2.0 // indirect
 	github.com/nats-io/nkeys v0.4.10 // indirect
 	github.com/nats-io/nuid v1.0.1 // indirect
-	github.com/pkg/errors v0.9.1 // indirect
 	github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2 // indirect
 	github.com/rogpeppe/go-internal v1.14.1 // indirect
 	github.com/spf13/pflag v1.0.6 // indirect

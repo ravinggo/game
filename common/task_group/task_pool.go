@@ -28,10 +28,8 @@ func NewTaskPool(poolSize int64, maxCap int64) *TaskPool {
 func (tp *TaskPool) PutForce(f func()) {
 	if atomic.AddInt64(&tp.poolSize, 1) <= tp.maxCap {
 		go func() {
-			defer func() {
-				safego.Recover()
-				atomic.AddInt64(&tp.poolSize, -1)
-			}()
+			defer safego.Recover()
+			defer atomic.AddInt64(&tp.poolSize, -1)
 			f()
 			for {
 				f, ok := <-tp.c
@@ -51,10 +49,8 @@ func (tp *TaskPool) PutForce(f func()) {
 func (tp *TaskPool) Put(f func()) bool {
 	if atomic.AddInt64(&tp.poolSize, 1) <= tp.maxCap {
 		go func() {
-			defer func() {
-				safego.Recover()
-				atomic.AddInt64(&tp.poolSize, -1)
-			}()
+			defer safego.Recover()
+			defer atomic.AddInt64(&tp.poolSize, -1)
 
 			f()
 			for {

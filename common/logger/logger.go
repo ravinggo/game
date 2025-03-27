@@ -1,6 +1,7 @@
 package logger
 
 import (
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
@@ -8,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/pkg/errors"
 	"github.com/ravinggo/zerolog"
 	"github.com/ravinggo/zerolog/log"
 	"github.com/ravinggo/zerolog/pkgerrors"
@@ -157,4 +159,33 @@ func getLoggerLevel() zerolog.Level {
 	default:
 		return zerolog.DebugLevel
 	}
+}
+
+func MarshalStack(err error) interface{} {
+	type stackTracer interface {
+		StackTrace() errors.StackTrace
+	}
+	var sterr stackTracer
+	var ok bool
+	for err != nil {
+		sterr, ok = err.(stackTracer)
+		if ok {
+			break
+		}
+
+		u, ok := err.(interface {
+			Unwrap() error
+		})
+		if !ok {
+			return nil
+		}
+
+		err = u.Unwrap()
+	}
+	if sterr == nil {
+		return nil
+	}
+
+	st := sterr.StackTrace()
+	return fmt.Sprintf("%+v", st)
 }

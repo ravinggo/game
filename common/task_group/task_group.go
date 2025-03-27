@@ -27,7 +27,10 @@ func NewTaskGroup[T any](f func(TaskGroupElem[T]), maxCap int) *TaskGroup[T] {
 	}
 	tg := &TaskGroup[T]{
 		maxCap: maxCap,
-		f:      f,
+		f: func(t TaskGroupElem[T]) {
+			defer safego.Recover()
+			f(t)
+		},
 	}
 	return tg
 }
@@ -68,7 +71,6 @@ func (this_ *TaskGroup[T]) PutForce(d T, f func()) {
 	if run {
 		go func() {
 			defer func() {
-				safego.Recover()
 				if this_.onStop != nil {
 					this_.onStop()
 				}
@@ -122,7 +124,6 @@ func (this_ *TaskGroup[T]) Put(d T, f func()) bool {
 	if run {
 		go func() {
 			defer func() {
-				safego.Recover()
 				if this_.onStop != nil {
 					this_.onStop()
 				}

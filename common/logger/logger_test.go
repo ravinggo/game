@@ -2,15 +2,22 @@ package logger
 
 import (
 	"io"
-	"os"
 	"testing"
+
+	baseenv "github.com/ravinggo/game/common/base-env"
+	"github.com/ravinggo/game/common/berror"
 )
 
+func init() {
+	InitDefaultLogger()
+}
+
 func TestLog(t *testing.T) {
+	baseenv.GetConfig().ErrorStackTrace = true
 	Log.Info().Str("key", "value").Str("a", "a").Msg("testxxxx")
 	Log.Debug().Str("key", "value").Str("a", "a").Msg("testxxxx")
 	Log.Warn().Str("key", "value").Str("a", "a").Msg("testxxxx")
-	Log.Error().Stack().Str("key", "value").Str("a", "a").Err(os.ErrClosed).Msg("testxxxx")
+	Log.Error().Str("key", "value").Str("a", "a").Err(berror.NewDatabaseStr("123")).Msg("testxxxx")
 
 }
 

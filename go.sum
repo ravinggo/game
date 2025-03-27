@@ -37,8 +37,8 @@ github.com/ravinggo/objectpool v1.0.2 h1:/MVzX4tvlUt68R/DKW9UyyhW22MfzPq1QsJwSpZ
 github.com/ravinggo/objectpool v1.0.2/go.mod h1:OQp7eESB+5ISIcYkbx//K18n3HZ2wczYCjsOL5L1rb8=
 github.com/ravinggo/tools v0.0.17 h1:UzQZBNTW0Vt4VsoVXdnVY+qvev5AVK2LSiHctzbQ4t0=
 github.com/ravinggo/tools v0.0.17/go.mod h1:EC8yrJ+exdTcS1gFfdgwR0VHLCsuj8htL5KTUNF3Bg0=
-github.com/ravinggo/zerolog v0.0.2 h1:LsHU/njn+voRuk8GJz0qzLmexTLaUWvxyqbcF+JVXC8=
-github.com/ravinggo/zerolog v0.0.2/go.mod h1:W/yh0joFhooufEQcOhB3jwez9tJfKGRg3W2PatAv4LM=
+github.com/ravinggo/zerolog v0.0.3 h1:IVkKrhIyJEMQZJAkeRcVuw45sI3pct4TF0kKvu7gBfg=
+github.com/ravinggo/zerolog v0.0.3/go.mod h1:W/yh0joFhooufEQcOhB3jwez9tJfKGRg3W2PatAv4LM=
 github.com/rogpeppe/go-internal v1.14.1 h1:UQB4HGPB6osV0SQTLymcB4TgvyWu6ZyliaW0tI/otEQ=
 github.com/rogpeppe/go-internal v1.14.1/go.mod h1:MaRKkUm5W0goXpeCfT7UZI6fk/L7L7so1lCWt35ZSgc=
 github.com/rs/xid v1.6.0/go.mod h1:7XoLgs4eV+QndskICGsho+ADou8ySMSjJKDIan90Nz0=
