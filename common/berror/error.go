@@ -2,7 +2,6 @@ package berror
 
 import (
 	"errors"
-	"fmt"
 	"unsafe"
 
 	errors2 "github.com/pkg/errors"
@@ -70,11 +69,6 @@ func (this_ *ErrMsg) Error() string {
 	if this_.ErrExtraInfo != "" {
 		b = append(b, `","err_extra_info":"`...)
 		b = append(b, this_.ErrExtraInfo...)
-	}
-	if len(this_.StackStace) > 0 {
-		b = append(b, `","stack_stace":"`...)
-		s := ((*utils.Stack)(unsafe.Pointer(&this_.StackStace))).StackTrace()
-		b = append(b, fmt.Sprintf("%+v", s)...)
 	}
 	b = append(b, `"}`...)
 	return utils.BytesToString(b)
