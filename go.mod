@@ -14,7 +14,7 @@ require (
 	github.com/petermattis/goid v0.0.0-20250319124200-ccd6737f222a
 	github.com/pkg/errors v0.9.1
 	github.com/ravinggo/objectpool v1.0.2
-	github.com/ravinggo/tools v0.0.17
+	github.com/ravinggo/tools v0.0.18
 	github.com/ravinggo/zerolog v0.0.3
 	github.com/stretchr/testify v1.10.0
 	google.golang.org/protobuf v1.36.5
@@ -32,10 +32,10 @@ require (
 	github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2 // indirect
 	github.com/rogpeppe/go-internal v1.14.1 // indirect
 	github.com/spf13/pflag v1.0.6 // indirect
-	golang.org/x/crypto v0.33.0 // indirect
+	golang.org/x/crypto v0.36.0 // indirect
 	golang.org/x/mod v0.21.0 // indirect
-	golang.org/x/sync v0.11.0 // indirect
-	golang.org/x/sys v0.30.0 // indirect
+	golang.org/x/sync v0.12.0 // indirect
+	golang.org/x/sys v0.31.0 // indirect
 	golang.org/x/tools v0.26.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 	k8s.io/gengo/v2 v2.0.0-20250207200755-1244d31929d7 // indirect
