@@ -116,25 +116,27 @@ func (s *ServerUserService[T1, TraceData, TP, US]) DealServerUserNatsMsg(msg *na
 			if len(traceData) > 0 {
 				err := trace.TraceMarshalFrom(traceData)
 				if err != nil {
+					retErr := berror.NewProtocolErr(err)
 					if msg.Reply == "" {
-						e := natsclient.NatsMsgReplyError(msg, berror.NewProtocolErr(err))
+						e := natsclient.NatsMsgReplyError(msg, retErr)
 						if e != nil {
 							logger.Log.Error().Err(e).Msg("nats reply error")
 						}
 					}
-					return berror.NewProtocolErr(err)
+					return retErr
 				}
 			}
 			c.Req = elem.ReqPool().Get().(proto.Message)
 			err = define.ProtoUnmarshal(data, c.Req)
 			if err != nil {
+				retErr := berror.NewProtocolErr(err)
 				if msg.Reply == "" {
-					e := natsclient.NatsMsgReplyError(msg, berror.NewProtocolErr(err))
+					e := natsclient.NatsMsgReplyError(msg, retErr)
 					if e != nil {
 						c.Error().Err(e).Msg("nats reply error")
 					}
 				}
-				return berror.NewProtocolErr(err)
+				return retErr
 			}
 			if elem.IsRPC() {
 				c.NatsMsg = msg

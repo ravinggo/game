@@ -650,6 +650,14 @@ func NatsMsgReplyError(reply *nats.Msg, err *berror.ErrMsg) *berror.ErrMsg {
 	if err == nil {
 		return nil
 	}
+	em := (*basepb.ErrorMessage)(err)
+	if len(em.StackStace) != 0 {
+		old := em.StackStace
+		defer func() {
+			em.StackStace = old
+		}()
+		em.StackStace = nil
+	}
 	return natsMsgReplyOne(reply, (*basepb.ErrorMessage)(err))
 }
 
