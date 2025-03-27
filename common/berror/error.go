@@ -97,6 +97,9 @@ func (this_ *ErrMsg) WithStackTrace() {
 }
 
 func (this_ *ErrMsg) StackTrace() errors2.StackTrace {
+	if this_ == nil || this_.StackStace == nil {
+		return nil
+	}
 	return *(*errors2.StackTrace)(unsafe.Pointer(&this_.StackStace))
 }
 
