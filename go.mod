@@ -15,9 +15,9 @@ require (
 	github.com/pkg/errors v0.9.1
 	github.com/ravinggo/objectpool v1.0.2
 	github.com/ravinggo/tools v0.0.18
-	github.com/ravinggo/zerolog v0.0.3
+	github.com/ravinggo/zerolog v0.0.4
 	github.com/stretchr/testify v1.10.0
-	google.golang.org/protobuf v1.36.5
+	google.golang.org/protobuf v1.36.6
 	gopkg.in/natefinch/lumberjack.v2 v2.2.1
 )
 

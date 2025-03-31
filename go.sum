@@ -37,8 +37,8 @@ github.com/ravinggo/objectpool v1.0.2 h1:/MVzX4tvlUt68R/DKW9UyyhW22MfzPq1QsJwSpZ
 github.com/ravinggo/objectpool v1.0.2/go.mod h1:OQp7eESB+5ISIcYkbx//K18n3HZ2wczYCjsOL5L1rb8=
 github.com/ravinggo/tools v0.0.18 h1:oqsX/gUVVOKaaNKEvX7E0BFUM5xgpDB3rfOcR8yqp6E=
 github.com/ravinggo/tools v0.0.18/go.mod h1:h7+JL/yMZ9jt5jyLw4jy4RdtQ5fCISGelHBhml49lkg=
-github.com/ravinggo/zerolog v0.0.3 h1:IVkKrhIyJEMQZJAkeRcVuw45sI3pct4TF0kKvu7gBfg=
-github.com/ravinggo/zerolog v0.0.3/go.mod h1:W/yh0joFhooufEQcOhB3jwez9tJfKGRg3W2PatAv4LM=
+github.com/ravinggo/zerolog v0.0.4 h1:B4FXvVeOzQw5ucil/8kf5IzJg4/nBGXBgAaN0tgEZWQ=
+github.com/ravinggo/zerolog v0.0.4/go.mod h1:W/yh0joFhooufEQcOhB3jwez9tJfKGRg3W2PatAv4LM=
 github.com/rogpeppe/go-internal v1.14.1 h1:UQB4HGPB6osV0SQTLymcB4TgvyWu6ZyliaW0tI/otEQ=
 github.com/rogpeppe/go-internal v1.14.1/go.mod h1:MaRKkUm5W0goXpeCfT7UZI6fk/L7L7so1lCWt35ZSgc=
 github.com/rs/xid v1.6.0/go.mod h1:7XoLgs4eV+QndskICGsho+ADou8ySMSjJKDIan90Nz0=
@@ -83,8 +83,8 @@ golang.org/x/xerrors v0.0.0-20190717185122-a985d3407aa7/go.mod h1:I/5z698sn9Ka8T
 golang.org/x/xerrors v0.0.0-20191011141410-1b5146add898/go.mod h1:I/5z698sn9Ka8TeJc9MKroUUfqBBauWjQqLJ2OPfmY0=
 golang.org/x/xerrors v0.0.0-20191204190536-9bdfabe68543/go.mod h1:I/5z698sn9Ka8TeJc9MKroUUfqBBauWjQqLJ2OPfmY0=
 golang.org/x/xerrors v0.0.0-20200804184101-5ec99f83aff1/go.mod h1:I/5z698sn9Ka8TeJc9MKroUUfqBBauWjQqLJ2OPfmY0=
-google.golang.org/protobuf v1.36.5 h1:tPhr+woSbjfYvY6/GPufUoYizxw1cF/yFoxJ2fmpwlM=
-google.golang.org/protobuf v1.36.5/go.mod h1:9fA7Ob0pmnwhb644+1+CVWFRbNajQ6iRojtC/QF5bRE=
+google.golang.org/protobuf v1.36.6 h1:z1NpPI8ku2WgiWnf+t9wTPsn6eP1L7ksHUlkfLvd9xY=
+google.golang.org/protobuf v1.36.6/go.mod h1:jduwjTPXsFjZGTmRluh+L6NjiWu7pchiJ2/5YcXBHnY=
 gopkg.in/check.v1 v0.0.0-20161208181325-20d25e280405/go.mod h1:Co6ibVJAznAaIkqp8huTwlJQCZ016jof/cbN4VW5Yz0=
 gopkg.in/check.v1 v1.0.0-20201130134442-10cb98267c6c h1:Hei/4ADfdWqJk1ZMxUNpqntNwaWcugrBjAiHlqqRiVk=
 gopkg.in/check.v1 v1.0.0-20201130134442-10cb98267c6c/go.mod h1:JHkPIbrfpd72SG/EVd6muEfDQjcINNoR0C8j2r3qZ4Q=
