@@ -8,8 +8,6 @@ import (
 	"github.com/nats-io/nats.go"
 	"google.golang.org/protobuf/proto"
 
-	"github.com/ravinggo/objectpool"
-
 	"github.com/ravinggo/game/common/basepb"
 	"github.com/ravinggo/game/common/define"
 	"github.com/ravinggo/game/common/logger"
@@ -87,19 +85,6 @@ type BaseCtx[TraceData any, TP TracePtr[TraceData]] struct {
 	// for rpc reply
 	NatsMsg *nats.Msg
 	TD      TraceData
-}
-
-// NewBaseCtxWithTrace create a new BaseCtx
-func NewBaseCtxWithTrace[TraceData any, TP TracePtr[TraceData]](traceData TraceData) *BaseCtx[TraceData, TP] {
-	c := objectpool.Get[BaseCtx[TraceData, TP]]()
-	c.TD = traceData
-	return c
-}
-
-// NewBaseCtx create a new BaseCtx
-func NewBaseCtx[TraceData any, TP TracePtr[TraceData]]() *BaseCtx[TraceData, TP] {
-	c := objectpool.Get[BaseCtx[TraceData, TP]]()
-	return c
 }
 
 func (c *BaseCtx[TraceData, TP]) Deadline() (deadline time.Time, ok bool) {
