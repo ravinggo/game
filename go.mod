@@ -10,11 +10,11 @@ require (
 	github.com/gogo/protobuf v1.3.2
 	github.com/kelseyhightower/envconfig v1.4.0
 	github.com/mailru/easyjson v0.9.0
-	github.com/nats-io/nats.go v1.39.1
+	github.com/nats-io/nats.go v1.40.1
 	github.com/petermattis/goid v0.0.0-20250319124200-ccd6737f222a
 	github.com/pkg/errors v0.9.1
 	github.com/ravinggo/objectpool v1.0.2
-	github.com/ravinggo/tools v0.0.18
+	github.com/ravinggo/tools v0.0.20
 	github.com/ravinggo/zerolog v0.0.4
 	github.com/stretchr/testify v1.10.0
 	google.golang.org/protobuf v1.36.6
