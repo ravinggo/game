@@ -34,9 +34,9 @@ For the functions that I don’t have time to complete for now, users can integr
 Welcome friends who are interested to participate in the development<br>
 欢迎有兴趣的朋友一起参与开发<br>
 
-## [deepcopy-gen](https://github.com/ravinggo/tools/tree/main/deepcopy-gen)
-Use sync.Pool to generate go structure deep copy function, modified from [deepcopy-gen](https://github.com/kubernetes/code-generator/tree/master/cmd/deepcopy-gen)<br>
-用sync.Pool 生成 go 结构体深拷贝函数, 从 [deepcopy-gen](https://github.com/kubernetes/code-generator/tree/master/cmd/deepcopy-gen) 修改
+## [deepcopy-gen](https://github.com/kubernetes/code-generator/tree/master/cmd/deepcopy-gen)
+[deepcopy-gen](https://github.com/kubernetes/code-generator/tree/master/cmd/deepcopy-gen) and keepalive-gen used DDD </br>
+[deepcopy-gen](https://github.com/kubernetes/code-generator/tree/master/cmd/deepcopy-gen) 配合keepalive-gen实现DDD 模式开发
 
 ## [keepalive-gen](https://github.com/ravinggo/tools/tree/main/keepalive-gen)
 All data changes in a single request are retained. If an error occurs during execution, all modifications are rolled back.</br>
