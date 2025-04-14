@@ -141,6 +141,41 @@ func (s *BaseService[TraceData, TP]) PostEventloop(e any) {
 	s.el.PostEventQueue(e)
 }
 
+func (s *BaseService[TraceData, TP]) PostGroupTask(hash uint64, f func()) {
+	if f == nil || hash < 0 {
+		return
+	}
+	l := len(s.taskGroupHash)
+	if l > 0 {
+		s.taskGroupHash[hash&s.taskPoolMark].PutForce(ce[TraceData, TP]{}, f)
+		return
+	}
+
+	tg, _ := s.taskMap.GetOrCreate(
+		hash, func() *task_group.TaskGroup[ce[TraceData, TP]] {
+			tg := s.taskGroupPool.Get().(*task_group.TaskGroup[ce[TraceData, TP]])
+			tg.SetTaskFunc(s.taskFunc)
+			tg.SetMaxCap(128)
+			tg.SetOnStop(
+				func(t *task_group.TaskGroup[ce[TraceData, TP]]) {
+					tg.SetOnStop(nil)
+					s.taskGroupPool.Put(tg)
+				},
+			)
+			return tg
+		},
+	)
+	tg.PutForce(ce[TraceData, TP]{}, f)
+}
+
+func (s *BaseService[TraceData, TP]) PostTaskPool(f func()) {
+	if s.taskPool != nil {
+		s.taskPool.PutForce(f)
+		return
+	}
+	safego.Go(f)
+}
+
 // Start if PostEventloop is being called, param f need to be implemented by the user
 func (s *BaseService[TraceData, TP]) Start(f func(any)) {
 	if f == nil {
@@ -281,7 +316,6 @@ func (s *BaseService[TraceData, TP]) dealNatsMsg(msg *nats.Msg) {
 			}
 			return
 		}
-
 	}
 
 	c.Req = elem.ReqPool().Get().(proto.Message)
