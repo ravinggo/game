@@ -35,8 +35,8 @@ github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2 h1:Jamvg5psRI
 github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2/go.mod h1:iKH77koFhYxTK1pcRnkKkqfTogsbg7gZNVY4sRDYZ/4=
 github.com/ravinggo/objectpool v1.0.2 h1:/MVzX4tvlUt68R/DKW9UyyhW22MfzPq1QsJwSpZ5JMA=
 github.com/ravinggo/objectpool v1.0.2/go.mod h1:OQp7eESB+5ISIcYkbx//K18n3HZ2wczYCjsOL5L1rb8=
-github.com/ravinggo/tools v0.0.21 h1:rT1DBgAITivvQB3X0tC9/UcW9u/H9Iznctm9I9uJdtE=
-github.com/ravinggo/tools v0.0.21/go.mod h1:h7+JL/yMZ9jt5jyLw4jy4RdtQ5fCISGelHBhml49lkg=
+github.com/ravinggo/tools v0.0.23 h1:fQDHGQ45sLCORFHxQg1t17637MPelDqtnE+o3QPlQvo=
+github.com/ravinggo/tools v0.0.23/go.mod h1:h7+JL/yMZ9jt5jyLw4jy4RdtQ5fCISGelHBhml49lkg=
 github.com/ravinggo/zerolog v0.0.4 h1:B4FXvVeOzQw5ucil/8kf5IzJg4/nBGXBgAaN0tgEZWQ=
 github.com/ravinggo/zerolog v0.0.4/go.mod h1:W/yh0joFhooufEQcOhB3jwez9tJfKGRg3W2PatAv4LM=
 github.com/rogpeppe/go-internal v1.14.1 h1:UQB4HGPB6osV0SQTLymcB4TgvyWu6ZyliaW0tI/otEQ=
