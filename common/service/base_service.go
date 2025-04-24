@@ -290,7 +290,7 @@ func (s *BaseService[TraceData, TP]) dealNatsMsg(msg *nats.Msg) {
 
 	elem, ok := s.h.GetHandler(msgName)
 	if !ok {
-		logger.Log.Info().Str("msgName", msgName).Str("subj", msg.Subject).Msg("msg not registered")
+		logger.Log.Warn().Str("msgName", msgName).Str("subj", msg.Subject).Msg("msg not registered")
 		if msg.Reply != "" {
 			_ = natsclient.NatsMsgReplyError(msg, ErrNotFoundHandler)
 		}
