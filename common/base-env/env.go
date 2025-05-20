@@ -30,6 +30,7 @@ const (
 	PprofAddr       = "PPROF_ADDR"
 	LogConsoleColor = "LOG_CONSOLE_COLOR"
 	GameTLS         = "GAME_TLS"
+	OpenCheat       = "OPEN_CHEAT"
 )
 
 type Config struct {
@@ -90,6 +91,8 @@ type Config struct {
 	ErrorStackTrace bool `envconfig:"ERROR_STACK_TRACE"`
 
 	GameTLS bool `envconfig:"GAME_TLS"`
+
+	OpenCheat bool `envconfig:"OPEN_CHEAT"`
 }
 
 var (
@@ -111,6 +114,7 @@ var (
 		LogAsync:        false,
 		ErrorStackTrace: false,
 		LogConsoleColor: true,
+		OpenCheat:       false,
 	}
 )
 
