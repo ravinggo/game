@@ -365,7 +365,7 @@ func (s *BaseService[TraceData, TP]) dealNatsMsg(msg *nats.Msg) {
 							func(t *task_group.TaskGroup[ce[TraceData, TP]]) {
 								t.SetOnStop(nil)
 								s.taskGroupPool.Put(t)
-								c.Warn().Int64("count", atomic.AddInt64(&countX, 1)).Msg("+++++++++++++++++")
+								c.Warn().Int64("count", atomic.AddInt64(&countX, -1)).Msg("---------------")
 							},
 						)
 						return tg
