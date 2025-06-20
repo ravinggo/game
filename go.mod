@@ -14,7 +14,7 @@ require (
 	github.com/petermattis/goid v0.0.0-20250319124200-ccd6737f222a
 	github.com/pkg/errors v0.9.1
 	github.com/ravinggo/objectpool v1.0.2
-	github.com/ravinggo/tools v0.0.25
+	github.com/ravinggo/tools v0.0.26
 	github.com/ravinggo/zerolog v0.0.5
 	github.com/stretchr/testify v1.10.0
 	google.golang.org/protobuf v1.36.6
