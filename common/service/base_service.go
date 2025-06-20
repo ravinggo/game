@@ -6,7 +6,6 @@ import (
 	"strconv"
 	"strings"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	"github.com/nats-io/nats.go"
@@ -159,8 +158,10 @@ func (s *BaseService[TraceData, TP]) PostGroupTask(hash uint64, f func()) {
 			tg.SetMaxCap(128)
 			tg.SetOnStop(
 				func(t *task_group.TaskGroup[ce[TraceData, TP]]) {
+					s.taskMap.Remove(hash)
 					t.SetOnStop(nil)
 					s.taskGroupPool.Put(t)
+
 				},
 			)
 			return tg
@@ -357,15 +358,14 @@ func (s *BaseService[TraceData, TP]) dealNatsMsg(msg *nats.Msg) {
 				}
 				tg, _ := s.taskMap.GetOrCreate(
 					hash, func() *task_group.TaskGroup[ce[TraceData, TP]] {
-						c.Warn().Int64("count", atomic.AddInt64(&countX, 1)).Msg("+++++++++++++++++")
 						tg := s.taskGroupPool.Get().(*task_group.TaskGroup[ce[TraceData, TP]])
 						tg.SetTaskFunc(s.taskFunc)
 						tg.SetMaxCap(128)
 						tg.SetOnStop(
 							func(t *task_group.TaskGroup[ce[TraceData, TP]]) {
+								s.taskMap.Remove(hash)
 								t.SetOnStop(nil)
 								s.taskGroupPool.Put(t)
-								c.Warn().Int64("count", atomic.AddInt64(&countX, -1)).Msg("---------------")
 							},
 						)
 						return tg
