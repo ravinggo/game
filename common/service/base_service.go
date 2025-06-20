@@ -158,8 +158,8 @@ func (s *BaseService[TraceData, TP]) PostGroupTask(hash uint64, f func()) {
 			tg.SetMaxCap(128)
 			tg.SetOnStop(
 				func(t *task_group.TaskGroup[ce[TraceData, TP]]) {
-					tg.SetOnStop(nil)
-					s.taskGroupPool.Put(tg)
+					t.SetOnStop(nil)
+					s.taskGroupPool.Put(t)
 				},
 			)
 			return tg
@@ -359,8 +359,8 @@ func (s *BaseService[TraceData, TP]) dealNatsMsg(msg *nats.Msg) {
 						tg.SetMaxCap(128)
 						tg.SetOnStop(
 							func(t *task_group.TaskGroup[ce[TraceData, TP]]) {
-								tg.SetOnStop(nil)
-								s.taskGroupPool.Put(tg)
+								t.SetOnStop(nil)
+								s.taskGroupPool.Put(t)
 							},
 						)
 						return tg

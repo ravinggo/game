@@ -171,8 +171,8 @@ func (s *ServerUserService[T1, TraceData, TP, US]) DealServerUserNatsMsg(msg *na
 							tg.SetMaxCap(128)
 							tg.SetOnStop(
 								func(t *task_group.TaskGroup[ce[TraceData, TP]]) {
-									tg.SetOnStop(nil)
-									s.taskGroupPool.Put(tg)
+									t.SetOnStop(nil)
+									s.taskGroupPool.Put(t)
 								},
 							)
 							return tg
