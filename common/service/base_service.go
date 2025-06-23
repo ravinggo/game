@@ -182,7 +182,7 @@ func (s *BaseService[TraceData, TP]) Start(f func(any)) {
 		func(e any) {
 			switch c := e.(type) {
 			case ce[TraceData, TP]:
-				s.handleCtx(c.Data, c.Elem)
+				s.dealCE(c)
 			case cf:
 				s.dealCF(c)
 			case func():
@@ -211,9 +211,7 @@ func (s *BaseService[TraceData, TP]) dealCE(c ce[TraceData, TP]) {
 		s.startCheckHashTask(tg)
 	}
 	tg.lastDealTime = timer.GetLowPrecisionTime()
-	if c.Elem.IsForce() {
-		tg.PutForce(c, nil)
-	}
+	tg.PutForce(c, nil)
 }
 
 func (s *BaseService[TraceData, TP]) dealCF(c cf) {
@@ -378,56 +376,56 @@ func (s *BaseService[TraceData, TP]) dealNatsMsg(msg *nats.Msg) {
 	}
 	if elem.IsSingle() {
 		s.el.PostEventQueue(ce[TraceData, TP]{Data: c, Elem: elem})
-	} else {
-		l := len(s.taskGroupHash)
-		if traceCtx != nil {
-			hash := traceCtx.ToHash()
-			if hash != 0 {
-				if l > 0 {
-					if elem.IsForce() {
-						s.taskGroupHash[hash&s.taskPoolMark].PutForce(ce[TraceData, TP]{Data: c, Elem: elem}, nil)
-					} else {
-						if !s.taskGroupHash[hash&s.taskPoolMark].Put(ce[TraceData, TP]{Data: c, Elem: elem}, nil) {
-							ReplyTaskPoolFull(c)
-							c.Warn().Err(err).Msg("task group full")
-							s.PutCtxToPool(c)
-						}
+		return
+	}
+	l := len(s.taskGroupHash)
+	if traceCtx != nil {
+		hash := traceCtx.ToHash()
+		if hash != 0 {
+			if l > 0 {
+				if elem.IsForce() {
+					s.taskGroupHash[hash&s.taskPoolMark].PutForce(ce[TraceData, TP]{Data: c, Elem: elem}, nil)
+				} else {
+					if !s.taskGroupHash[hash&s.taskPoolMark].Put(ce[TraceData, TP]{Data: c, Elem: elem}, nil) {
+						ReplyTaskPoolFull(c)
+						c.Warn().Err(err).Msg("task group full")
+						s.PutCtxToPool(c)
 					}
-
-					return
 				}
-				s.el.PostEventQueue(ce[TraceData, TP]{Data: c, Elem: elem, Hash: hash})
+
 				return
 			}
-		}
-
-		if s.taskPool != nil {
-			if elem.IsForce() {
-				s.taskPool.PutForce(
-					func() {
-						s.handleCtx(c, elem)
-					},
-				)
-			} else {
-				if !s.taskPool.Put(
-					func() {
-						s.handleCtx(c, elem)
-					},
-				) {
-					ReplyTaskPoolFull(c)
-					c.Warn().Err(err).Msg("task group full")
-					s.PutCtxToPool(c)
-				}
-			}
+			s.el.PostEventQueue(ce[TraceData, TP]{Data: c, Elem: elem, Hash: hash})
 			return
 		}
-		safego.Go(
-			func() {
-				defer safego.RecoverWithLogger(c)
-				s.handleCtx(c, elem)
-			},
-		)
 	}
+
+	if s.taskPool != nil {
+		if elem.IsForce() {
+			s.taskPool.PutForce(
+				func() {
+					s.handleCtx(c, elem)
+				},
+			)
+		} else {
+			if !s.taskPool.Put(
+				func() {
+					s.handleCtx(c, elem)
+				},
+			) {
+				ReplyTaskPoolFull(c)
+				c.Warn().Err(err).Msg("task group full")
+				s.PutCtxToPool(c)
+			}
+		}
+		return
+	}
+	safego.Go(
+		func() {
+			defer safego.RecoverWithLogger(c)
+			s.handleCtx(c, elem)
+		},
+	)
 }
 
 // ReplyTaskPoolFull reply task pool full error
