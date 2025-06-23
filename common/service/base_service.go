@@ -15,7 +15,6 @@ import (
 
 	baseenv "github.com/ravinggo/game/common/base-env"
 	"github.com/ravinggo/game/common/berror"
-	"github.com/ravinggo/game/common/cmap"
 	"github.com/ravinggo/game/common/ctx"
 	"github.com/ravinggo/game/common/define"
 	"github.com/ravinggo/game/common/eventloop"
@@ -24,9 +23,16 @@ import (
 	"github.com/ravinggo/game/common/natsclient"
 	"github.com/ravinggo/game/common/safego"
 	"github.com/ravinggo/game/common/task_group"
+	"github.com/ravinggo/game/common/timer"
 )
 
 var ErrNotFoundHandler = berror.NewProtocolStr("not found handler")
+
+type timeTask[TraceData any, TP ctx.TracePtr[TraceData]] struct {
+	task_group.TaskGroup[ce[TraceData, TP]]
+	lastDealTime int64
+	hash         uint64
+}
 
 type BaseService[TraceData any, TP ctx.TracePtr[TraceData]] struct {
 	h             *handler.Handler[TraceData, TP]
@@ -34,7 +40,7 @@ type BaseService[TraceData any, TP ctx.TracePtr[TraceData]] struct {
 	el            *eventloop.DoubleBuffQueue
 	taskGroupHash []task_group.TaskGroup[ce[TraceData, TP]]
 	taskPoolMark  uint64
-	taskMap       cmap.ConcurrentMap[uint64, *task_group.TaskGroup[ce[TraceData, TP]]]
+	taskMap       map[uint64]*timeTask[TraceData, TP]
 	taskGroupPool *sync.Pool
 	taskPool      *task_group.TaskPool
 	serverId      int64
@@ -46,6 +52,12 @@ type BaseService[TraceData any, TP ctx.TracePtr[TraceData]] struct {
 type ce[TraceData any, TP ctx.TracePtr[TraceData]] struct {
 	Data *ctx.BaseCtx[TraceData, TP]
 	Elem *handler.Elem[TraceData, TP]
+	Hash uint64
+}
+
+type cf struct {
+	Hash uint64
+	Func func()
 }
 
 // NewBaseService create a new BaseService
@@ -62,15 +74,11 @@ func NewBaseService[TraceData any, TP ctx.TracePtr[TraceData]](
 	}
 
 	s := &BaseService[TraceData, TP]{
-		h:           handler.NewHandler[TraceData](c.middles...),
-		natsCluster: natsclient.NewClusterClient(natsUrls, c.rpcTimeout),
-		el:          eventloop.NewDoubleBuffQueue(c.lockQueueThread),
-		taskMap: cmap.NewWithCustomShardingFunction[uint64, *task_group.TaskGroup[ce[TraceData, TP]]](
-			func(key uint64) uint32 {
-				return uint32(key)
-			},
-		),
-		taskGroupPool: objectpool.GetTypePool[task_group.TaskGroup[ce[TraceData, TP]]](),
+		h:             handler.NewHandler[TraceData](c.middles...),
+		natsCluster:   natsclient.NewClusterClient(natsUrls, c.rpcTimeout),
+		el:            eventloop.NewDoubleBuffQueue(c.lockQueueThread),
+		taskMap:       map[uint64]*timeTask[TraceData, TP]{},
+		taskGroupPool: objectpool.GetTypePool[timeTask[TraceData, TP]](),
 		serverId:      baseenv.GetConfig().ServerId,
 		serverType:    baseenv.GetConfig().ServerType,
 		ctxPool:       objectpool.GetTypePool[ctx.BaseCtx[TraceData, TP]](),
@@ -103,7 +111,7 @@ func NewBaseService[TraceData any, TP ctx.TracePtr[TraceData]](
 	if c.taskRunMode == TaskPool {
 		s.taskPool = task_group.NewTaskPool(int64(taskPoolSize), int64(taskPoolSize*10))
 	}
-
+	timer.StartLowPrecisionTime()
 	return s
 }
 
@@ -150,24 +158,7 @@ func (s *BaseService[TraceData, TP]) PostGroupTask(hash uint64, f func()) {
 		s.taskGroupHash[hash&s.taskPoolMark].PutForce(ce[TraceData, TP]{}, f)
 		return
 	}
-
-	tg, _ := s.taskMap.GetOrCreate(
-		hash, func() *task_group.TaskGroup[ce[TraceData, TP]] {
-			tg := s.taskGroupPool.Get().(*task_group.TaskGroup[ce[TraceData, TP]])
-			tg.SetTaskFunc(s.taskFunc)
-			tg.SetMaxCap(128)
-			tg.SetOnStop(
-				func(t *task_group.TaskGroup[ce[TraceData, TP]]) {
-					s.taskMap.Remove(hash)
-					t.SetOnStop(nil)
-					s.taskGroupPool.Put(t)
-
-				},
-			)
-			return tg
-		},
-	)
-	tg.PutForce(ce[TraceData, TP]{}, f)
+	s.el.PostEventQueue(cf{Hash: hash, Func: f})
 }
 
 func (s *BaseService[TraceData, TP]) PostTaskPool(f func()) {
@@ -192,12 +183,61 @@ func (s *BaseService[TraceData, TP]) Start(f func(any)) {
 			switch c := e.(type) {
 			case ce[TraceData, TP]:
 				s.handleCtx(c.Data, c.Elem)
+			case cf:
+				s.dealCF(c)
 			case func():
 				c()
 			default:
 				if f != nil {
 					f(e)
 				}
+			}
+		},
+	)
+}
+
+func (s *BaseService[TraceData, TP]) dealCE(c ce[TraceData, TP]) {
+	if c.Hash == 0 {
+		s.handleCtx(c.Data, c.Elem)
+		return
+	}
+	tg, ok := s.taskMap[c.Hash]
+	if !ok {
+		tg = s.taskGroupPool.Get().(*timeTask[TraceData, TP])
+		tg.SetTaskFunc(s.taskFunc)
+		tg.SetMaxCap(128)
+		tg.hash = c.Hash
+		s.taskMap[c.Hash] = tg
+		s.startCheckHashTask(tg)
+	}
+	tg.lastDealTime = timer.GetLowPrecisionTime()
+	if c.Elem.IsForce() {
+		tg.PutForce(c, nil)
+	}
+}
+
+func (s *BaseService[TraceData, TP]) dealCF(c cf) {
+	tg, ok := s.taskMap[c.Hash]
+	if !ok {
+		tg = s.taskGroupPool.Get().(*timeTask[TraceData, TP])
+		tg.SetTaskFunc(s.taskFunc)
+		tg.SetMaxCap(128)
+		tg.hash = c.Hash
+		s.taskMap[c.Hash] = tg
+		s.startCheckHashTask(tg)
+	}
+	tg.lastDealTime = timer.GetLowPrecisionTime()
+	tg.PutForce(ce[TraceData, TP]{}, c.Func)
+}
+
+func (s *BaseService[TraceData, TP]) startCheckHashTask(tg *timeTask[TraceData, TP]) {
+	s.el.AfterFunc(
+		time.Second*30, func() {
+			if timer.GetLowPrecisionTime()-tg.lastDealTime > 30 {
+				delete(s.taskMap, tg.hash)
+				tg.hash = 0
+				tg.lastDealTime = 0
+				s.taskGroupPool.Put(tg)
 			}
 		},
 	)
@@ -356,30 +396,7 @@ func (s *BaseService[TraceData, TP]) dealNatsMsg(msg *nats.Msg) {
 
 					return
 				}
-				tg, _ := s.taskMap.GetOrCreate(
-					hash, func() *task_group.TaskGroup[ce[TraceData, TP]] {
-						tg := s.taskGroupPool.Get().(*task_group.TaskGroup[ce[TraceData, TP]])
-						tg.SetTaskFunc(s.taskFunc)
-						tg.SetMaxCap(128)
-						tg.SetOnStop(
-							func(t *task_group.TaskGroup[ce[TraceData, TP]]) {
-								s.taskMap.Remove(hash)
-								t.SetOnStop(nil)
-								s.taskGroupPool.Put(t)
-							},
-						)
-						return tg
-					},
-				)
-				if elem.IsForce() {
-					tg.PutForce(ce[TraceData, TP]{Data: c, Elem: elem}, nil)
-				} else {
-					if !tg.Put(ce[TraceData, TP]{Data: c, Elem: elem}, nil) {
-						ReplyTaskPoolFull(c)
-						c.Warn().Err(err).Msg("task group full")
-						s.PutCtxToPool(c)
-					}
-				}
+				s.el.PostEventQueue(ce[TraceData, TP]{Data: c, Elem: elem, Hash: hash})
 				return
 			}
 		}

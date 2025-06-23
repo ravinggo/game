@@ -18,7 +18,7 @@ type TaskGroup[T any] struct {
 	f         func(TaskGroupElem[T])
 	isRunning bool
 	maxCap    int
-	onStop    func()
+	meta      int64
 }
 
 func NewTaskGroup[T any](f func(TaskGroupElem[T]), maxCap int) *TaskGroup[T] {
@@ -33,17 +33,6 @@ func NewTaskGroup[T any](f func(TaskGroupElem[T]), maxCap int) *TaskGroup[T] {
 		},
 	}
 	return tg
-}
-
-// SetOnStop why add this function? for sync.Pool
-func (this_ *TaskGroup[T]) SetOnStop(f func(*TaskGroup[T])) {
-	if f == nil && this_.onStop != nil {
-		this_.onStop = nil
-	} else if f != nil {
-		this_.onStop = func() {
-			f(this_)
-		}
-	}
 }
 
 // SetTaskFunc why add this function? for sync.Pool
@@ -70,11 +59,6 @@ func (this_ *TaskGroup[T]) PutForce(d T, f func()) {
 	this_.mu.Unlock()
 	if run {
 		go func() {
-			defer func() {
-				if this_.onStop != nil {
-					this_.onStop()
-				}
-			}()
 			for {
 				this_.mu.Lock()
 				if !this_.isRunning {
@@ -123,11 +107,6 @@ func (this_ *TaskGroup[T]) Put(d T, f func()) bool {
 	this_.mu.Unlock()
 	if run {
 		go func() {
-			defer func() {
-				if this_.onStop != nil {
-					this_.onStop()
-				}
-			}()
 			for {
 				this_.mu.Lock()
 				if !this_.isRunning {

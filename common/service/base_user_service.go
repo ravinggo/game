@@ -11,7 +11,6 @@ import (
 	"github.com/ravinggo/game/common/logger"
 	"github.com/ravinggo/game/common/natsclient"
 	"github.com/ravinggo/game/common/safego"
-	"github.com/ravinggo/game/common/task_group"
 )
 
 // ServerUserService is a service,can use user subject.
@@ -164,30 +163,8 @@ func (s *ServerUserService[T1, TraceData, TP, US]) DealServerUserNatsMsg(msg *na
 
 						return nil
 					}
-					tg, _ := s.taskMap.GetOrCreate(
-						hash, func() *task_group.TaskGroup[ce[TraceData, TP]] {
-							tg := s.taskGroupPool.Get().(*task_group.TaskGroup[ce[TraceData, TP]])
-							tg.SetTaskFunc(s.taskFunc)
-							tg.SetMaxCap(128)
-							tg.SetOnStop(
-								func(t *task_group.TaskGroup[ce[TraceData, TP]]) {
-									s.taskMap.Remove(hash)
-									t.SetOnStop(nil)
-									s.taskGroupPool.Put(t)
-								},
-							)
-							return tg
-						},
-					)
-					if elem.IsForce() {
-						tg.PutForce(ce[TraceData, TP]{Data: c, Elem: elem}, nil)
-					} else {
-						if !tg.Put(ce[TraceData, TP]{Data: c, Elem: elem}, nil) {
-							ReplyTaskPoolFull(c)
-							c.Warn().Err(err).Msg("task group full")
-							s.PutCtxToPool(c)
-						}
-					}
+
+					s.el.PostEventQueue(ce[TraceData, TP]{Data: c, Elem: elem, Hash: hash})
 					return nil
 				} else {
 					c.Error().Err(define.ErrInvalidToHash).Msg("DealServerUserNatsMsg not dispatch")

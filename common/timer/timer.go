@@ -2,6 +2,7 @@ package timer
 
 import (
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/ravinggo/game/common/safego"
@@ -96,4 +97,29 @@ func (t *tickerElem) do() {
 			tickerElemPool.Put(t)
 		}
 	}
+}
+
+type lowPrecisionTime struct {
+	now  int64
+	once sync.Once
+}
+
+var lpt lowPrecisionTime
+
+func StartLowPrecisionTime() {
+	lpt.once.Do(
+		func() {
+			atomic.StoreInt64(&lpt.now, time.Now().Unix())
+			Ticker(
+				time.Second, func() bool {
+					atomic.StoreInt64(&lpt.now, time.Now().Unix())
+					return true
+				},
+			)
+		},
+	)
+}
+
+func GetLowPrecisionTime() int64 {
+	return atomic.LoadInt64(&lpt.now)
 }
