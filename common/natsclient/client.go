@@ -813,3 +813,7 @@ func (this_ *NatsClient) RequestRaw(c ctx.IContext, toServerId int64, reqMsgName
 	}
 	return natsMsg.Data, nil
 }
+
+func (this_ *NatsClient) Conn() *nats.Conn {
+	return this_.conn
+}
