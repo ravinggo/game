@@ -36,7 +36,7 @@ func (this_ *JetStream) AddStream(name string, desc string, maxBytes int64) *ber
 		&nats.StreamConfig{
 			Name:        name,
 			Description: desc,
-			Subjects:    []string{getSubjByStream(name)},
+			Subjects:    []string{name},
 			Retention:   nats.WorkQueuePolicy,
 			MaxBytes:    maxBytes,
 		},
@@ -50,8 +50,7 @@ func (this_ *JetStream) AddStream(name string, desc string, maxBytes int64) *ber
 }
 
 func (this_ *JetStream) AddStreamIfNoExist(name string, desc string, maxBytes int64) *berror.ErrMsg {
-	subj := getSubjByStream(name)
-	info, err := this_.js.StreamNameBySubject(subj)
+	info, err := this_.js.StreamNameBySubject(name)
 	if err != nil {
 		if !errors.Is(err, nats.ErrNoMatchingStream) {
 			return berror.NewProtocolErr(err)
