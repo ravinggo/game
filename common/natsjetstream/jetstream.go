@@ -27,16 +27,12 @@ func (this_ *JetStream) Close() {
 	_ = this_.nc.Drain()
 }
 
-func getSubjByStream(name string) string {
-	return name + ".>"
-}
-
 func (this_ *JetStream) AddStream(name string, desc string, maxBytes int64) *berror.ErrMsg {
 	info, err := this_.js.AddStream(
 		&nats.StreamConfig{
 			Name:        name,
 			Description: desc,
-			Subjects:    []string{getSubjByStream(name)},
+			Subjects:    []string{name},
 			Retention:   nats.WorkQueuePolicy,
 			MaxBytes:    maxBytes,
 		},
@@ -50,8 +46,7 @@ func (this_ *JetStream) AddStream(name string, desc string, maxBytes int64) *ber
 }
 
 func (this_ *JetStream) AddStreamIfNoExist(name string, desc string, maxBytes int64) *berror.ErrMsg {
-	subj := getSubjByStream(name)
-	info, err := this_.js.StreamNameBySubject(subj)
+	info, err := this_.js.StreamNameBySubject(name)
 	if err != nil {
 		if !errors.Is(err, nats.ErrNoMatchingStream) {
 			return berror.NewProtocolErr(err)
@@ -63,8 +58,7 @@ func (this_ *JetStream) AddStreamIfNoExist(name string, desc string, maxBytes in
 }
 
 func (this_ *JetStream) DeleteStreamIfExist(name string) *berror.ErrMsg {
-	subj := getSubjByStream(name)
-	_, err := this_.js.StreamNameBySubject(subj)
+	_, err := this_.js.StreamNameBySubject(name)
 	if err != nil {
 		if !errors.Is(err, nats.ErrNoMatchingStream) {
 			return berror.NewProtocolErr(err)
@@ -123,22 +117,22 @@ func (this_ *JetStream) DeleteConsumer(stream string, name string) *berror.ErrMs
 
 // PullWithSeq Start pulling data from the specified Sequence
 func (this_ *JetStream) PullWithSeq(stream string, name string, seq uint64) (*Puller, *berror.ErrMsg) {
-	return this_.pullWith(getSubjByStream(stream), name, nats.StartSequence(seq), nats.BindStream(stream))
+	return this_.pullWith(stream, name, nats.StartSequence(seq), nats.BindStream(stream))
 }
 
 // PullWithTime Start pulling data from the specified time
 func (this_ *JetStream) PullWithTime(stream string, name string, time time.Time) (*Puller, *berror.ErrMsg) {
-	return this_.pullWith(getSubjByStream(stream), name, nats.StartTime(time), nats.BindStream(stream))
+	return this_.pullWith(stream, name, nats.StartTime(time), nats.BindStream(stream))
 }
 
 // PullWithAll Pull all data
 func (this_ *JetStream) PullWithAll(stream string, name string) (*Puller, *berror.ErrMsg) {
-	return this_.pullWith(getSubjByStream(stream), name, nats.DeliverAll(), nats.BindStream(stream))
+	return this_.pullWith(stream, name, nats.DeliverAll(), nats.BindStream(stream))
 }
 
 // PullWithNewest Pull the latest data
 func (this_ *JetStream) PullWithNewest(stream string, name string) (*Puller, *berror.ErrMsg) {
-	return this_.pullWith(getSubjByStream(stream), name, nats.DeliverNew(), nats.BindStream(stream))
+	return this_.pullWith(stream, name, nats.DeliverNew(), nats.BindStream(stream))
 }
 
 func (this_ *JetStream) pullWith(subj string, name string, opt ...nats.SubOpt) (*Puller, *berror.ErrMsg) {
