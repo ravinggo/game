@@ -313,8 +313,6 @@ func (s *BaseService[TraceData, TP]) subscribe() {
 	}
 }
 
-var countX int64
-
 func (s *BaseService[TraceData, TP]) dealNatsMsg(msg *nats.Msg) {
 	msgName := msg.Subject
 	index := strings.LastIndexByte(msgName, '.')
