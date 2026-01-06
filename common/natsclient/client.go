@@ -108,6 +108,12 @@ func NewNatsClient(urls string, rpcTimeout time.Duration, options ...nats.Option
 	}
 	nc.name = opts.Name
 
+	if opts.ConnectedCB == nil {
+		opts.ConnectedCB = func(conn *nats.Conn) {
+			logger.Log.Info().Str("nats-server", conn.ConnectedAddr()).Msg("nats connected")
+		}
+	}
+
 	if opts.DisconnectedErrCB == nil {
 		opts.DisconnectedErrCB = func(conn *nats.Conn, err error) {
 			if atomic.LoadInt32(&nc.closed) == 0 {
