@@ -19,9 +19,10 @@ var (
 )
 
 type eventHandler struct {
-	f    any
-	fa   any // for publish
-	desc string
+	f         any
+	fa        any // for publish
+	desc      string
+	prevCalls []any
 }
 
 func (e eventHandler) String() string {
@@ -83,7 +84,11 @@ func Logger() {
 }
 
 // Register a local event
-func Register[CP ctx.IContextPtr[CTX], T, CTX any](desc string, f func(CP, T) *berror.ErrMsg) {
+func Register[CP ctx.IContextPtr[CTX], T, CTX any](desc string, f func(CP, T) *berror.ErrMsg, prevCalls ...func(CP) *berror.ErrMsg) {
+	pcs := make([]any, 0, len(prevCalls))
+	for _, v := range prevCalls {
+		pcs = append(pcs, v)
+	}
 	ptr, index := objectpool.GetPtrAndIndex[T]()
 	setES(
 		ptr, index, eventHandler{
@@ -91,7 +96,8 @@ func Register[CP ctx.IContextPtr[CTX], T, CTX any](desc string, f func(CP, T) *b
 			fa: func(c CP, a any) *berror.ErrMsg {
 				return f(c, a.(T))
 			},
-			desc: "localevent[" + desc + "] [" + runtime.FuncForPC(reflect.ValueOf(f).Pointer()).Name() + "] " + reflect.TypeOf(f).String(),
+			desc:      "localevent[" + desc + "] [" + runtime.FuncForPC(reflect.ValueOf(f).Pointer()).Name() + "] " + reflect.TypeOf(f).String(),
+			prevCalls: pcs,
 		},
 	)
 }
@@ -101,6 +107,14 @@ func Call[CP ctx.IContextPtr[CTX], CTX, T any](c CP, data T) *berror.ErrMsg {
 	ptr, index := objectpool.GetPtrAndIndex[T]()
 	es := getES(ptr, index)
 	for _, e := range es {
+		if len(e.prevCalls) != 0 {
+			for _, pc := range e.prevCalls {
+				err := pc.(func(CP) *berror.ErrMsg)(c)
+				if err != nil {
+					return err
+				}
+			}
+		}
 		if err := e.f.(func(CP, T) *berror.ErrMsg)(c, data); err != nil {
 			return err
 		}
