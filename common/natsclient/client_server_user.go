@@ -1,8 +1,9 @@
+// Package natsclient provides NATS messaging infrastructure.
+// This framework exclusively supports int64 RoleID for user identification.
 package natsclient
 
 import (
 	"errors"
-	"hash/crc64"
 	"math"
 	"strconv"
 	"strings"
@@ -28,9 +29,11 @@ import (
 // because when NATS reconnects, it will send all the subjects subscribed to the current connection to NATS-Server for re-subscription.
 // too many subjects will cause the reconnection to be too slow.
 // so it is ideal for one user to subscribe to the same service once.
+// Only int64 RoleID is supported by this framework.
 type ServerUserSubject interface {
-	// ToHash for switch one NatsClient And Dispatch call,must not 0
-	ToHash() uint64
+	// GetRoleID returns the int64 role identifier used for NatsClient selection and dispatch routing.
+	// Must not return 0.
+	GetRoleID() int64
 
 	// CreateSubj create subj for NatsClient.SubscribeServerUser
 	// param b from objectpool.GetBytes
@@ -136,8 +139,8 @@ func (u *ServerIntUserSubject) CreateSubj(b *objectpool.Bytes) {
 	b.WriteBytes('/')
 	b.WriteInt(u.RoleId)
 }
-func (u *ServerIntUserSubject) ToHash() uint64 {
-	return uint64(u.RoleId)
+func (u *ServerIntUserSubject) GetRoleID() int64 {
+	return u.RoleId
 }
 
 func (u *ServerIntUserSubject) CreateSubjSize() int {
@@ -161,40 +164,6 @@ func (u *ServerIntUserSubject) ParseSubj(s string) error {
 	return nil
 }
 
-type ServerStringUserSubject struct {
-	ServerType string
-	ServerId   int64
-	RoleId     string
-}
-
-func (u *ServerStringUserSubject) CreateSubj(b *objectpool.Bytes) {
-	b.WriteString(u.ServerType)
-	b.WriteBytes('/')
-	b.WriteInt(u.ServerId)
-	b.WriteBytes('/')
-	b.WriteString(u.RoleId)
-}
-
-func (u *ServerStringUserSubject) ToHash() uint64 {
-	return crc64.Checksum(utils.StringToBytes(u.RoleId), crc64.MakeTable(crc64.ECMA))
-}
-
-func (u *ServerStringUserSubject) CreateSubjSize() int {
-	return len(u.ServerType) + utils.CountIntByte(u.ServerId) + len(u.RoleId) + 2
-}
-
-func (u *ServerStringUserSubject) ParseSubj(s string) error {
-	i1 := strings.LastIndexByte(s, '/')
-	if i1 == -1 {
-		return define.ErrInvalidUserSubj
-	}
-	i2 := strings.LastIndexByte(s, '.')
-	if i2 == -1 {
-		return define.ErrInvalidUserSubj
-	}
-	u.RoleId = s[i1+1 : i2]
-	return nil
-}
 
 func (nc *ServerUserNatsClient[T, US]) Close() {
 	nc.NatsClient.Close()
@@ -231,7 +200,7 @@ func (nc *ServerUserNatsClient[T, US]) SubscribeUser(us US) bool {
 	if _, ok := nc.subs.Get(subj); ok {
 		return false
 	}
-	index := us.ToHash() % uint64(len(nc.queues))
+	index := uint64(us.GetRoleID()) % uint64(len(nc.queues))
 	sub, err := nc.conn.ChanSubscribe(subj, nc.queues[index])
 	if err != nil {
 		logger.Log.Error().Err(err).Str("subj", subj).Msg("ClientSubscribeServerUser")
@@ -258,7 +227,7 @@ func (nc *ServerUserNatsClient[T, US]) SubscribeUserWaitSuccess(us US) bool {
 	if _, ok := nc.subs.Get(subj); ok {
 		return false
 	}
-	index := us.ToHash() % uint64(len(nc.queues))
+	index := uint64(us.GetRoleID()) % uint64(len(nc.queues))
 	sub, err := nc.conn.ChanSubscribe(subj, nc.queues[index])
 	if err != nil {
 		logger.Log.Error().Err(err).Str("subj", subj).Msg("ClientSubscribeServerUser")
@@ -294,7 +263,7 @@ func (nc *ServerUserNatsClient[T, US]) QueueSubscribeUser(us US, handler nats.Ms
 		return false
 	}
 	group := subj[:len(subj)-2]
-	index := us.ToHash() % uint64(len(nc.queues))
+	index := uint64(us.GetRoleID()) % uint64(len(nc.queues))
 	sub, err := nc.conn.ChanQueueSubscribe(subj, group, nc.queues[index])
 	if err != nil {
 		logger.Log.Error().Err(err).Str("subj", subj).Str("group", group).Msg("ClientQueueSubscribeServerUser")
@@ -321,7 +290,7 @@ func (nc *ServerUserNatsClient[T, US]) QueueSubscribeUserWaitSuccess(us US) bool
 		return false
 	}
 	group := subj[:len(subj)-2]
-	index := us.ToHash() % uint64(len(nc.queues))
+	index := uint64(us.GetRoleID()) % uint64(len(nc.queues))
 	sub, err := nc.conn.ChanQueueSubscribe(subj, group, nc.queues[index])
 	if err != nil {
 		logger.Log.Error().Err(err).Str("subj", subj).Str("group", group).Msg("ClientQueueSubscribeServerUser")

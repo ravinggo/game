@@ -73,7 +73,7 @@
 │  │                                                                     │    │
 │  │  IContext ◄── BaseCtx[TraceData, TP]                               │    │
 │  │                 │                                                   │    │
-│  │                 ├── Trace (IntTrace / StringTrace)                  │    │
+│  │                 ├── Trace (IntTrace)                                 │    │
 │  │                 │    └── ToHash() → consistent routing             │    │
 │  │                 ├── Req / Resp (protobuf, pooled)                  │    │
 │  │                 └── Logger (zerolog)                                │    │

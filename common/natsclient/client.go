@@ -626,7 +626,7 @@ func NatsUnmarshalResponseMany(data []byte, f func(string, []byte) *berror.ErrMs
 	}
 }
 
-// NatsUnmarshalResponseWithout Unmarshal response data from nats.Msg.Data
+// NatsUnmarshalResponseWithout Unmarshal response data from nats.Msg.Ctx
 func NatsUnmarshalResponseWithout(d []byte, respMsg proto.Message) *berror.ErrMsg {
 	msgName, data, err := NatsUnmarshalResponse(d)
 	if err != nil {
@@ -667,23 +667,37 @@ func NatsMsgReplyError(reply *nats.Msg, err *berror.ErrMsg) *berror.ErrMsg {
 	return natsMsgReplyOne(reply, (*basepb.ErrorMessage)(err))
 }
 
-// NatsMsgReply Reply to nats.Msg for respMsgS
-func NatsMsgReply(reply *nats.Msg, respMsgS ...proto.Message) *berror.ErrMsg {
-	if len(respMsgS) == 0 {
-		return nil
-	}
-	if len(respMsgS) == 1 {
-		return natsMsgReplyOne(reply, respMsgS[0])
+// NatsMsgReply sends resp and optional otherResp back to the caller.
+// When isRespFirst is true resp is serialized before otherResp; otherwise otherResp comes first and resp is appended last.
+// No intermediate slice is allocated: size is computed in two passes and the buffer is written in order.
+func NatsMsgReply(reply *nats.Msg, isRespFirst bool, resp proto.Message, otherResp ...proto.Message) *berror.ErrMsg {
+	if len(otherResp) == 0 {
+		return natsMsgReplyOne(reply, resp)
 	}
 
-	totalSize, err := NatsMarshalManySize(respMsgS...)
+	respSize, err := NatsMarshalSize(resp)
 	if err != nil {
 		return err
 	}
-	b := objectpool.GetBytes(totalSize)
+	otherSize, err2 := NatsMarshalManySize(otherResp...)
+	if err2 != nil {
+		return err2
+	}
+
+	b := objectpool.GetBytes(respSize + otherSize)
 	defer objectpool.PutBytes(b)
 
-	err = NatsMarshalManyAppend(&b, respMsgS...)
+	if isRespFirst {
+		if err = NatsMarshalAppend(&b, resp); err != nil {
+			return err
+		}
+		err = NatsMarshalManyAppend(&b, otherResp...)
+	} else {
+		if err = NatsMarshalManyAppend(&b, otherResp...); err != nil {
+			return err
+		}
+		err = NatsMarshalAppend(&b, resp)
+	}
 	if err != nil {
 		return err
 	}
@@ -766,7 +780,7 @@ func NatsMarshalManyAppend(b *objectpool.Bytes, msgS ...proto.Message) *berror.E
 // if toServerId == 0, Receiver serverId is 0 or a cluster server node
 // param reqMsgName is proto message name.
 // param reqMsgData is proto message data.
-// return nats.Msg.Data and berror.ErrMsg.
+// return nats.Msg.Ctx and berror.ErrMsg.
 func (this_ *NatsClient) RequestRaw(c ctx.IContext, toServerId int64, reqMsgName string, reqMsgData []byte) ([]byte, *berror.ErrMsg) {
 	msgNameSize := 21 + len(reqMsgName)
 	traceSize := 0

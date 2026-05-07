@@ -1,15 +1,12 @@
 package service
 
 import (
-	"reflect"
-	"runtime"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/nats-io/nats.go"
-	"google.golang.org/protobuf/proto"
 
 	"github.com/ravinggo/objectpool"
 
@@ -17,245 +14,127 @@ import (
 	"github.com/ravinggo/game/common/berror"
 	"github.com/ravinggo/game/common/ctx"
 	"github.com/ravinggo/game/common/define"
-	"github.com/ravinggo/game/common/eventloop"
 	"github.com/ravinggo/game/common/handler"
 	"github.com/ravinggo/game/common/logger"
 	"github.com/ravinggo/game/common/natsclient"
-	"github.com/ravinggo/game/common/safego"
-	"github.com/ravinggo/game/common/task_group"
 	"github.com/ravinggo/game/common/timer"
 )
 
 var ErrNotFoundHandler = berror.NewProtocolStr("not found handler")
 
-type timeTask[TraceData any, TP ctx.TracePtr[TraceData]] struct {
-	task_group.TaskGroup[ce[TraceData, TP]]
-	lastDealTime int64
-	hash         uint64
-}
-
-type BaseService[TraceData any, TP ctx.TracePtr[TraceData]] struct {
-	h             *handler.Handler[TraceData, TP]
-	natsCluster   *natsclient.ClusterClient
-	el            *eventloop.DoubleBuffQueue
-	taskGroupHash []task_group.TaskGroup[ce[TraceData, TP]]
-	taskPoolMark  uint64
-	taskMap       map[uint64]*timeTask[TraceData, TP]
-	taskGroupPool *sync.Pool
-	taskPool      *task_group.TaskPool
-	serverId      int64
-	serverType    string
-	ctxPool       *sync.Pool
-	cnf           config[TraceData, TP]
-}
-
+// ce is posted to an EventLoop to carry a parsed request or a PostTask callback.
+// When Func is non-nil the taskFunc calls it instead of handleCtx, then returns Ctx to pool.
+// RoleID is read from Ctx.GetTrace().GetRoleID() at the point of routing.
+// Written by Claude Code claude-opus-4-6.
 type ce[TraceData any, TP ctx.TracePtr[TraceData]] struct {
-	Data *ctx.BaseCtx[TraceData, TP]
+	Ctx  *ctx.BaseCtx[TraceData, TP]
 	Elem *handler.Elem[TraceData, TP]
-	Hash uint64
+	Func func(*ctx.BaseCtx[TraceData, TP]) *berror.ErrMsg
 }
 
-type cf struct {
-	Hash uint64
-	Func func()
+// BaseService holds shared infrastructure. It does not own an EventLoop or a handler registry;
+// concrete service types provide both only when their dispatch strategy requires them.
+// Written by Claude Code claude-opus-4-6.
+type BaseService[TraceData any, TP ctx.TracePtr[TraceData]] struct {
+	natsCluster    *natsclient.ClusterClient
+	ctxPool        *sync.Pool
+	serverId       int64
+	serverType     string
+	cnf            config[TraceData, TP]
+	serviceMiddles []handler.Middleware[TraceData, TP]
+	h              *handler.Handler[TraceData, TP]
+	// dispatch is set by each concrete service constructor.
+	dispatch func(*ctx.BaseCtx[TraceData, TP], *handler.Elem[TraceData, TP])
 }
 
-// NewBaseService create a new BaseService
-func NewBaseService[TraceData any, TP ctx.TracePtr[TraceData]](
+// GetHandler implements handler.IService, returning the shared handler registry.
+func (s *BaseService[TraceData, TP]) GetHandler() *handler.Handler[TraceData, TP] {
+	return s.h
+}
+
+// newBaseService initialises shared BaseService infrastructure: NATS cluster client,
+// context pool, server identity, and a low-precision timer. It is called by every
+// concrete service constructor before any dispatch strategy is configured.
+// Written by Claude Code claude-opus-4-6.
+func newBaseService[TraceData any, TP ctx.TracePtr[TraceData]](
 	natsUrls []string,
-	ops ...Option[TraceData, TP],
+	c config[TraceData, TP],
 ) *BaseService[TraceData, TP] {
-	c := config[TraceData, TP]{}
-	for _, op := range ops {
-		op(&c)
-	}
 	if c.rpcTimeout <= 0 {
 		c.rpcTimeout = time.Second * 10
 	}
-
 	s := &BaseService[TraceData, TP]{
-		h:             handler.NewHandler[TraceData](c.middles...),
-		natsCluster:   natsclient.NewClusterClient(natsUrls, c.rpcTimeout),
-		el:            eventloop.NewDoubleBuffQueue(c.lockQueueThread),
-		taskMap:       map[uint64]*timeTask[TraceData, TP]{},
-		taskGroupPool: objectpool.GetTypePool[timeTask[TraceData, TP]](),
-		serverId:      baseenv.GetConfig().ServerId,
-		serverType:    baseenv.GetConfig().ServerType,
-		ctxPool:       objectpool.GetTypePool[ctx.BaseCtx[TraceData, TP]](),
-		cnf:           c,
+		natsCluster: natsclient.NewClusterClient(natsUrls, c.rpcTimeout),
+		serverId:    baseenv.GetConfig().ServerId,
+		serverType:  baseenv.GetConfig().ServerType,
+		ctxPool:     objectpool.GetTypePool[ctx.BaseCtx[TraceData, TP]](),
+		cnf:         c,
 	}
-
-	numCpu := uint64(runtime.NumCPU())
-	if numCpu&1 == 1 {
-		numCpu++
-	}
-	taskPoolSize := numCpu * 1024
-	if c.hashRunMode < OneHashOneGo || c.hashRunMode > FixedHashPoolMode {
-		c.hashRunMode = OneHashOneGo
-	}
-	switch c.hashRunMode {
-	case FixedHashPoolMode:
-		numCpu := uint64(runtime.NumCPU())
-		if numCpu&1 == 1 {
-			numCpu++
-		}
-		taskPoolSize := numCpu * 1024
-		s.taskPoolMark = taskPoolSize - 1
-		s.taskGroupHash = make([]task_group.TaskGroup[ce[TraceData, TP]], taskPoolSize)
-		for i := uint64(0); i < taskPoolSize; i++ {
-			s.taskGroupHash[i].SetMaxCap(128)
-			s.taskGroupHash[i].SetTaskFunc(s.taskFunc)
-		}
-	}
-
-	if c.taskRunMode == TaskPool {
-		s.taskPool = task_group.NewTaskPool(int64(taskPoolSize), int64(taskPoolSize*10))
-	}
+	s.serviceMiddles = c.serviceMiddlewares()
 	timer.StartLowPrecisionTime()
 	return s
 }
 
-func (s *BaseService[TraceData, TP]) GetCtxFromPool() *ctx.BaseCtx[TraceData, TP] {
-	return s.ctxPool.Get().(*ctx.BaseCtx[TraceData, TP])
+// applyServiceMiddles wraps f with all service-scoped middlewares in declaration order.
+// middlewares[0] is the outermost wrapper. Returns f unchanged when no service middlewares are set.
+func (s *BaseService[TraceData, TP]) applyServiceMiddles(
+	f func(*ctx.BaseCtx[TraceData, TP]) *berror.ErrMsg,
+) func(*ctx.BaseCtx[TraceData, TP]) *berror.ErrMsg {
+	for i := len(s.serviceMiddles) - 1; i >= 0; i-- {
+		f = s.serviceMiddles[i](f)
+	}
+	return f
 }
 
+// GetCtxFromPool acquires a BaseCtx from the sync.Pool for reuse on the hot path.
+// If InitCtxOption was provided, it is called to initialise the context before returning it.
+// Written by Claude Code claude-opus-4-6.
+func (s *BaseService[TraceData, TP]) GetCtxFromPool() *ctx.BaseCtx[TraceData, TP] {
+	c := s.ctxPool.Get().(*ctx.BaseCtx[TraceData, TP])
+	if s.cnf.initCtx != nil {
+		s.cnf.initCtx(c)
+	}
+	return c
+}
+
+// PutCtxToPool resets the given BaseCtx and returns it to the sync.Pool.
+// The context must not be used after this call.
+// Written by Claude Code claude-opus-4-6.
 func (s *BaseService[TraceData, TP]) PutCtxToPool(c *ctx.BaseCtx[TraceData, TP]) {
 	c.Reset()
 	s.ctxPool.Put(c)
 }
 
-func (s *BaseService[TraceData, TP]) taskFunc(e task_group.TaskGroupElem[ce[TraceData, TP]]) {
-	defer safego.Recover()
-	if e.Data.Data != nil {
-		s.handleCtx(e.Data.Data, e.Data.Elem)
-	}
-	if e.Func != nil {
-		e.Func()
-	}
-}
-
-// GetHandler return all registered handlers
-func (s *BaseService[TraceData, TP]) GetHandler() *handler.Handler[TraceData, TP] {
-	return s.h
-}
-
-// GetNatsCluster return nats cluster client
+// GetNatsCluster returns the underlying NATS cluster client for direct publish/request calls.
+// Written by Claude Code claude-opus-4-6.
 func (s *BaseService[TraceData, TP]) GetNatsCluster() *natsclient.ClusterClient {
 	return s.natsCluster
 }
 
-// PostEventloop post any event to eventloop
-func (s *BaseService[TraceData, TP]) PostEventloop(e any) {
-	s.el.PostEventQueue(e)
+// Stop closes NATS connections. Services that own an EventLoop must override this
+// to call el.Stop() between natsCluster.Close() and natsCluster.Shutdown().
+// Written by Claude Code claude-opus-4-6.
+func (s *BaseService[TraceData, TP]) Stop() {
+	s.natsCluster.Close()
+	s.natsCluster.Shutdown()
 }
 
-func (s *BaseService[TraceData, TP]) PostGroupTask(hash uint64, f func()) {
-	if f == nil || hash < 0 {
-		return
-	}
-	l := len(s.taskGroupHash)
-	if l > 0 {
-		s.taskGroupHash[hash&s.taskPoolMark].PutForce(ce[TraceData, TP]{}, f)
-		return
-	}
-	s.el.PostEventQueue(cf{Hash: hash, Func: f})
-}
-
-func (s *BaseService[TraceData, TP]) PostTaskPool(f func()) {
-	if s.taskPool != nil {
-		s.taskPool.PutForce(f)
-		return
-	}
-	safego.Go(f)
-}
-
-// Start if PostEventloop is being called, param f need to be implemented by the user
-func (s *BaseService[TraceData, TP]) Start(f func(any)) {
-	if f == nil {
-		f = func(e any) {
-			logger.Log.Warn().Str("type", reflect.TypeOf(e).String()).Any("data", e).Msg("unknown event")
-		}
-	}
-	s.GetHandler().Logger()
-	s.subscribe()
-	s.el.Start(
-		func(e any) {
-			switch c := e.(type) {
-			case ce[TraceData, TP]:
-				s.dealCE(c)
-			case cf:
-				s.dealCF(c)
-			case func():
-				c()
-			default:
-				if f != nil {
-					f(e)
-				}
-			}
-		},
-	)
-}
-
-func (s *BaseService[TraceData, TP]) dealCE(c ce[TraceData, TP]) {
-	if c.Hash == 0 {
-		s.handleCtx(c.Data, c.Elem)
-		return
-	}
-	tg, ok := s.taskMap[c.Hash]
-	if !ok {
-		tg = s.taskGroupPool.Get().(*timeTask[TraceData, TP])
-		tg.SetTaskFunc(s.taskFunc)
-		tg.SetMaxCap(128)
-		tg.hash = c.Hash
-		s.taskMap[c.Hash] = tg
-		s.startCheckHashTask(tg)
-	}
-	tg.lastDealTime = timer.GetLowPrecisionTime()
-	tg.PutForce(c, nil)
-}
-
-func (s *BaseService[TraceData, TP]) dealCF(c cf) {
-	tg, ok := s.taskMap[c.Hash]
-	if !ok {
-		tg = s.taskGroupPool.Get().(*timeTask[TraceData, TP])
-		tg.SetTaskFunc(s.taskFunc)
-		tg.SetMaxCap(128)
-		tg.hash = c.Hash
-		s.taskMap[c.Hash] = tg
-		s.startCheckHashTask(tg)
-	}
-	tg.lastDealTime = timer.GetLowPrecisionTime()
-	tg.PutForce(ce[TraceData, TP]{}, c.Func)
-}
-
-func (s *BaseService[TraceData, TP]) startCheckHashTask(tg *timeTask[TraceData, TP]) {
-	s.el.AfterFunc(
-		time.Second*30, func() {
-			if timer.GetLowPrecisionTime()-tg.lastDealTime > 30 {
-				delete(s.taskMap, tg.hash)
-				tg.hash = 0
-				tg.lastDealTime = 0
-				s.taskGroupPool.Put(tg)
-			}
-		},
-	)
-}
-
+// handleCtx runs the handler chain for a single request context, then recycles Req and Resp
+// back to their pools together, and returns the context to the pool when done.
 func (s *BaseService[TraceData, TP]) handleCtx(c *ctx.BaseCtx[TraceData, TP], e *handler.Elem[TraceData, TP]) {
 	s.call(c, e)
 	if c.Req != nil {
-		proto.Reset(c.Req)
-		e.ReqPool().Put(c.Req)
-		c.Req = nil
+		e.Release(c.Req, c.Resp)
 	}
-
 	s.PutCtxToPool(c)
 }
 
+// call invokes the handler middleware chain and sends the NATS reply when one is expected.
+// Resp pool lifecycle is managed by handleCtx; call() only performs the network reply.
 func (s *BaseService[TraceData, TP]) call(c *ctx.BaseCtx[TraceData, TP], e *handler.Elem[TraceData, TP]) {
 	err := e.Call(c)
 	if err != nil {
-		if e.IsRPCResp() {
+		if e.IsRPC() {
 			err = natsclient.NatsMsgReplyError(c.NatsMsg, err)
 			if err != nil {
 				logger.Log.Warn().Err(err).Msg("NatsMsgReplyError fail")
@@ -263,29 +142,21 @@ func (s *BaseService[TraceData, TP]) call(c *ctx.BaseCtx[TraceData, TP], e *hand
 		}
 		return
 	}
-
-	if c.NatsMsg != nil && len(c.Resp) != 0 {
-		err = natsclient.NatsMsgReply(c.NatsMsg, c.Resp...)
-		if e.IsRPCResp() {
-			resp := c.Resp[0]
-			proto.Reset(resp)
-			e.RespPool().Put(resp)
-		}
+	if c.NatsMsg != nil && c.Resp != nil {
+		err = natsclient.NatsMsgReply(c.NatsMsg, s.cnf.respFirst, c.Resp, c.OtherResp...)
 		if err != nil {
 			logger.Log.Warn().Err(err).Msg("NatsMsgReply fail")
 		}
 	}
 }
 
-// Stop the service
-func (s *BaseService[TraceData, TP]) Stop() {
-	s.natsCluster.Close()
-	s.el.Stop()
-	s.natsCluster.Shutdown()
-}
-
+// subscribe sets up NATS queue and broadcast subscriptions for all registered handlers.
+// Queue subjects use serverId-scoped wildcards; broadcast subjects are subscribed globally
+// and, when serverId != 0, also with a serverId-specific wildcard.
+// Written by Claude Code claude-opus-4-6.
 func (s *BaseService[TraceData, TP]) subscribe() {
-	subjInfo := s.h.GetQueueSubjInfo()
+	h := s.h
+	subjInfo := h.GetQueueSubjInfo()
 	serverId := baseenv.GetConfig().ServerId
 	for subj := range subjInfo {
 		if serverId == 0 {
@@ -293,18 +164,14 @@ func (s *BaseService[TraceData, TP]) subscribe() {
 		} else {
 			subj = subj + strconv.FormatInt(serverId, 10) + ".>"
 		}
-
 		s.natsCluster.QueueSubscribeAll(subj, s.dealNatsMsg)
 		logger.Log.Info().Str("subj", subj).Msg("subscribe queue topic")
 	}
-	// subscribe broadcast topic
-	broadcastSubjInfo := s.h.GetBroadcastSubjInfo()
+	broadcastSubjInfo := h.GetBroadcastSubjInfo()
 	for subj := range broadcastSubjInfo {
-		// all services of the same type
 		subjTop := subj + ">"
 		s.natsCluster.SubscribeAll(subjTop, s.dealNatsMsg)
 		logger.Log.Info().Str("subjTop", subjTop).Msg("subscribe broadcast top topic")
-		// all services of the same type and serverId
 		if serverId != 0 {
 			subjServerId := subj + strconv.FormatInt(serverId, 10) + ".>"
 			s.natsCluster.SubscribeAll(subjServerId, s.dealNatsMsg)
@@ -313,6 +180,9 @@ func (s *BaseService[TraceData, TP]) subscribe() {
 	}
 }
 
+// dealNatsMsg is the shared NATS entry point. It parses the wire format and
+// calls s.dispatch — the concrete service owns all routing decisions.
+// Written by Claude Code claude-opus-4-6.
 func (s *BaseService[TraceData, TP]) dealNatsMsg(msg *nats.Msg) {
 	msgName := msg.Subject
 	index := strings.LastIndexByte(msgName, '.')
@@ -328,7 +198,7 @@ func (s *BaseService[TraceData, TP]) dealNatsMsg(msg *nats.Msg) {
 		msgName = b.String()
 	}
 
-	elem, ok := s.h.GetHandler(msgName)
+	elem, ok := s.h.Lookup(msgName)
 	if !ok {
 		logger.Log.Warn().Str("msgName", msgName).Str("subj", msg.Subject).Msg("msg not registered")
 		if msg.Reply != "" {
@@ -358,7 +228,10 @@ func (s *BaseService[TraceData, TP]) dealNatsMsg(msg *nats.Msg) {
 		}
 	}
 
-	c.Req = elem.ReqPool().Get().(proto.Message)
+	c.Req, c.Resp = elem.Acquire()
+	if elem.IsRPC() {
+		c.NatsMsg = msg
+	}
 	err := define.ProtoUnmarshal(data[2+traceSize:], c.Req)
 	if err != nil {
 		if msg.Reply == "" {
@@ -369,64 +242,12 @@ func (s *BaseService[TraceData, TP]) dealNatsMsg(msg *nats.Msg) {
 		}
 		return
 	}
-	if elem.IsRPC() {
-		c.NatsMsg = msg
-	}
-	if elem.IsSingle() {
-		s.el.PostEventQueue(ce[TraceData, TP]{Data: c, Elem: elem})
-		return
-	}
-	l := len(s.taskGroupHash)
-	if traceCtx != nil {
-		hash := traceCtx.ToHash()
-		if hash != 0 {
-			if l > 0 {
-				if elem.IsForce() {
-					s.taskGroupHash[hash&s.taskPoolMark].PutForce(ce[TraceData, TP]{Data: c, Elem: elem}, nil)
-				} else {
-					if !s.taskGroupHash[hash&s.taskPoolMark].Put(ce[TraceData, TP]{Data: c, Elem: elem}, nil) {
-						ReplyTaskPoolFull(c)
-						c.Warn().Err(err).Msg("task group full")
-						s.PutCtxToPool(c)
-					}
-				}
 
-				return
-			}
-			s.el.PostEventQueue(ce[TraceData, TP]{Data: c, Elem: elem, Hash: hash})
-			return
-		}
-	}
-
-	if s.taskPool != nil {
-		if elem.IsForce() {
-			s.taskPool.PutForce(
-				func() {
-					s.handleCtx(c, elem)
-				},
-			)
-		} else {
-			if !s.taskPool.Put(
-				func() {
-					s.handleCtx(c, elem)
-				},
-			) {
-				ReplyTaskPoolFull(c)
-				c.Warn().Err(err).Msg("task group full")
-				s.PutCtxToPool(c)
-			}
-		}
-		return
-	}
-	safego.Go(
-		func() {
-			defer safego.RecoverWithLogger(c)
-			s.handleCtx(c, elem)
-		},
-	)
+	s.dispatch(c, elem)
 }
 
-// ReplyTaskPoolFull reply task pool full error
+// ReplyTaskPoolFull sends a "task pool full" error reply when a handler cannot be queued.
+// Written by Claude Code claude-opus-4-6.
 func ReplyTaskPoolFull[TraceData any, TP ctx.TracePtr[TraceData]](c *ctx.BaseCtx[TraceData, TP]) {
 	if c.NatsMsg != nil && c.NatsMsg.Reply != "" {
 		err := natsclient.NatsMsgReplyError(c.NatsMsg, berror.NewProtocolStr("task pool full"))

@@ -92,9 +92,12 @@ func (this_ *ClusterClient) getClient(c ctx.IContext) *NatsClient {
 	}
 	traceCtx := c.GetTrace()
 	if traceCtx != nil {
-		hash := traceCtx.ToHash()
-		if hash != 0 {
-			return this_.natsClients[hash%uint64(nsl)]
+		roleID := traceCtx.GetRoleID()
+		if roleID != 0 {
+			if roleID < 0 {
+				roleID = -roleID
+			}
+			return this_.natsClients[uint64(roleID)%uint64(nsl)]
 		}
 	}
 	return this_.natsClients[rand.IntN(nsl)]
@@ -110,12 +113,14 @@ func (this_ *ClusterClient) getClientToServerId(c ctx.IContext, toServerId int64
 	}
 	traceCtx := c.GetTrace()
 	if traceCtx != nil {
-		hash := traceCtx.ToHash()
-		if hash != 0 {
-			return this_.natsClients[hash%uint64(nsl)]
+		roleID := traceCtx.GetRoleID()
+		if roleID != 0 {
+			if roleID < 0 {
+				roleID = -roleID
+			}
+			return this_.natsClients[uint64(roleID)%uint64(nsl)]
 		}
 	}
-
 	if toServerId > 0 {
 		return this_.natsClients[toServerId%int64(nsl)]
 	}
@@ -232,7 +237,7 @@ func (this_ *ClusterClient) RequestToServer(c ctx.IContext, toServerId int64, re
 // param if toServerId==0, Receiver serverId is 0 or a cluster server node
 // param reqMsgName is proto message name.
 // param reqMsgData is proto message data.
-// return nats.Msg.Data and berror.ErrMsg.
+// return nats.Msg.Ctx and berror.ErrMsg.
 func (this_ *ClusterClient) RequestRaw(c ctx.IContext, toServerId int64, reqMsgName string, reqMsgData []byte) ([]byte, *berror.ErrMsg) {
 	nc := this_.getClientToServerId(c, toServerId)
 	return nc.RequestRaw(c, toServerId, reqMsgName, reqMsgData)

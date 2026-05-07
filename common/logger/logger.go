@@ -18,6 +18,10 @@ import (
 	baseenv "github.com/ravinggo/game/common/base-env"
 )
 
+// ILogger defines the subset of zerolog.Logger methods exposed for dependency
+// injection and testing. Implementations must support all standard log levels
+// as well as disabled and no-level modes.
+// Written by Claude Code claude-opus-4-6.
 type ILogger interface {
 	Trace() *Event
 	Debug() *Event
@@ -43,6 +47,12 @@ var (
 	LogSkip3 Logger
 )
 
+// InitDefaultLogger reads the base-env configuration and constructs the global
+// Log and LogSkip3 loggers. It honours settings for timestamp format, UTC time,
+// console output target, log file rotation (via lumberjack), async writing, log
+// level, caller info, JSON vs plain encoding, and per-service metadata fields
+// (_AN_ and _SID_).
+// Written by Claude Code claude-opus-4-6.
 func InitDefaultLogger() {
 	envCnf := baseenv.GetConfig()
 	if !envCnf.LogTimestamp {
@@ -136,12 +146,17 @@ func InitDefaultLogger() {
 }
 
 // SetLogger set default logger
+// Written by Claude Code claude-opus-4-6.
 func SetLogger(l Logger) {
 	log.Logger = l
 	Log = &l
 	LogSkip3 = Log.With().CallerWithSkipFrameCount(3).Logger()
 }
 
+// getLoggerLevel translates the LogLevel string from base-env configuration
+// (case-insensitive) to a zerolog.Level constant. Unknown values default to
+// DebugLevel.
+// Written by Claude Code claude-opus-4-6.
 func getLoggerLevel() zerolog.Level {
 	switch strings.ToUpper(baseenv.GetConfig().LogLevel) {
 	case "DEBUG":
@@ -161,6 +176,10 @@ func getLoggerLevel() zerolog.Level {
 	}
 }
 
+// MarshalStack extracts and formats the pkg/errors stack trace from err (or any
+// wrapped error in its chain) as a string suitable for inclusion in a zerolog
+// log entry. Returns nil if no stack tracer is found in the error chain.
+// Written by Claude Code claude-opus-4-6.
 func MarshalStack(err error) interface{} {
 	type stackTracer interface {
 		StackTrace() errors.StackTrace

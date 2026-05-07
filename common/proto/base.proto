@@ -10,9 +10,11 @@ message IntTrace{
   string trace_id = 4;
 }
 
-message StringTrace{
-  string role_id = 1;
-  int64 from_server_id = 2;
-  string from_server_type= 3;
-  string trace_id = 4;
+message Ping{
+  int64 client_time = 1;
+}
+
+message Pong{
+  int64 server_time = 2;
+  int64 client_time = 1;
 }

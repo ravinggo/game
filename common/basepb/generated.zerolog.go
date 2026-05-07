@@ -19,9 +19,9 @@ func (m *ErrorInfo) MarshalZerologObject(e *zerolog.Event) {
 	m.MarshalEasyJSON(&w)
 	d, err := w.BuildBytes()
 	if err != nil {
-		e.Str("ErrorInfo error", err.Error())
+		e.Str("basepb.ErrorInfo error", err.Error())
 	} else {
-		e.RawJSON("ErrorInfo", d)
+		e.RawJSON("basepb.ErrorInfo", d)
 	}
 }
 
@@ -32,9 +32,9 @@ func (m *ErrorMessage) MarshalZerologObject(e *zerolog.Event) {
 	m.MarshalEasyJSON(&w)
 	d, err := w.BuildBytes()
 	if err != nil {
-		e.Str("ErrorMessage error", err.Error())
+		e.Str("basepb.ErrorMessage error", err.Error())
 	} else {
-		e.RawJSON("ErrorMessage", d)
+		e.RawJSON("basepb.ErrorMessage", d)
 	}
 }
 
@@ -45,21 +45,34 @@ func (m *IntTrace) MarshalZerologObject(e *zerolog.Event) {
 	m.MarshalEasyJSON(&w)
 	d, err := w.BuildBytes()
 	if err != nil {
-		e.Str("IntTrace error", err.Error())
+		e.Str("basepb.IntTrace error", err.Error())
 	} else {
-		e.RawJSON("IntTrace", d)
+		e.RawJSON("basepb.IntTrace", d)
 	}
 }
 
-func (m *StringTrace) MarshalZerologObject(e *zerolog.Event) {
+func (m *Ping) MarshalZerologObject(e *zerolog.Event) {
 	b := objectpool.GetBytes(2048)
 	defer objectpool.PutBytes(b)
 	w := jwriter.Writer{Buffer: buffer.Buffer{Buf: b}}
 	m.MarshalEasyJSON(&w)
 	d, err := w.BuildBytes()
 	if err != nil {
-		e.Str("StringTrace error", err.Error())
+		e.Str("basepb.Ping error", err.Error())
 	} else {
-		e.RawJSON("StringTrace", d)
+		e.RawJSON("basepb.Ping", d)
+	}
+}
+
+func (m *Pong) MarshalZerologObject(e *zerolog.Event) {
+	b := objectpool.GetBytes(2048)
+	defer objectpool.PutBytes(b)
+	w := jwriter.Writer{Buffer: buffer.Buffer{Buf: b}}
+	m.MarshalEasyJSON(&w)
+	d, err := w.BuildBytes()
+	if err != nil {
+		e.Str("basepb.Pong error", err.Error())
+	} else {
+		e.RawJSON("basepb.Pong", d)
 	}
 }

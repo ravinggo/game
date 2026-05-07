@@ -9,6 +9,7 @@ import (
 )
 
 // AsyncSink write log asynchronously
+// Written by Claude Code claude-opus-4-6.
 type AsyncSink struct {
 	writer io.Writer
 
@@ -20,6 +21,7 @@ type AsyncSink struct {
 }
 
 // NewAsync create a AsyncSink
+// Written by Claude Code claude-opus-4-6.
 func NewAsync(writer io.Writer) *AsyncSink {
 	as := &AsyncSink{
 		writer:   writer,
@@ -40,14 +42,22 @@ var buffPool = sync.Pool{
 	},
 }
 
+// bs is a pooled byte-slice container used by AsyncSink to amortise allocations
+// across many small log writes.
+// Written by Claude Code claude-opus-4-6.
 type bs struct {
 	data []byte
 }
 
+// getBuff acquires a pooled bs instance from buffPool.
+// Written by Claude Code claude-opus-4-6.
 func getBuff() *bs {
 	return buffPool.Get().(*bs)
 }
 
+// putBuff returns a bs to the pool if its capacity is within the pool limit;
+// oversized buffers are discarded to prevent memory growth.
+// Written by Claude Code claude-opus-4-6.
 func putBuff(b *bs) {
 	if cap(b.data) > buffLen {
 		return
@@ -57,10 +67,15 @@ func putBuff(b *bs) {
 }
 
 // Closed return true if closed
+// Written by Claude Code claude-opus-4-6.
 func (this_ *AsyncSink) Closed() bool {
 	return atomic.LoadUint32(&this_.close_) == 1
 }
 
+// Close signals the background goroutine to flush remaining buffered data,
+// waits for it to finish, and then closes the underlying writer if it implements
+// io.Closer.
+// Written by Claude Code claude-opus-4-6.
 func (this_ *AsyncSink) Close() error {
 	atomic.StoreUint32(&this_.close_, 1)
 	this_.cond.Signal()
@@ -75,6 +90,10 @@ func (this_ *AsyncSink) Close() error {
 
 var count int
 
+// run starts the background goroutine that drains the double-buffer and writes
+// accumulated log data to the underlying writer. It recovers from panics and
+// restarts itself to prevent silent log loss.
+// Written by Claude Code claude-opus-4-6.
 func (this_ *AsyncSink) run() {
 	go func() {
 		defer func() {
@@ -124,6 +143,12 @@ func (this_ *AsyncSink) run() {
 	}()
 }
 
+// Write buffers p for asynchronous delivery to the underlying writer. If the
+// last pending buffer has room for p it is appended there to reduce the number
+// of discrete write calls; otherwise a new buffer is acquired from the pool.
+// Writes larger than buffLen bypass the pool entirely. Write is safe for
+// concurrent use.
+// Written by Claude Code claude-opus-4-6.
 func (this_ *AsyncSink) Write(p []byte) (n int, err error) {
 	lp := len(p)
 	this_.cond.L.Lock()

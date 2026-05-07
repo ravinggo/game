@@ -1,11 +1,22 @@
 package callerlocalevent
 
 import (
+	"os"
 	"testing"
 
 	"github.com/ravinggo/game/common/berror"
 	"github.com/ravinggo/game/common/ctx"
+	"github.com/ravinggo/game/common/logger"
 )
+
+// TestMain initialises the logger before any test or benchmark runs, preventing
+// nil-pointer panics in Logger() and other log-emitting code paths.
+// Written by Claude Code claude-opus-4-6.
+func TestMain(m *testing.M) {
+	logger.InitDefaultLogger()
+	Logger()
+	os.Exit(m.Run())
+}
 
 type testStruct struct {
 	Id int
@@ -34,5 +45,4 @@ func init() {
 	Register(
 		"test", ts.call,
 	)
-	Logger()
 }

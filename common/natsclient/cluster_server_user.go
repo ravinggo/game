@@ -184,8 +184,7 @@ func (cnc *ClusterClientServerUser[T, US]) UserSubscribeOne(us US) {
 	if nsl == 0 {
 		panic("nats client is empty")
 	}
-	hash := us.ToHash()
-	client := cnc.natsClients[hash%nsl]
+	client := cnc.natsClients[uint64(us.GetRoleID())%nsl]
 	client.SubscribeUser(us)
 }
 
@@ -195,8 +194,7 @@ func (cnc *ClusterClientServerUser[T, US]) UserSubscribeOneWaitSuccess(us US) {
 	if nsl == 0 {
 		panic("nats client is empty")
 	}
-	hash := us.ToHash()
-	client := cnc.natsClients[hash%nsl]
+	client := cnc.natsClients[uint64(us.GetRoleID())%nsl]
 	client.SubscribeUserWaitSuccess(us)
 }
 
@@ -244,7 +242,7 @@ func (cnc *ClusterClientServerUser[T, US]) PublishUser(c ctx.IContext, us US, pu
 		panic("nats client is empty")
 	}
 
-	client := cnc.natsClients[us.ToHash()%nsl]
+	client := cnc.natsClients[uint64(us.GetRoleID())%nsl]
 	return client.PublishUser(c, us, pubMsg)
 }
 
@@ -254,7 +252,7 @@ func (cnc *ClusterClientServerUser[T, US]) PublishUserMany(c ctx.IContext, us US
 		panic("nats client is empty")
 	}
 
-	client := cnc.natsClients[us.ToHash()%nsl]
+	client := cnc.natsClients[uint64(us.GetRoleID())%nsl]
 	return client.PublishUserMany(c, us, pubMsg...)
 }
 
@@ -267,7 +265,7 @@ func (cnc *ClusterClientServerUser[T, US]) RequestUser(c ctx.IContext, us US, re
 		panic("nats client is empty")
 	}
 
-	client := cnc.natsClients[us.ToHash()%nsl]
+	client := cnc.natsClients[uint64(us.GetRoleID())%nsl]
 	return client.RequestUser(c, us, reqMsg, respMsg)
 }
 

@@ -3,7 +3,6 @@ package service
 import (
 	"github.com/nats-io/nats.go"
 	"github.com/ravinggo/objectpool"
-	"google.golang.org/protobuf/proto"
 
 	"github.com/ravinggo/game/common/berror"
 	"github.com/ravinggo/game/common/ctx"
@@ -13,14 +12,17 @@ import (
 	"github.com/ravinggo/game/common/safego"
 )
 
-// ServerUserService is a service,can use user subject.
+// ServerUserService extends OneHashOneGoService with per-user NATS subject subscriptions.
+// User messages are always hash-routed by user ID, making OneHashOneGo the natural fit.
+// Written by Claude Code claude-opus-4-6.
 type ServerUserService[T1 any, TraceData any, TP ctx.TracePtr[TraceData], US natsclient.ServerUserSubjectPtr[T1]] struct {
-	*BaseService[TraceData, TP]
+	*OneHashOneGoService[TraceData, TP]
 	userNatsCluster *natsclient.ClusterClientServerUser[T1, US]
 	hookUserMsg     HookUserMsg[T1, US]
 }
 
-// NewServerUserService create a ServerUserService.
+// NewServerUserService creates a ServerUserService backed by OneHashOneGo dispatch.
+// Written by Claude Code claude-opus-4-6.
 func NewServerUserService[T1 any, TraceData any, TP ctx.TracePtr[TraceData], US natsclient.ServerUserSubjectPtr[T1]](
 	natsUrls []string,
 	ops ...ServerUserOption[T1, TraceData, TP, US],
@@ -30,7 +32,7 @@ func NewServerUserService[T1 any, TraceData any, TP ctx.TracePtr[TraceData], US 
 		op(serverCnf)
 	}
 	s := &ServerUserService[T1, TraceData, TP, US]{
-		BaseService: NewBaseService[TraceData, TP](
+		OneHashOneGoService: NewOneHashOneGoService[TraceData, TP](
 			natsUrls,
 			serverCnf.options...,
 		),
@@ -44,38 +46,48 @@ func NewServerUserService[T1 any, TraceData any, TP ctx.TracePtr[TraceData], US 
 	return s
 }
 
-// GetUserNatsCluster return *ClusterClientServerUser.
+// GetUserNatsCluster returns the per-user NATS cluster client.
+// Written by Claude Code claude-opus-4-6.
 func (s *ServerUserService[T1, TraceData, TP, US]) GetUserNatsCluster() *natsclient.ClusterClientServerUser[T1, US] {
 	return s.userNatsCluster
 }
 
-// UserSubscribeOne subscribe one user subject.
+// UserSubscribeOne subscribes to one user subject on a single NATS connection.
+// Written by Claude Code claude-opus-4-6.
 func (s *ServerUserService[T1, TraceData, TP, US]) UserSubscribeOne(us US) {
 	s.userNatsCluster.UserSubscribeOne(us)
 }
 
-// UserSubscribeOneWaitSuccess subscribe one user subject and wait success.
-// Only used in multi-cluster or multiple connections to the same cluster
+// UserSubscribeOneWaitSuccess subscribes to one user subject and waits for confirmation.
+// Only useful with multi-cluster or multiple connections to the same cluster.
+// Written by Claude Code claude-opus-4-6.
 func (s *ServerUserService[T1, TraceData, TP, US]) UserSubscribeOneWaitSuccess(us US) {
 	s.userNatsCluster.UserSubscribeOneWaitSuccess(us)
 }
 
-// UserSubscribeAll subscribe all NatsClient for user subject.
+// UserSubscribeAll subscribes to a user subject on all NATS connections.
+// Written by Claude Code claude-opus-4-6.
 func (s *ServerUserService[T1, TraceData, TP, US]) UserSubscribeAll(us US) {
 	s.userNatsCluster.UserSubscribeAll(us)
 }
 
-// UserSubscribeAllWaitSuccess subscribe all NatsClient for user subject and wait success.
-// Only used in multi-cluster or multiple connections to the same cluster
+// UserSubscribeAllWaitSuccess subscribes to a user subject on all connections and waits.
+// Only useful with multi-cluster or multiple connections to the same cluster.
+// Written by Claude Code claude-opus-4-6.
 func (s *ServerUserService[T1, TraceData, TP, US]) UserSubscribeAllWaitSuccess(us US) {
 	s.userNatsCluster.UserSubscribeAllWaitSuccess(us)
 }
 
-// UserUnsubscribe unsubscribe user subject if subscribed.
+// UserUnsubscribe removes the subscription for a user subject if present.
+// Written by Claude Code claude-opus-4-6.
 func (s *ServerUserService[T1, TraceData, TP, US]) UserUnsubscribe(us US) {
 	s.userNatsCluster.UserUnsubscribe(us)
 }
 
+// DealServerUserNatsMsg is the NATS callback for per-user subject messages. It parses
+// the user subject, validates the wire payload, and dispatches each embedded proto
+// message through the handler registry with user-hash-based routing.
+// Written by Claude Code claude-opus-4-6.
 func (s *ServerUserService[T1, TraceData, TP, US]) DealServerUserNatsMsg(msg *nats.Msg) {
 	us := (US)(objectpool.Get[T1]())
 	defer objectpool.Put[T1](us)
@@ -93,7 +105,7 @@ func (s *ServerUserService[T1, TraceData, TP, US]) DealServerUserNatsMsg(msg *na
 	if bErr != nil {
 		return
 	}
-	if s.hookUserMsg != nil { // hook
+	if s.hookUserMsg != nil {
 		s.doHook(us, traceData, msgData, msg)
 		return
 	}
@@ -101,7 +113,7 @@ func (s *ServerUserService[T1, TraceData, TP, US]) DealServerUserNatsMsg(msg *na
 	bErr = natsclient.NatsUnmarshalResponseMany(
 		msgData, func(msgName string, data []byte) *berror.ErrMsg {
 			msgCount++
-			elem, ok := s.h.GetHandler(msgName)
+			elem, ok := s.GetHandler().Lookup(msgName)
 			if !ok {
 				logger.Log.Info().Str("msgName", msgName).Str("subj", msg.Subject).Msg("msg not registered")
 				return nil
@@ -125,7 +137,10 @@ func (s *ServerUserService[T1, TraceData, TP, US]) DealServerUserNatsMsg(msg *na
 					return retErr
 				}
 			}
-			c.Req = elem.ReqPool().Get().(proto.Message)
+			c.Req, c.Resp = elem.Acquire()
+			if elem.IsRPC() {
+				c.NatsMsg = msg
+			}
 			err = define.ProtoUnmarshal(data, c.Req)
 			if err != nil {
 				retErr := berror.NewProtocolErr(err)
@@ -137,45 +152,23 @@ func (s *ServerUserService[T1, TraceData, TP, US]) DealServerUserNatsMsg(msg *na
 				}
 				return retErr
 			}
-			if elem.IsRPC() {
-				c.NatsMsg = msg
+
+			roleID := us.GetRoleID()
+			if roleID == 0 && trace != nil {
+				roleID = trace.GetRoleID()
 			}
-
-			if elem.IsSingle() {
-				s.el.PostEventQueue(ce[TraceData, TP]{Data: c, Elem: elem})
-			} else {
-				l := len(s.taskGroupHash)
-				hash := us.ToHash()
-				if hash == 0 && trace != nil {
-					hash = trace.ToHash()
-				}
-				if hash != 0 {
-					if l > 0 {
-						if elem.IsForce() {
-							s.taskGroupHash[hash&s.taskPoolMark].PutForce(ce[TraceData, TP]{Data: c, Elem: elem}, nil)
-						} else {
-							if !s.taskGroupHash[hash&s.taskPoolMark].Put(ce[TraceData, TP]{Data: c, Elem: elem}, nil) {
-								ReplyTaskPoolFull(c)
-								c.Warn().Err(err).Msg("task group full")
-								s.PutCtxToPool(c)
-							}
-						}
-
-						return nil
-					}
-
-					s.el.PostEventQueue(ce[TraceData, TP]{Data: c, Elem: elem, Hash: hash})
-					return nil
-				} else {
-					c.Error().Err(define.ErrInvalidToHash).Msg("DealServerUserNatsMsg not dispatch")
-					if msg.Reply != "" { // RPC
-						err := natsclient.NatsMsgReplyError(msg, berror.NewProtocolErr(define.ErrInvalidToHash))
-						if err != nil {
-							c.Error().Err(err).Msg("nats reply error")
-						}
+			if roleID == 0 {
+				c.Error().Err(define.ErrZeroRoleID).Msg("DealServerUserNatsMsg: zero RoleID for non-single handler")
+				if msg.Reply != "" {
+					e := natsclient.NatsMsgReplyError(msg, berror.NewProtocolErr(define.ErrZeroRoleID))
+					if e != nil {
+						c.Error().Err(e).Msg("nats reply error")
 					}
 				}
+				return nil
 			}
+			c.GetTrace().SetRoleID(roleID)
+			s.dispatch(c, elem)
 			return nil
 		},
 	)
@@ -184,6 +177,9 @@ func (s *ServerUserService[T1, TraceData, TP, US]) DealServerUserNatsMsg(msg *na
 	}
 }
 
+// doHook calls the optional hookUserMsg callback with panic recovery so that a bad
+// hook cannot crash the NATS subscription goroutine.
+// Written by Claude Code claude-opus-4-6.
 func (s *ServerUserService[T1, TraceData, TP, US]) doHook(us US, traceData []byte, data []byte, msg *nats.Msg) {
 	defer safego.Recover()
 	s.hookUserMsg(us, traceData, data, msg)

@@ -32,9 +32,7 @@ func NewTestService() *TestService {
 			[]string{
 				"nats://192.168.0.160:4222",
 			},
-			service.ServerUserBase[natsclient.ServerIntUserSubject, ctx.IntTrace](
-				service.MiddlesOption(handler.LoggerAndRecover[ctx.IntTrace, *ctx.IntTrace]),
-			),
+			service.ServerUserBase[natsclient.ServerIntUserSubject, ctx.IntTrace](service.IdleCleanupTimeoutOption[ctx.IntTrace](time.Second)),
 		),
 	}
 	t.nc = natsclient.NewClusterClientServerUser[natsclient.ServerIntUserSubject](
@@ -49,10 +47,9 @@ func NewTestService() *TestService {
 }
 
 func (t *TestService) Router() {
-	handler.RegisterRPCResp(t.svc.GetHandler(), "test1", t.Trace)
-	handler.RegisterEvent(t.svc.GetHandler(), "test2", t.TraceString)
-	handler.RegisterRPCResp(t.svc.GetHandler(), "test3", t.Error)
-	callerlocalevent.Register("test localevent eventString", t.eventString)
+	handler.RegisterRPCResp(t.svc, "test1", t.Trace)
+	handler.RegisterEvent(t.svc, "test2", t.Ping)
+	handler.RegisterRPCResp(t.svc, "test3", t.Error)
 	callerlocalevent.Register("test localevent eventInt", t.eventInt)
 }
 
@@ -85,15 +82,11 @@ func (t *TestService) Trace(c *ctx.Int64TraceCtx, req *basepb.IntTrace, resp *ba
 	return callerlocalevent.Call(c, req)
 }
 
-func (t *TestService) eventString(c *ctx.Int64TraceCtx, req *basepb.StringTrace) *berror.ErrMsg {
+func (t *TestService) eventInt(c *ctx.Int64TraceCtx, req *basepb.Ping) *berror.ErrMsg {
 	return nil
 }
 
-func (t *TestService) eventInt(c *ctx.Int64TraceCtx, req *basepb.IntTrace) *berror.ErrMsg {
-	return nil
-}
-
-func (t *TestService) TraceString(c *ctx.Int64TraceCtx, req *basepb.StringTrace) *berror.ErrMsg {
+func (t *TestService) Ping(c *ctx.Int64TraceCtx, req *basepb.Ping) *berror.ErrMsg {
 	err := callerlocalevent.Call(c, req)
 	if err != nil {
 		return err
@@ -127,37 +120,31 @@ func (t *TestService) ReqTrace(roleId int64) {
 	rpc.Req.FromServerId = 2
 	rpc.Req.FromServerType = "3"
 	rpc.Req.TraceId = "4"
-	// rpc := natsclient.ClusterRequest[basepb.IntTrace, *basepb.IntTrace]{}
 	err := rpc.RequestToServer(
 		t.nc.ClusterClient, c, baseenv.GetConfig().ServerId,
 	)
 	if err != nil {
 		logger.Log.Error().Err(err).Msg("ReqTrace IntTrace")
 	}
+	c2 := objectpool.Get[ctx.Int64TraceCtx]()
+	defer objectpool.Put[ctx.Int64TraceCtx](c2)
 
-	c = objectpool.Get[ctx.Int64TraceCtx]()
-	defer objectpool.Put[ctx.Int64TraceCtx](c)
-
-	rpc1 := natsclient.NewClusterPublish[basepb.StringTrace]()
+	rpc1 := natsclient.NewClusterPublish[basepb.Ping]()
 	defer rpc1.Free()
-	rpc1.Pub.RoleId = "x"
-	rpc1.Pub.FromServerId = 2
-	rpc1.Pub.FromServerType = "3"
-	rpc1.Pub.TraceId = "4"
-
+	rpc1.Pub.ClientTime = time.Now().UnixMilli()
 	err = rpc1.PublishToServer(
-		t.nc.ClusterClient, c, baseenv.GetConfig().ServerId,
+		t.nc.ClusterClient, c2, baseenv.GetConfig().ServerId,
 	)
 	if err != nil {
 		logger.Log.Panic().Err(err).Msg("ReqTrace StringTrace")
 	}
 	if roleId%100 == 0 {
-		c = objectpool.Get[ctx.Int64TraceCtx]()
-		defer objectpool.Put[ctx.Int64TraceCtx](c)
+		c1 := objectpool.Get[ctx.Int64TraceCtx]()
+		defer objectpool.Put[ctx.Int64TraceCtx](c1)
 
 		if rpc.Resp.RoleId == roleId {
-			c.TD.RoleId = roleId
-			c.TD.FromServerId = 0
+			c1.TD.RoleId = roleId
+			c1.TD.FromServerId = 0
 		}
 
 		req := natsclient.NewClusterRequestServerUser[basepb.ErrorMessage, basepb.IntTrace, natsclient.ServerIntUserSubject]()
@@ -168,8 +155,6 @@ func (t *TestService) ReqTrace(roleId int64) {
 
 		if err != nil {
 			logger.Log.Panic().Err(err).Int64("roleId", roleId).Msg("ReqUser ErrorMessage")
-		} else {
-			// logger.Log.Info().Int64("roleId", roleId).Msg("ReqUser ErrorMessage success")
 		}
 	}
 }

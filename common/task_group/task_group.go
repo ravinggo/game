@@ -6,12 +6,27 @@ import (
 	"github.com/ravinggo/game/common/safego"
 )
 
+// TaskGroupElem is a single work item held by a TaskGroup. Data carries
+// caller-supplied metadata (e.g. a user-id or session object) that is
+// forwarded to the handler function alongside the action to execute.
+// Written by Claude Code claude-opus-4-6.
 type TaskGroupElem[T any] struct {
 	Data T
 	Func func()
 }
 
-// TaskGroup dynamic task group, can't use MPSC? Only mutex can be used
+// TaskGroup is a dynamic, per-key serialisation primitive. All tasks submitted
+// to the same TaskGroup instance are executed sequentially in a single
+// goroutine; a new goroutine is spawned automatically when the first task
+// arrives and exits as soon as the backlog is empty, keeping idle memory
+// overhead minimal.
+//
+// TaskGroup is safe for concurrent Put / PutForce calls but is NOT designed as
+// a general-purpose MPSC queue — it relies on a mutex rather than a lock-free
+// ring. Use it when per-entity ordering is more important than raw throughput.
+//
+// The zero value is not usable; construct one with NewTaskGroup.
+// Written by Claude Code claude-opus-4-6.
 type TaskGroup[T any] struct {
 	data      [2][]TaskGroupElem[T]
 	mu        sync.Mutex
@@ -21,6 +36,11 @@ type TaskGroup[T any] struct {
 	meta      int64
 }
 
+// NewTaskGroup allocates a TaskGroup with the given handler and maximum
+// pending-task capacity. maxCap is clamped to a minimum of 16. The handler f
+// is called for every TaskGroupElem in FIFO order on a dedicated goroutine; it
+// is wrapped in a recover so a panic does not terminate the goroutine.
+// Written by Claude Code claude-opus-4-6.
 func NewTaskGroup[T any](f func(TaskGroupElem[T]), maxCap int) *TaskGroup[T] {
 	if maxCap < 16 {
 		maxCap = 16
@@ -35,17 +55,29 @@ func NewTaskGroup[T any](f func(TaskGroupElem[T]), maxCap int) *TaskGroup[T] {
 	return tg
 }
 
-// SetTaskFunc why add this function? for sync.Pool
+// SetTaskFunc replaces the task handler. This is provided primarily to support
+// reuse of TaskGroup instances obtained from a sync.Pool — it must not be
+// called while the group has tasks in flight.
+// Written by Claude Code claude-opus-4-6.
 func (this_ *TaskGroup[T]) SetTaskFunc(f func(TaskGroupElem[T])) {
 	this_.f = f
 }
 
-// SetMaxCap why add this function? for sync.Pool
+// SetMaxCap updates the maximum pending-task capacity. Like SetTaskFunc this
+// exists to support sync.Pool reuse and must not be called concurrently with
+// Put / PutForce.
+// Written by Claude Code claude-opus-4-6.
 func (this_ *TaskGroup[T]) SetMaxCap(maxCap int) {
 	this_.maxCap = maxCap
 }
 
-// PutForce force put task to TaskGroup
+// PutForce enqueues a task unconditionally, bypassing the capacity limit. This
+// is the preferred path for critical operations (e.g. payment processing) where
+// dropping the task would be worse than allowing the queue to grow beyond its
+// soft limit.
+//
+// If no goroutine is currently running for this group, PutForce spawns one.
+// Written by Claude Code claude-opus-4-6.
 func (this_ *TaskGroup[T]) PutForce(d T, f func()) {
 	run := false
 	this_.mu.Lock()
@@ -89,7 +121,11 @@ func (this_ *TaskGroup[T]) PutForce(d T, f func()) {
 	}
 }
 
-// Put task to TaskGroup, if task group is full, return false
+// Put attempts to enqueue a task. It returns false without enqueueing if the
+// pending task count has reached maxCap, providing back-pressure to callers.
+// If no goroutine is currently running for this group and the task is
+// accepted, Put spawns one.
+// Written by Claude Code claude-opus-4-6.
 func (this_ *TaskGroup[T]) Put(d T, f func()) bool {
 	run := false
 	this_.mu.Lock()
@@ -137,7 +173,10 @@ func (this_ *TaskGroup[T]) Put(d T, f func()) bool {
 	return true
 }
 
-// IsRunning return true if TaskGroup is running
+// IsRunning reports whether the internal drain goroutine is currently active.
+// A return value of false means the group is idle and the next Put / PutForce
+// will spawn a new goroutine.
+// Written by Claude Code claude-opus-4-6.
 func (this_ *TaskGroup[T]) IsRunning() bool {
 	this_.mu.Lock()
 	isRunning := this_.isRunning

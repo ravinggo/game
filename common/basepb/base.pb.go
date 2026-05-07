@@ -98,24 +98,21 @@ func (*IntTrace) XXX_MessageName() string {
 	return "basepb.IntTrace"
 }
 
-type StringTrace struct {
-	RoleId         string `protobuf:"bytes,1,opt,name=role_id,json=roleId,proto3" json:"role_id,omitempty"`
-	FromServerId   int64  `protobuf:"varint,2,opt,name=from_server_id,json=fromServerId,proto3" json:"from_server_id,omitempty"`
-	FromServerType string `protobuf:"bytes,3,opt,name=from_server_type,json=fromServerType,proto3" json:"from_server_type,omitempty"`
-	TraceId        string `protobuf:"bytes,4,opt,name=trace_id,json=traceId,proto3" json:"trace_id,omitempty"`
+type Ping struct {
+	ClientTime int64 `protobuf:"varint,1,opt,name=client_time,json=clientTime,proto3" json:"client_time,omitempty"`
 }
 
-func (m *StringTrace) Reset()      { *m = StringTrace{} }
-func (*StringTrace) ProtoMessage() {}
-func (*StringTrace) Descriptor() ([]byte, []int) {
+func (m *Ping) Reset()      { *m = Ping{} }
+func (*Ping) ProtoMessage() {}
+func (*Ping) Descriptor() ([]byte, []int) {
 	return fileDescriptor_db1b6b0986796150, []int{1}
 }
-func (m *StringTrace) XXX_Unmarshal(b []byte) error {
+func (m *Ping) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
 }
-func (m *StringTrace) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+func (m *Ping) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 	if deterministic {
-		return xxx_messageInfo_StringTrace.Marshal(b, m, deterministic)
+		return xxx_messageInfo_Ping.Marshal(b, m, deterministic)
 	} else {
 		b = b[:cap(b)]
 		n, err := m.MarshalToSizedBuffer(b)
@@ -125,58 +122,93 @@ func (m *StringTrace) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) 
 		return b[:n], nil
 	}
 }
-func (m *StringTrace) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_StringTrace.Merge(m, src)
+func (m *Ping) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_Ping.Merge(m, src)
 }
-func (m *StringTrace) XXX_Size() int {
+func (m *Ping) XXX_Size() int {
 	return m.Size()
 }
-func (m *StringTrace) XXX_DiscardUnknown() {
-	xxx_messageInfo_StringTrace.DiscardUnknown(m)
+func (m *Ping) XXX_DiscardUnknown() {
+	xxx_messageInfo_Ping.DiscardUnknown(m)
 }
 
-var xxx_messageInfo_StringTrace proto.InternalMessageInfo
+var xxx_messageInfo_Ping proto.InternalMessageInfo
 
-func (m *StringTrace) GetRoleId() string {
+func (m *Ping) GetClientTime() int64 {
 	if m != nil {
-		return m.RoleId
-	}
-	return ""
-}
-
-func (m *StringTrace) GetFromServerId() int64 {
-	if m != nil {
-		return m.FromServerId
+		return m.ClientTime
 	}
 	return 0
 }
 
-func (m *StringTrace) GetFromServerType() string {
-	if m != nil {
-		return m.FromServerType
-	}
-	return ""
+func (*Ping) XXX_MessageName() string {
+	return "basepb.Ping"
 }
 
-func (m *StringTrace) GetTraceId() string {
-	if m != nil {
-		return m.TraceId
-	}
-	return ""
+type Pong struct {
+	ServerTime int64 `protobuf:"varint,2,opt,name=server_time,json=serverTime,proto3" json:"server_time,omitempty"`
+	ClientTime int64 `protobuf:"varint,1,opt,name=client_time,json=clientTime,proto3" json:"client_time,omitempty"`
 }
 
-func (*StringTrace) XXX_MessageName() string {
-	return "basepb.StringTrace"
+func (m *Pong) Reset()      { *m = Pong{} }
+func (*Pong) ProtoMessage() {}
+func (*Pong) Descriptor() ([]byte, []int) {
+	return fileDescriptor_db1b6b0986796150, []int{2}
+}
+func (m *Pong) XXX_Unmarshal(b []byte) error {
+	return m.Unmarshal(b)
+}
+func (m *Pong) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	if deterministic {
+		return xxx_messageInfo_Pong.Marshal(b, m, deterministic)
+	} else {
+		b = b[:cap(b)]
+		n, err := m.MarshalToSizedBuffer(b)
+		if err != nil {
+			return nil, err
+		}
+		return b[:n], nil
+	}
+}
+func (m *Pong) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_Pong.Merge(m, src)
+}
+func (m *Pong) XXX_Size() int {
+	return m.Size()
+}
+func (m *Pong) XXX_DiscardUnknown() {
+	xxx_messageInfo_Pong.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_Pong proto.InternalMessageInfo
+
+func (m *Pong) GetServerTime() int64 {
+	if m != nil {
+		return m.ServerTime
+	}
+	return 0
+}
+
+func (m *Pong) GetClientTime() int64 {
+	if m != nil {
+		return m.ClientTime
+	}
+	return 0
+}
+
+func (*Pong) XXX_MessageName() string {
+	return "basepb.Pong"
 }
 func init() {
 	proto.RegisterType((*IntTrace)(nil), "basepb.IntTrace")
-	proto.RegisterType((*StringTrace)(nil), "basepb.StringTrace")
+	proto.RegisterType((*Ping)(nil), "basepb.Ping")
+	proto.RegisterType((*Pong)(nil), "basepb.Pong")
 }
 
 func init() { proto.RegisterFile("base.proto", fileDescriptor_db1b6b0986796150) }
 
 var fileDescriptor_db1b6b0986796150 = []byte{
-	// 220 bytes of a gzipped FileDescriptorProto
+	// 256 bytes of a gzipped FileDescriptorProto
 	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0xe2, 0xe2, 0x4a, 0x4a, 0x2c, 0x4e,
 	0xd5, 0x2b, 0x28, 0xca, 0x2f, 0xc9, 0x17, 0x62, 0x03, 0xb1, 0x0b, 0x92, 0x94, 0xfa, 0x18, 0xb9,
 	0x38, 0x3c, 0xf3, 0x4a, 0x42, 0x8a, 0x12, 0x93, 0x53, 0x85, 0xc4, 0xb9, 0xd8, 0x8b, 0xf2, 0x73,
@@ -185,18 +217,23 @@ var fileDescriptor_db1b6b0986796150 = []byte{
 	0x3c, 0x13, 0x58, 0x9e, 0x07, 0x24, 0x1a, 0x0c, 0x16, 0xf4, 0x4c, 0x11, 0xd2, 0xe0, 0x12, 0x40,
 	0x56, 0x55, 0x52, 0x59, 0x90, 0x2a, 0xc1, 0xac, 0xc0, 0xa8, 0xc1, 0x19, 0xc4, 0x87, 0x50, 0x17,
 	0x52, 0x59, 0x90, 0x2a, 0x24, 0xc9, 0xc5, 0x51, 0x02, 0xb2, 0x11, 0x64, 0x12, 0x0b, 0x58, 0x05,
-	0x3b, 0x98, 0xef, 0x99, 0xa2, 0x34, 0x91, 0x91, 0x8b, 0x3b, 0xb8, 0xa4, 0x28, 0x33, 0x2f, 0x1d,
-	0xab, 0x9b, 0x38, 0x07, 0xc0, 0x4d, 0x4e, 0x46, 0x37, 0x1e, 0xca, 0x31, 0x9c, 0x78, 0x24, 0xc7,
-	0x78, 0xe1, 0x91, 0x1c, 0xe3, 0x83, 0x47, 0x72, 0x8c, 0x2f, 0x1e, 0xc9, 0x31, 0x7c, 0x78, 0x24,
-	0xc7, 0x38, 0xe1, 0xb1, 0x1c, 0xc3, 0x89, 0xc7, 0x72, 0x8c, 0x17, 0x1e, 0xcb, 0x31, 0xdc, 0x78,
-	0x2c, 0xc7, 0x10, 0xc5, 0xa1, 0xa7, 0x0f, 0x09, 0xd8, 0x24, 0x36, 0x70, 0x38, 0x1b, 0x03, 0x02,
-	0x00, 0x00, 0xff, 0xff, 0x3b, 0x6f, 0xdc, 0xf4, 0x75, 0x01, 0x00, 0x00,
+	0x3b, 0x98, 0xef, 0x99, 0xa2, 0xa4, 0xce, 0xc5, 0x12, 0x90, 0x99, 0x97, 0x2e, 0x24, 0xcf, 0xc5,
+	0x9d, 0x9c, 0x93, 0x99, 0x9a, 0x57, 0x12, 0x5f, 0x92, 0x99, 0x9b, 0x0a, 0x75, 0x0f, 0x17, 0x44,
+	0x28, 0x24, 0x33, 0x37, 0x55, 0xc9, 0x83, 0x8b, 0x25, 0x20, 0x1f, 0xa2, 0x10, 0x66, 0x21, 0x48,
+	0x21, 0xc4, 0x61, 0x5c, 0x10, 0x21, 0x90, 0x42, 0x82, 0x26, 0x39, 0x19, 0xdd, 0x78, 0x28, 0xc7,
+	0x70, 0xe2, 0x91, 0x1c, 0xe3, 0x85, 0x47, 0x72, 0x8c, 0x0f, 0x1e, 0xc9, 0x31, 0xbe, 0x78, 0x24,
+	0xc7, 0xf0, 0xe1, 0x91, 0x1c, 0xe3, 0x84, 0xc7, 0x72, 0x0c, 0x27, 0x1e, 0xcb, 0x31, 0x5e, 0x78,
+	0x2c, 0xc7, 0x70, 0xe3, 0xb1, 0x1c, 0x43, 0x14, 0x87, 0x9e, 0x3e, 0x24, 0xdc, 0x92, 0xd8, 0xc0,
+	0xc1, 0x68, 0x0c, 0x08, 0x00, 0x00, 0xff, 0xff, 0x01, 0xe2, 0xa7, 0x26, 0x54, 0x01, 0x00, 0x00,
 }
 
 func (m *IntTrace) ProtoReflect() google_golang_org_protobuf_reflect_protoreflect.Message {
 	return nil
 }
-func (m *StringTrace) ProtoReflect() google_golang_org_protobuf_reflect_protoreflect.Message {
+func (m *Ping) ProtoReflect() google_golang_org_protobuf_reflect_protoreflect.Message {
+	return nil
+}
+func (m *Pong) ProtoReflect() google_golang_org_protobuf_reflect_protoreflect.Message {
 	return nil
 }
 
@@ -249,7 +286,7 @@ func (m *IntTrace) MarshalToSizedBuffer(dAtA []byte) (int, error) {
 	return len(dAtA) - i, nil
 }
 
-func (m *StringTrace) Marshal() (dAtA []byte, err error) {
+func (m *Ping) Marshal() (dAtA []byte, err error) {
 	size := m.Size()
 	dAtA = make([]byte, size)
 	n, err := m.MarshalToSizedBuffer(dAtA[:size])
@@ -259,41 +296,53 @@ func (m *StringTrace) Marshal() (dAtA []byte, err error) {
 	return dAtA[:n], nil
 }
 
-func (m *StringTrace) MarshalTo(dAtA []byte) (int, error) {
+func (m *Ping) MarshalTo(dAtA []byte) (int, error) {
 	size := m.Size()
 	return m.MarshalToSizedBuffer(dAtA[:size])
 }
 
-func (m *StringTrace) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+func (m *Ping) MarshalToSizedBuffer(dAtA []byte) (int, error) {
 	i := len(dAtA)
 	_ = i
 	var l int
 	_ = l
-	if len(m.TraceId) > 0 {
-		i -= len(m.TraceId)
-		copy(dAtA[i:], m.TraceId)
-		i = encodeVarintBase(dAtA, i, uint64(len(m.TraceId)))
+	if m.ClientTime != 0 {
+		i = encodeVarintBase(dAtA, i, uint64(m.ClientTime))
 		i--
-		dAtA[i] = 0x22
+		dAtA[i] = 0x8
 	}
-	if len(m.FromServerType) > 0 {
-		i -= len(m.FromServerType)
-		copy(dAtA[i:], m.FromServerType)
-		i = encodeVarintBase(dAtA, i, uint64(len(m.FromServerType)))
-		i--
-		dAtA[i] = 0x1a
+	return len(dAtA) - i, nil
+}
+
+func (m *Pong) Marshal() (dAtA []byte, err error) {
+	size := m.Size()
+	dAtA = make([]byte, size)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
+	if err != nil {
+		return nil, err
 	}
-	if m.FromServerId != 0 {
-		i = encodeVarintBase(dAtA, i, uint64(m.FromServerId))
+	return dAtA[:n], nil
+}
+
+func (m *Pong) MarshalTo(dAtA []byte) (int, error) {
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *Pong) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
+	_ = i
+	var l int
+	_ = l
+	if m.ServerTime != 0 {
+		i = encodeVarintBase(dAtA, i, uint64(m.ServerTime))
 		i--
 		dAtA[i] = 0x10
 	}
-	if len(m.RoleId) > 0 {
-		i -= len(m.RoleId)
-		copy(dAtA[i:], m.RoleId)
-		i = encodeVarintBase(dAtA, i, uint64(len(m.RoleId)))
+	if m.ClientTime != 0 {
+		i = encodeVarintBase(dAtA, i, uint64(m.ClientTime))
 		i--
-		dAtA[i] = 0xa
+		dAtA[i] = 0x8
 	}
 	return len(dAtA) - i, nil
 }
@@ -366,7 +415,7 @@ func (m *IntTrace) MarshalEasyJSON(w *github_com_mailru_easyjson_jwriter.Writer)
 
 }
 
-func (m *StringTrace) MarshalEasyJSON(w *github_com_mailru_easyjson_jwriter.Writer) {
+func (m *Ping) MarshalEasyJSON(w *github_com_mailru_easyjson_jwriter.Writer) {
 	if m == nil {
 		w.RawString("null")
 		return
@@ -374,45 +423,44 @@ func (m *StringTrace) MarshalEasyJSON(w *github_com_mailru_easyjson_jwriter.Writ
 
 	w.RawByte('{')
 	needWriteComma := false
-	if m.RoleId != "" {
+	if m.ClientTime != 0 {
 		w.RawByte('"')
-		w.RawString("role_id")
+		w.RawString("client_time")
 		w.RawByte('"')
 		w.RawByte(':')
-		w.String(m.RoleId)
+		w.Int64(int64(m.ClientTime))
 		needWriteComma = true
 	}
-	if m.FromServerId != 0 {
+	_ = needWriteComma
+	w.RawByte('}')
+
+}
+
+func (m *Pong) MarshalEasyJSON(w *github_com_mailru_easyjson_jwriter.Writer) {
+	if m == nil {
+		w.RawString("null")
+		return
+	}
+
+	w.RawByte('{')
+	needWriteComma := false
+	if m.ClientTime != 0 {
+		w.RawByte('"')
+		w.RawString("client_time")
+		w.RawByte('"')
+		w.RawByte(':')
+		w.Int64(int64(m.ClientTime))
+		needWriteComma = true
+	}
+	if m.ServerTime != 0 {
 		if needWriteComma {
 			w.RawByte(',')
 		}
 		w.RawByte('"')
-		w.RawString("from_server_id")
+		w.RawString("server_time")
 		w.RawByte('"')
 		w.RawByte(':')
-		w.Int64(int64(m.FromServerId))
-		needWriteComma = true
-	}
-	if m.FromServerType != "" {
-		if needWriteComma {
-			w.RawByte(',')
-		}
-		w.RawByte('"')
-		w.RawString("from_server_type")
-		w.RawByte('"')
-		w.RawByte(':')
-		w.String(m.FromServerType)
-		needWriteComma = true
-	}
-	if m.TraceId != "" {
-		if needWriteComma {
-			w.RawByte(',')
-		}
-		w.RawByte('"')
-		w.RawString("trace_id")
-		w.RawByte('"')
-		w.RawByte(':')
-		w.String(m.TraceId)
+		w.Int64(int64(m.ServerTime))
 		needWriteComma = true
 	}
 	_ = needWriteComma
@@ -433,16 +481,29 @@ func (m *IntTrace) GoString() string {
 	return m.String()
 }
 
-func (m *StringTrace) MarshalJSON() ([]byte, error) {
+func (m *Ping) MarshalJSON() ([]byte, error) {
 	w := github_com_mailru_easyjson_jwriter.Writer{Buffer: github_com_mailru_easyjson_buffer.Buffer{Buf: make([]byte, 0, 2048)}}
 	m.MarshalEasyJSON(&w)
 	return w.BuildBytes()
 }
-func (m *StringTrace) String() string {
+func (m *Ping) String() string {
 	d, _ := m.MarshalJSON()
 	return *(*string)(unsafe.Pointer(&d))
 }
-func (m *StringTrace) GoString() string {
+func (m *Ping) GoString() string {
+	return m.String()
+}
+
+func (m *Pong) MarshalJSON() ([]byte, error) {
+	w := github_com_mailru_easyjson_jwriter.Writer{Buffer: github_com_mailru_easyjson_buffer.Buffer{Buf: make([]byte, 0, 2048)}}
+	m.MarshalEasyJSON(&w)
+	return w.BuildBytes()
+}
+func (m *Pong) String() string {
+	d, _ := m.MarshalJSON()
+	return *(*string)(unsafe.Pointer(&d))
+}
+func (m *Pong) GoString() string {
 	return m.String()
 }
 
@@ -469,26 +530,29 @@ func (m *IntTrace) Size() (n int) {
 	return n
 }
 
-func (m *StringTrace) Size() (n int) {
+func (m *Ping) Size() (n int) {
 	if m == nil {
 		return 0
 	}
 	var l int
 	_ = l
-	l = len(m.RoleId)
-	if l > 0 {
-		n += 1 + l + sovBase(uint64(l))
+	if m.ClientTime != 0 {
+		n += 1 + sovBase(uint64(m.ClientTime))
 	}
-	if m.FromServerId != 0 {
-		n += 1 + sovBase(uint64(m.FromServerId))
+	return n
+}
+
+func (m *Pong) Size() (n int) {
+	if m == nil {
+		return 0
 	}
-	l = len(m.FromServerType)
-	if l > 0 {
-		n += 1 + l + sovBase(uint64(l))
+	var l int
+	_ = l
+	if m.ClientTime != 0 {
+		n += 1 + sovBase(uint64(m.ClientTime))
 	}
-	l = len(m.TraceId)
-	if l > 0 {
-		n += 1 + l + sovBase(uint64(l))
+	if m.ServerTime != 0 {
+		n += 1 + sovBase(uint64(m.ServerTime))
 	}
 	return n
 }
@@ -651,7 +715,7 @@ func (m *IntTrace) Unmarshal(dAtA []byte) error {
 	}
 	return nil
 }
-func (m *StringTrace) Unmarshal(dAtA []byte) error {
+func (m *Ping) Unmarshal(dAtA []byte) error {
 	l := len(dAtA)
 	iNdEx := 0
 	for iNdEx < l {
@@ -674,17 +738,17 @@ func (m *StringTrace) Unmarshal(dAtA []byte) error {
 		fieldNum := int32(wire >> 3)
 		wireType := int(wire & 0x7)
 		if wireType == 4 {
-			return fmt.Errorf("proto: StringTrace: wiretype end group for non-group")
+			return fmt.Errorf("proto: Ping: wiretype end group for non-group")
 		}
 		if fieldNum <= 0 {
-			return fmt.Errorf("proto: StringTrace: illegal tag %d (wire type %d)", fieldNum, wire)
+			return fmt.Errorf("proto: Ping: illegal tag %d (wire type %d)", fieldNum, wire)
 		}
 		switch fieldNum {
 		case 1:
-			if wireType != 2 {
-				return fmt.Errorf("proto: wrong wireType = %d for field RoleId", wireType)
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field ClientTime", wireType)
 			}
-			var stringLen uint64
+			m.ClientTime = 0
 			for shift := uint(0); ; shift += 7 {
 				if shift >= 64 {
 					return ErrIntOverflowBase
@@ -694,29 +758,85 @@ func (m *StringTrace) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				stringLen |= uint64(b&0x7F) << shift
+				m.ClientTime |= int64(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
 			}
-			intStringLen := int(stringLen)
-			if intStringLen < 0 {
+		default:
+			iNdEx = preIndex
+			skippy, err := skipBase(dAtA[iNdEx:])
+			if err != nil {
+				return err
+			}
+			if (skippy < 0) || (iNdEx+skippy) < 0 {
 				return ErrInvalidLengthBase
 			}
-			postIndex := iNdEx + intStringLen
-			if postIndex < 0 {
-				return ErrInvalidLengthBase
-			}
-			if postIndex > l {
+			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.RoleId = string(dAtA[iNdEx:postIndex])
-			iNdEx = postIndex
+			iNdEx += skippy
+		}
+	}
+
+	if iNdEx > l {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
+}
+func (m *Pong) Unmarshal(dAtA []byte) error {
+	l := len(dAtA)
+	iNdEx := 0
+	for iNdEx < l {
+		preIndex := iNdEx
+		var wire uint64
+		for shift := uint(0); ; shift += 7 {
+			if shift >= 64 {
+				return ErrIntOverflowBase
+			}
+			if iNdEx >= l {
+				return io.ErrUnexpectedEOF
+			}
+			b := dAtA[iNdEx]
+			iNdEx++
+			wire |= uint64(b&0x7F) << shift
+			if b < 0x80 {
+				break
+			}
+		}
+		fieldNum := int32(wire >> 3)
+		wireType := int(wire & 0x7)
+		if wireType == 4 {
+			return fmt.Errorf("proto: Pong: wiretype end group for non-group")
+		}
+		if fieldNum <= 0 {
+			return fmt.Errorf("proto: Pong: illegal tag %d (wire type %d)", fieldNum, wire)
+		}
+		switch fieldNum {
+		case 1:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field ClientTime", wireType)
+			}
+			m.ClientTime = 0
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowBase
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				m.ClientTime |= int64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
 		case 2:
 			if wireType != 0 {
-				return fmt.Errorf("proto: wrong wireType = %d for field FromServerId", wireType)
+				return fmt.Errorf("proto: wrong wireType = %d for field ServerTime", wireType)
 			}
-			m.FromServerId = 0
+			m.ServerTime = 0
 			for shift := uint(0); ; shift += 7 {
 				if shift >= 64 {
 					return ErrIntOverflowBase
@@ -726,75 +846,11 @@ func (m *StringTrace) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				m.FromServerId |= int64(b&0x7F) << shift
+				m.ServerTime |= int64(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
 			}
-		case 3:
-			if wireType != 2 {
-				return fmt.Errorf("proto: wrong wireType = %d for field FromServerType", wireType)
-			}
-			var stringLen uint64
-			for shift := uint(0); ; shift += 7 {
-				if shift >= 64 {
-					return ErrIntOverflowBase
-				}
-				if iNdEx >= l {
-					return io.ErrUnexpectedEOF
-				}
-				b := dAtA[iNdEx]
-				iNdEx++
-				stringLen |= uint64(b&0x7F) << shift
-				if b < 0x80 {
-					break
-				}
-			}
-			intStringLen := int(stringLen)
-			if intStringLen < 0 {
-				return ErrInvalidLengthBase
-			}
-			postIndex := iNdEx + intStringLen
-			if postIndex < 0 {
-				return ErrInvalidLengthBase
-			}
-			if postIndex > l {
-				return io.ErrUnexpectedEOF
-			}
-			m.FromServerType = string(dAtA[iNdEx:postIndex])
-			iNdEx = postIndex
-		case 4:
-			if wireType != 2 {
-				return fmt.Errorf("proto: wrong wireType = %d for field TraceId", wireType)
-			}
-			var stringLen uint64
-			for shift := uint(0); ; shift += 7 {
-				if shift >= 64 {
-					return ErrIntOverflowBase
-				}
-				if iNdEx >= l {
-					return io.ErrUnexpectedEOF
-				}
-				b := dAtA[iNdEx]
-				iNdEx++
-				stringLen |= uint64(b&0x7F) << shift
-				if b < 0x80 {
-					break
-				}
-			}
-			intStringLen := int(stringLen)
-			if intStringLen < 0 {
-				return ErrInvalidLengthBase
-			}
-			postIndex := iNdEx + intStringLen
-			if postIndex < 0 {
-				return ErrInvalidLengthBase
-			}
-			if postIndex > l {
-				return io.ErrUnexpectedEOF
-			}
-			m.TraceId = string(dAtA[iNdEx:postIndex])
-			iNdEx = postIndex
 		default:
 			iNdEx = preIndex
 			skippy, err := skipBase(dAtA[iNdEx:])

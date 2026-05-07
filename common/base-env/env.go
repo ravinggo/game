@@ -33,6 +33,10 @@ const (
 	OpenCheat       = "OPEN_CHEAT"
 )
 
+// Config holds all runtime configuration read from environment variables at startup.
+// Each field maps to a specific env var (see the envconfig tags). Default values are
+// defined in the package-level cfg variable and can be overridden by the environment.
+// Written by Claude Code claude-opus-4-6.
 type Config struct {
 	ServerType string `envconfig:"SERVER_TYPE"` // app name
 	ServerId   int64  `envconfig:"SERVER_ID"`   // app server id
@@ -118,14 +122,24 @@ var (
 	}
 )
 
+// InitConfig populates the package-level Config singleton from the current environment
+// using kelseyhightower/envconfig. It panics if a required variable is missing or
+// cannot be parsed. Call once at program startup before calling GetConfig.
+// Written by Claude Code claude-opus-4-6.
 func InitConfig() {
 	envconfig.MustProcess("", &cfg)
 }
 
+// GetConfig returns a pointer to the package-level Config singleton. Callers must not
+// mutate the returned value. InitConfig should be called before GetConfig.
+// Written by Claude Code claude-opus-4-6.
 func GetConfig() *Config {
 	return &cfg
 }
 
+// String serialises the Config to a JSON string for logging or debugging purposes.
+// It panics if JSON marshalling fails, which should never happen for this type.
+// Written by Claude Code claude-opus-4-6.
 func (c *Config) String() string {
 	data, err := json.Marshal(c)
 	if err != nil {

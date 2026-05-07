@@ -1,10 +1,7 @@
+// Written by Claude Code claude-opus-4-6.
 package timer
 
 import (
-	"fmt"
-	"net/http"
-	_ "net/http/pprof"
-	"sync/atomic"
 	"testing"
 	"time"
 
@@ -50,32 +47,127 @@ func TestSecondToTime(t *testing.T) {
 	r.EqualValues(s, 1)
 }
 
-func TestTicker(t *testing.T) {
-	go func() {
-		http.ListenAndServe(":8222", nil)
-	}()
-	count := int64(0)
-
-	for i := 0; i < 100; i++ {
-		go func() {
-			for i := 0; i < 10000; i++ {
-				interval := time.Second
-				Ticker(
-					interval, func() bool {
-						atomic.AddInt64(&count, 1)
-						return true
-					},
-				)
-				time.Sleep(time.Microsecond)
-			}
-		}()
+// TestStartAndGetLowPrecisionTime verifies that after StartLowPrecisionTime is
+// called, GetLowPrecisionTime returns a non-zero Unix timestamp.
+func TestStartAndGetLowPrecisionTime(t *testing.T) {
+	StartLowPrecisionTime()
+	got := GetLowPrecisionTime()
+	if got == 0 {
+		t.Fatal("GetLowPrecisionTime returned 0 after StartLowPrecisionTime")
 	}
-
-	oldCount := int64(0)
-	for {
-		time.Sleep(time.Second)
-		currCount := atomic.LoadInt64(&count)
-		fmt.Println(currCount, currCount-oldCount)
-		oldCount = currCount
+	// The cached value should be within a couple of seconds of the real clock.
+	now := time.Now().Unix()
+	diff := now - got
+	if diff < 0 {
+		diff = -diff
 	}
+	if diff > 2 {
+		t.Fatalf("GetLowPrecisionTime is %d seconds off from time.Now()", diff)
+	}
+}
+
+// TestBeginOfDay verifies that BeginOfDay returns midnight of the given day.
+func TestBeginOfDay(t *testing.T) {
+	r := require.New(t)
+	now := time.Now().UTC()
+	bod := BeginOfDay(now)
+	r.Equal(now.Year(), bod.Year())
+	r.Equal(now.Month(), bod.Month())
+	r.Equal(now.Day(), bod.Day())
+	r.Equal(0, bod.Hour())
+	r.Equal(0, bod.Minute())
+	r.Equal(0, bod.Second())
+	r.Equal(0, bod.Nanosecond())
+}
+
+// TestEndOfDay verifies that EndOfDay returns one nanosecond before midnight.
+func TestEndOfDay(t *testing.T) {
+	r := require.New(t)
+	now := time.Now().UTC()
+	eod := EndOfDay(now)
+	r.Equal(now.Year(), eod.Year())
+	r.Equal(now.Month(), eod.Month())
+	r.Equal(now.Day(), eod.Day())
+	r.Equal(23, eod.Hour())
+	r.Equal(59, eod.Minute())
+	r.Equal(59, eod.Second())
+	r.Equal(999999999, eod.Nanosecond())
+}
+
+// TestNextDay verifies that NextDay returns a time exactly 24 hours later.
+func TestNextDay(t *testing.T) {
+	r := require.New(t)
+	base := time.Date(2024, 3, 1, 12, 0, 0, 0, time.UTC)
+	next := NextDay(base)
+	r.Equal(base.Add(24*time.Hour), next)
+}
+
+// TestLastDay verifies that LastDay returns a time exactly 24 hours earlier.
+func TestLastDay(t *testing.T) {
+	r := require.New(t)
+	base := time.Date(2024, 3, 1, 12, 0, 0, 0, time.UTC)
+	last := LastDay(base)
+	r.Equal(base.Add(-24*time.Hour), last)
+}
+
+// TestTimeStampToString verifies that a known Unix timestamp formats correctly.
+func TestTimeStampToString(t *testing.T) {
+	r := require.New(t)
+	// 2024-01-15 08:30:00 UTC
+	ts := time.Date(2024, 1, 15, 8, 30, 0, 0, time.UTC).Unix()
+	// time.DateTime = "2006-01-02 15:04:05"
+	got := TimeStampToString(ts)
+	want := time.Unix(ts, 0).Format("2006-01-02 15:04:05")
+	r.Equal(want, got)
+}
+
+// TestSecondToTime_Extended covers additional SecondToTime cases not
+// covered by the existing TestSecondToTime.
+func TestSecondToTime_Extended(t *testing.T) {
+	r := require.New(t)
+
+	// Zero seconds
+	h, m, s := SecondToTime(0)
+	r.EqualValues(0, h)
+	r.EqualValues(0, m)
+	r.EqualValues(0, s)
+
+	// Exactly one hour
+	h, m, s = SecondToTime(3600)
+	r.EqualValues(1, h)
+	r.EqualValues(0, m)
+	r.EqualValues(0, s)
+
+	// Exactly one minute
+	h, m, s = SecondToTime(60)
+	r.EqualValues(0, h)
+	r.EqualValues(1, m)
+	r.EqualValues(0, s)
+}
+
+// TestDayPass verifies that DayPass counts calendar days correctly.
+func TestDayPass(t *testing.T) {
+	r := require.New(t)
+
+	loc := time.UTC
+
+	// Same day: 0 days apart.
+	begin := time.Date(2024, 5, 1, 8, 0, 0, 0, loc)
+	end := time.Date(2024, 5, 1, 23, 59, 59, 0, loc)
+	r.EqualValues(0, DayPass(begin, end))
+
+	// Exactly one calendar day apart (midnight boundary).
+	begin = time.Date(2024, 5, 1, 0, 0, 0, 0, loc)
+	end = time.Date(2024, 5, 2, 0, 0, 0, 0, loc)
+	r.EqualValues(1, DayPass(begin, end))
+
+	// Spanning a month boundary.
+	begin = time.Date(2024, 1, 30, 0, 0, 0, 0, loc)
+	end = time.Date(2024, 2, 3, 0, 0, 0, 0, loc)
+	r.EqualValues(4, DayPass(begin, end))
+
+	// Negative when end is before begin.
+	begin = time.Date(2024, 5, 5, 0, 0, 0, 0, loc)
+	end = time.Date(2024, 5, 3, 0, 0, 0, 0, loc)
+	r.EqualValues(-2, DayPass(begin, end))
 }
