@@ -664,7 +664,7 @@ func NatsMsgReplyError(reply define.Responder, err *berror.ErrMsg) *berror.ErrMs
 		}()
 		em.StackStace = nil
 	}
-	return natsMsgReplyOne(reply, (*basepb.ErrorMessage)(err))
+	return NatsMsgReplyOne(reply, (*basepb.ErrorMessage)(err))
 }
 
 // NatsMsgReply sends resp and optional otherResp back to the caller.
@@ -672,7 +672,7 @@ func NatsMsgReplyError(reply define.Responder, err *berror.ErrMsg) *berror.ErrMs
 // No intermediate slice is allocated: size is computed in two passes and the buffer is written in order.
 func NatsMsgReply(reply define.Responder, isRespFirst bool, resp proto.Message, otherResp ...proto.Message) *berror.ErrMsg {
 	if len(otherResp) == 0 {
-		return natsMsgReplyOne(reply, resp)
+		return NatsMsgReplyOne(reply, resp)
 	}
 
 	respSize, err := NatsMarshalSize(resp)
@@ -704,7 +704,7 @@ func NatsMsgReply(reply define.Responder, isRespFirst bool, resp proto.Message, 
 	return berror.NewProtocolErr(reply.Respond(b))
 }
 
-func natsMsgReplyOne(reply define.Responder, respMsg proto.Message) *berror.ErrMsg {
+func NatsMsgReplyOne(reply define.Responder, respMsg proto.Message) *berror.ErrMsg {
 	msgName := string(define.ProtoMessageName(respMsg))
 	msgNameSize := len(msgName)
 	if msgNameSize > math.MaxUint8 {

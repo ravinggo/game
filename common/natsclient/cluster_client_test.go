@@ -89,7 +89,7 @@ func TestNatsClient(t *testing.T) {
 				t.Fatalf("TraceId!= %s, want %s", intTrace.TraceId, testData.TraceId)
 			}
 			if msg.Reply != "" {
-				e := natsMsgReplyOne(msg, intTrace)
+				e := NatsMsgReplyOne(msg, intTrace)
 				if e != nil {
 					t.Fatalf("natsMsgReplyOne err:%v", e)
 				}
@@ -153,7 +153,7 @@ func TestClusterClient(t *testing.T) {
 				t.Errorf("TraceId!= %s, want %s", intTrace.TraceId, testData.TraceId)
 			}
 			if msg.Reply != "" {
-				e := natsMsgReplyOne(msg, intTrace)
+				e := NatsMsgReplyOne(msg, intTrace)
 				if e != nil {
 					t.Fatalf("natsMsgReplyOne err:%v", e)
 				}

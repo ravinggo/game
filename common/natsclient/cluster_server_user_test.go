@@ -54,7 +54,7 @@ func TestNewClusterClientServerUser(t *testing.T) {
 				t.Errorf("TraceId!= %s, want %s", intTrace.TraceId, testData.TraceId)
 			}
 			if msg.Reply != "" {
-				e := natsMsgReplyOne(msg, intTrace)
+				e := NatsMsgReplyOne(msg, intTrace)
 				if e != nil {
 					t.Fatalf("natsMsgReplyOne err:%v", e)
 				}
