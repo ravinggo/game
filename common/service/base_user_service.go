@@ -106,8 +106,9 @@ func (s *ServerUserService[T1, TraceData, TP, US]) DealServerUserNatsMsg(msg *na
 		return
 	}
 	if s.hookUserMsg != nil {
-		s.doHook(us, traceData, msgData, msg)
-		return
+		if s.doHook(us, traceData, msgData, msg) {
+			return
+		}
 	}
 	msgCount := 0
 	bErr = natsclient.NatsUnmarshalResponseMany(
@@ -128,7 +129,7 @@ func (s *ServerUserService[T1, TraceData, TP, US]) DealServerUserNatsMsg(msg *na
 				err := trace.TraceMarshalFrom(traceData)
 				if err != nil {
 					retErr := berror.NewProtocolErr(err)
-					if msg.Reply == "" {
+					if msg.Reply != "" {
 						e := natsclient.NatsMsgReplyError(msg, retErr)
 						if e != nil {
 							logger.Log.Error().Err(e).Msg("nats reply error")
@@ -180,7 +181,7 @@ func (s *ServerUserService[T1, TraceData, TP, US]) DealServerUserNatsMsg(msg *na
 // doHook calls the optional hookUserMsg callback with panic recovery so that a bad
 // hook cannot crash the NATS subscription goroutine.
 // Written by Claude Code claude-opus-4-6.
-func (s *ServerUserService[T1, TraceData, TP, US]) doHook(us US, traceData []byte, data []byte, msg *nats.Msg) {
+func (s *ServerUserService[T1, TraceData, TP, US]) doHook(us US, traceData []byte, data []byte, msg *nats.Msg) bool {
 	defer safego.Recover()
-	s.hookUserMsg(us, traceData, data, msg)
+	return s.hookUserMsg(us, traceData, data, msg)
 }

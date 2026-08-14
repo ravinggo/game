@@ -14,7 +14,7 @@ import (
 // when registered via ServerUserHookUserMsgOption. It receives the parsed user subject,
 // raw trace bytes, raw proto payload bytes, and the original NATS message.
 // Written by Claude Code claude-opus-4-6.
-type HookUserMsg[T1 any, US natsclient.ServerUserSubjectPtr[T1]] = func(us US, traceData []byte, data []byte, msg *nats.Msg)
+type HookUserMsg[T1 any, US natsclient.ServerUserSubjectPtr[T1]] = func(us US, traceData []byte, data []byte, msg *nats.Msg) bool
 
 // middlewareScope controls which execution paths a middleware is applied to.
 type middlewareScope uint8
@@ -191,7 +191,7 @@ func InitCtxOption[TraceData any, TP ctx.TracePtr[TraceData]](
 // during construction.
 // Written by Claude Code claude-opus-4-6.
 type ServerUserOption[
-	T1 any, TraceData any, TP ctx.TracePtr[TraceData], US natsclient.ServerUserSubjectPtr[T1],
+T1 any, TraceData any, TP ctx.TracePtr[TraceData], US natsclient.ServerUserSubjectPtr[T1],
 ] func(*serverUserConfig[T1, TraceData, TP, US])
 
 // serverUserConfig accumulates settings for ServerUserService construction, including
