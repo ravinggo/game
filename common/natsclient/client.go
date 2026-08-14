@@ -704,6 +704,26 @@ func NatsMsgReply(reply define.Responder, isRespFirst bool, resp proto.Message, 
 	return berror.NewProtocolErr(reply.Respond(b))
 }
 
+func NatsMsgReplyMany(reply define.Responder, msgS ...proto.Message) *berror.ErrMsg {
+	if len(msgS) == 0 {
+		return nil
+	}
+
+	size, err := NatsMarshalManySize(msgS...)
+	if err != nil {
+		return err
+	}
+
+	b := objectpool.GetBytes(size)
+	defer objectpool.PutBytes(b)
+
+	err = NatsMarshalManyAppend(&b, msgS...)
+	if err != nil {
+		return err
+	}
+	return berror.NewProtocolErr(reply.Respond(b))
+}
+
 func NatsMsgReplyOne(reply define.Responder, respMsg proto.Message) *berror.ErrMsg {
 	msgName := string(define.ProtoMessageName(respMsg))
 	msgNameSize := len(msgName)
