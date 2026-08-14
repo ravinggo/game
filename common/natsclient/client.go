@@ -652,7 +652,7 @@ func NatsUnmarshalResponseWithout(d []byte, respMsg proto.Message) *berror.ErrMs
 }
 
 // NatsMsgReplyError Reply to nats.Msg for an *berror.ErrMsg
-func NatsMsgReplyError(reply *nats.Msg, err *berror.ErrMsg) *berror.ErrMsg {
+func NatsMsgReplyError(reply define.Responder, err *berror.ErrMsg) *berror.ErrMsg {
 	if err == nil {
 		return nil
 	}
@@ -670,7 +670,7 @@ func NatsMsgReplyError(reply *nats.Msg, err *berror.ErrMsg) *berror.ErrMsg {
 // NatsMsgReply sends resp and optional otherResp back to the caller.
 // When isRespFirst is true resp is serialized before otherResp; otherwise otherResp comes first and resp is appended last.
 // No intermediate slice is allocated: size is computed in two passes and the buffer is written in order.
-func NatsMsgReply(reply *nats.Msg, isRespFirst bool, resp proto.Message, otherResp ...proto.Message) *berror.ErrMsg {
+func NatsMsgReply(reply define.Responder, isRespFirst bool, resp proto.Message, otherResp ...proto.Message) *berror.ErrMsg {
 	if len(otherResp) == 0 {
 		return natsMsgReplyOne(reply, resp)
 	}
@@ -704,7 +704,7 @@ func NatsMsgReply(reply *nats.Msg, isRespFirst bool, resp proto.Message, otherRe
 	return berror.NewProtocolErr(reply.Respond(b))
 }
 
-func natsMsgReplyOne(reply *nats.Msg, respMsg proto.Message) *berror.ErrMsg {
+func natsMsgReplyOne(reply define.Responder, respMsg proto.Message) *berror.ErrMsg {
 	msgName := string(define.ProtoMessageName(respMsg))
 	msgNameSize := len(msgName)
 	if msgNameSize > math.MaxUint8 {
