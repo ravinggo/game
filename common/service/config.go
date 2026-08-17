@@ -101,7 +101,7 @@ func NatsOptions[TraceData any, TP ctx.TracePtr[TraceData]](
 	}
 }
 
-func DispatchHookOptions[TraceData any, TP ctx.TracePtr[TraceData]](
+func DispatchHookOption[TraceData any, TP ctx.TracePtr[TraceData]](
 	f func(msg *nats.Msg) bool,
 ) Option[TraceData, TP] {
 	return func(c *config[TraceData, TP]) {
