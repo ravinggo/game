@@ -184,6 +184,9 @@ func (s *BaseService[TraceData, TP]) subscribe() {
 // calls s.dispatch — the concrete service owns all routing decisions.
 // Written by Claude Code claude-opus-4-6.
 func (s *BaseService[TraceData, TP]) dealNatsMsg(msg *nats.Msg) {
+	if s.cnf.dispatchHook != nil && s.cnf.dispatchHook(msg) {
+		return
+	}
 	msgName := msg.Subject
 	index := strings.LastIndexByte(msgName, '.')
 	if index == -1 {

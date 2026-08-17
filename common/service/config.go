@@ -43,6 +43,7 @@ type config[TraceData any, TP ctx.TracePtr[TraceData]] struct {
 	middles            []scopedMiddle[TraceData, TP]
 	natsOptions        []nats.Option
 	initCtx            func(*ctx.BaseCtx[TraceData, TP])
+	dispatchHook       func(msg *nats.Msg) bool
 }
 
 // allMiddlewares returns the full middleware chain for NATS message handling.
@@ -97,6 +98,14 @@ func NatsOptions[TraceData any, TP ctx.TracePtr[TraceData]](
 ) Option[TraceData, TP] {
 	return func(c *config[TraceData, TP]) {
 		c.natsOptions = append(c.natsOptions, opts...)
+	}
+}
+
+func DispatchHookOptions[TraceData any, TP ctx.TracePtr[TraceData]](
+	f func(msg *nats.Msg) bool,
+) Option[TraceData, TP] {
+	return func(c *config[TraceData, TP]) {
+		c.dispatchHook = f
 	}
 }
 
