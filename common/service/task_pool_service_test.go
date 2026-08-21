@@ -25,14 +25,17 @@ func makeTPS(h *handler.Handler[ctx.IntTrace, *ctx.IntTrace]) *TaskPoolService[c
 		numCpu++
 	}
 	poolSize := int64(numCpu * 1024)
-	s := &TaskPoolService[ctx.IntTrace, *ctx.IntTrace]{
+	var s *TaskPoolService[ctx.IntTrace, *ctx.IntTrace]
+	s = &TaskPoolService[ctx.IntTrace, *ctx.IntTrace]{
 		BaseService: &BaseService[ctx.IntTrace, *ctx.IntTrace]{
 			ctxPool: objectpool.GetTypePool[ctx.BaseCtx[ctx.IntTrace, *ctx.IntTrace]](),
 			h:       h,
+			dispatch: func(c *ctx.BaseCtx[ctx.IntTrace, *ctx.IntTrace], elem *handler.Elem[ctx.IntTrace, *ctx.IntTrace]) {
+				s.doDispatch(c, elem)
+			},
 		},
 		taskPool: task_group.NewTaskPool(poolSize, poolSize*10),
 	}
-	s.dispatch = s.doDispatch
 	return s
 }
 
@@ -122,7 +125,7 @@ func TestTaskPoolService_PostTask_NilIsNoop(t *testing.T) {
 	h := handler.NewHandler[ctx.IntTrace, *ctx.IntTrace]()
 	s := makeTPS(h)
 	c := s.GetCtxFromPool()
-	s.PostTaskCloneCtx(c, nil) // nil func — must not panic
+	s.PostTaskCloneCtx(c, nil)                                                                               // nil func — must not panic
 	s.PostTaskCloneCtx(nil, func(_ *ctx.BaseCtx[ctx.IntTrace, *ctx.IntTrace]) *berror.ErrMsg { return nil }) // nil ctx — must not panic
 	s.PutCtxToPool(c)
 }

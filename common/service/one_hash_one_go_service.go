@@ -44,15 +44,20 @@ func NewOneHashOneGoService[TraceData any, TP ctx.TracePtr[TraceData]](
 	natsUrls []string,
 	c Config[TraceData, TP],
 ) *OneHashOneGoService[TraceData, TP] {
-	base := NewBaseService[TraceData, TP](natsUrls, c)
-	base.h = handler.NewHandler[TraceData](c.allMiddlewares()...)
-	s := &OneHashOneGoService[TraceData, TP]{
+	var s *OneHashOneGoService[TraceData, TP]
+	base := NewBaseService[TraceData, TP](
+		natsUrls,
+		func(c *ctx.BaseCtx[TraceData, TP], elem *handler.Elem[TraceData, TP]) {
+			s.doDispatch(c, elem)
+		},
+		c,
+	)
+	s = &OneHashOneGoService[TraceData, TP]{
 		BaseService:   base,
 		el:            eventloop.NewDoubleBuffQueue(c.LockQueueThread),
 		taskMap:       map[int64]*timeTask[TraceData, TP]{},
 		taskGroupPool: objectpool.GetTypePool[timeTask[TraceData, TP]](),
 	}
-	s.dispatch = s.doDispatch
 	return s
 }
 

@@ -24,13 +24,13 @@ func makeFFAbs(h *handler.Handler[ctx.IntTrace, *ctx.IntTrace], fps int) *FixedF
 			BaseService: &BaseService[ctx.IntTrace, *ctx.IntTrace]{
 				ctxPool: objectpool.GetTypePool[ctx.BaseCtx[ctx.IntTrace, *ctx.IntTrace]](),
 				h:       h,
+				dispatch: func(c *ctx.BaseCtx[ctx.IntTrace, *ctx.IntTrace], elem *handler.Elem[ctx.IntTrace, *ctx.IntTrace]) {
+					loop.PostEventQueue(CE[ctx.IntTrace, *ctx.IntTrace]{Ctx: c, Elem: elem})
+				},
 			},
 			fl: loop,
 		},
 		loop: loop,
-	}
-	s.dispatch = func(c *ctx.BaseCtx[ctx.IntTrace, *ctx.IntTrace], elem *handler.Elem[ctx.IntTrace, *ctx.IntTrace]) {
-		loop.PostEventQueue(CE[ctx.IntTrace, *ctx.IntTrace]{Ctx: c, Elem: elem})
 	}
 	return s
 }
@@ -43,13 +43,13 @@ func makeFFTicker(h *handler.Handler[ctx.IntTrace, *ctx.IntTrace], fps int) *Fix
 			BaseService: &BaseService[ctx.IntTrace, *ctx.IntTrace]{
 				ctxPool: objectpool.GetTypePool[ctx.BaseCtx[ctx.IntTrace, *ctx.IntTrace]](),
 				h:       h,
+				dispatch: func(c *ctx.BaseCtx[ctx.IntTrace, *ctx.IntTrace], elem *handler.Elem[ctx.IntTrace, *ctx.IntTrace]) {
+					loop.PostEventQueue(CE[ctx.IntTrace, *ctx.IntTrace]{Ctx: c, Elem: elem})
+				},
 			},
 			fl: loop,
 		},
 		loop: loop,
-	}
-	s.dispatch = func(c *ctx.BaseCtx[ctx.IntTrace, *ctx.IntTrace], elem *handler.Elem[ctx.IntTrace, *ctx.IntTrace]) {
-		loop.PostEventQueue(CE[ctx.IntTrace, *ctx.IntTrace]{Ctx: c, Elem: elem})
 	}
 	return s
 }
@@ -62,13 +62,13 @@ func makeFFCatchUp(h *handler.Handler[ctx.IntTrace, *ctx.IntTrace], fps int) *Fi
 			BaseService: &BaseService[ctx.IntTrace, *ctx.IntTrace]{
 				ctxPool: objectpool.GetTypePool[ctx.BaseCtx[ctx.IntTrace, *ctx.IntTrace]](),
 				h:       h,
+				dispatch: func(c *ctx.BaseCtx[ctx.IntTrace, *ctx.IntTrace], elem *handler.Elem[ctx.IntTrace, *ctx.IntTrace]) {
+					loop.PostEventQueue(CE[ctx.IntTrace, *ctx.IntTrace]{Ctx: c, Elem: elem})
+				},
 			},
 			fl: loop,
 		},
 		loop: loop,
-	}
-	s.dispatch = func(c *ctx.BaseCtx[ctx.IntTrace, *ctx.IntTrace], elem *handler.Elem[ctx.IntTrace, *ctx.IntTrace]) {
-		loop.PostEventQueue(CE[ctx.IntTrace, *ctx.IntTrace]{Ctx: c, Elem: elem})
 	}
 	return s
 }

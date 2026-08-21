@@ -21,10 +21,14 @@ import (
 // makeFHPS constructs a FixedHashPoolService without a NATS connection.
 // Written by Claude Code claude-opus-4-6.
 func makeFHPS(h *handler.Handler[ctx.IntTrace, *ctx.IntTrace]) *FixedHashPoolService[ctx.IntTrace, *ctx.IntTrace] {
-	s := &FixedHashPoolService[ctx.IntTrace, *ctx.IntTrace]{
+	var s *FixedHashPoolService[ctx.IntTrace, *ctx.IntTrace]
+	s = &FixedHashPoolService[ctx.IntTrace, *ctx.IntTrace]{
 		BaseService: &BaseService[ctx.IntTrace, *ctx.IntTrace]{
 			ctxPool: objectpool.GetTypePool[ctx.BaseCtx[ctx.IntTrace, *ctx.IntTrace]](),
 			h:       h,
+			dispatch: func(c *ctx.BaseCtx[ctx.IntTrace, *ctx.IntTrace], elem *handler.Elem[ctx.IntTrace, *ctx.IntTrace]) {
+				s.doDispatch(c, elem)
+			},
 		},
 	}
 
@@ -39,7 +43,6 @@ func makeFHPS(h *handler.Handler[ctx.IntTrace, *ctx.IntTrace]) *FixedHashPoolSer
 		s.taskGroupHash[i].SetMaxCap(128)
 		s.taskGroupHash[i].SetTaskFunc(s.taskFunc)
 	}
-	s.dispatch = s.doDispatch
 	return s
 }
 

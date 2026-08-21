@@ -26,9 +26,15 @@ func NewTaskPoolService[TraceData any, TP ctx.TracePtr[TraceData]](
 	natsUrls []string,
 	c Config[TraceData, TP],
 ) *TaskPoolService[TraceData, TP] {
-	base := NewBaseService[TraceData, TP](natsUrls, c)
-	base.h = handler.NewHandler[TraceData](c.allMiddlewares()...)
-	s := &TaskPoolService[TraceData, TP]{
+	var s *TaskPoolService[TraceData, TP]
+	base := NewBaseService[TraceData, TP](
+		natsUrls,
+		func(c *ctx.BaseCtx[TraceData, TP], elem *handler.Elem[TraceData, TP]) {
+			s.doDispatch(c, elem)
+		},
+		c,
+	)
+	s = &TaskPoolService[TraceData, TP]{
 		BaseService: base,
 	}
 
@@ -39,7 +45,6 @@ func NewTaskPoolService[TraceData any, TP ctx.TracePtr[TraceData]](
 	poolSize := int64(numCpu * 1024)
 	s.taskPool = task_group.NewTaskPool(poolSize, poolSize*10)
 
-	s.dispatch = s.doDispatch
 	return s
 }
 

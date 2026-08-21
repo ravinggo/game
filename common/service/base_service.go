@@ -114,6 +114,7 @@ func (s *BaseService[TraceData, TP]) RegisterEventForceBroadcast[REQ define.Prot
 // Written by Claude Code claude-opus-4-6.
 func NewBaseService[TraceData any, TP ctx.TracePtr[TraceData]](
 	natsUrls []string,
+	dispatchFunc func(*ctx.BaseCtx[TraceData, TP], *handler.Elem[TraceData, TP]),
 	c Config[TraceData, TP],
 ) *BaseService[TraceData, TP] {
 	if c.RpcTimeout <= 0 {
@@ -126,6 +127,7 @@ func NewBaseService[TraceData any, TP ctx.TracePtr[TraceData]](
 		ctxPool:     objectpool.GetTypePool[ctx.BaseCtx[TraceData, TP]](),
 		cnf:         c,
 		h:           handler.NewHandler[TraceData](c.allMiddlewares()...),
+		dispatch:    dispatchFunc,
 	}
 
 	s.serviceMiddles = c.serviceMiddlewares()

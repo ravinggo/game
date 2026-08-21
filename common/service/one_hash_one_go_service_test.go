@@ -21,16 +21,19 @@ import (
 // The caller must start and stop the EventLoop.
 // Written by Claude Code claude-opus-4-6.
 func makeOHOGS(h *handler.Handler[ctx.IntTrace, *ctx.IntTrace]) *OneHashOneGoService[ctx.IntTrace, *ctx.IntTrace] {
-	s := &OneHashOneGoService[ctx.IntTrace, *ctx.IntTrace]{
+	var s *OneHashOneGoService[ctx.IntTrace, *ctx.IntTrace]
+	s = &OneHashOneGoService[ctx.IntTrace, *ctx.IntTrace]{
 		BaseService: &BaseService[ctx.IntTrace, *ctx.IntTrace]{
 			ctxPool: objectpool.GetTypePool[ctx.BaseCtx[ctx.IntTrace, *ctx.IntTrace]](),
 			h:       h,
+			dispatch: func(c *ctx.BaseCtx[ctx.IntTrace, *ctx.IntTrace], elem *handler.Elem[ctx.IntTrace, *ctx.IntTrace]) {
+				s.doDispatch(c, elem)
+			},
 		},
 		el:            eventloop.NewDoubleBuffQueue(false),
 		taskMap:       map[int64]*timeTask[ctx.IntTrace, *ctx.IntTrace]{},
 		taskGroupPool: objectpool.GetTypePool[timeTask[ctx.IntTrace, *ctx.IntTrace]](),
 	}
-	s.dispatch = s.doDispatch
 	return s
 }
 

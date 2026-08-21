@@ -31,9 +31,15 @@ func NewFixedHashPoolService[TraceData any, TP ctx.TracePtr[TraceData]](
 	natsUrls []string,
 	c Config[TraceData, TP],
 ) *FixedHashPoolService[TraceData, TP] {
-	base := NewBaseService[TraceData, TP](natsUrls, c)
-	base.h = handler.NewHandler[TraceData](c.allMiddlewares()...)
-	s := &FixedHashPoolService[TraceData, TP]{
+	var s *FixedHashPoolService[TraceData, TP]
+	base := NewBaseService[TraceData, TP](
+		natsUrls,
+		func(c *ctx.BaseCtx[TraceData, TP], elem *handler.Elem[TraceData, TP]) {
+			s.doDispatch(c, elem)
+		},
+		c,
+	)
+	s = &FixedHashPoolService[TraceData, TP]{
 		BaseService: base,
 	}
 
@@ -49,7 +55,6 @@ func NewFixedHashPoolService[TraceData any, TP ctx.TracePtr[TraceData]](
 		s.taskGroupHash[i].SetTaskFunc(s.taskFunc)
 	}
 
-	s.dispatch = s.doDispatch
 	return s
 }
 

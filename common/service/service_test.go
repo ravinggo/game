@@ -33,10 +33,14 @@ func TestMain(m *testing.M) {
 // makeBS constructs a BaseService with ctxPool set but natsCluster left nil.
 // Only call methods that do not reach natsCluster (handleCtx, dealNatsMsg, etc.).
 // Written by Claude Code claude-opus-4-6.
-func makeBS(h *handler.Handler[ctx.IntTrace, *ctx.IntTrace]) *BaseService[ctx.IntTrace, *ctx.IntTrace] {
+func makeBS(
+	h *handler.Handler[ctx.IntTrace, *ctx.IntTrace],
+	dispatchFunc func(*ctx.BaseCtx[ctx.IntTrace, *ctx.IntTrace], *handler.Elem[ctx.IntTrace, *ctx.IntTrace]),
+) *BaseService[ctx.IntTrace, *ctx.IntTrace] {
 	s := &BaseService[ctx.IntTrace, *ctx.IntTrace]{
-		ctxPool: objectpool.GetTypePool[ctx.BaseCtx[ctx.IntTrace, *ctx.IntTrace]](),
-		h:       h,
+		ctxPool:  objectpool.GetTypePool[ctx.BaseCtx[ctx.IntTrace, *ctx.IntTrace]](),
+		h:        h,
+		dispatch: dispatchFunc,
 	}
 	return s
 }
@@ -61,7 +65,7 @@ func buildWireData(t *testing.T, msg proto.Message) []byte {
 // acquired context when Config.InitCtx is set.
 func TestGetCtxFromPool_CallsInitCtx(t *testing.T) {
 	h := handler.NewHandler[ctx.IntTrace, *ctx.IntTrace]()
-	s := makeBS(h)
+	s := makeBS(h, nil)
 
 	var calls int
 	s.cnf.InitCtx = func(c *ctx.BaseCtx[ctx.IntTrace, *ctx.IntTrace]) {
@@ -88,7 +92,7 @@ func TestGetCtxFromPool_CallsInitCtx(t *testing.T) {
 // Config.InitCtx is nil.
 func TestGetCtxFromPool_NilInitCtx(t *testing.T) {
 	h := handler.NewHandler[ctx.IntTrace, *ctx.IntTrace]()
-	s := makeBS(h)
+	s := makeBS(h, nil)
 	c := s.GetCtxFromPool()
 	if c == nil {
 		t.Fatal("GetCtxFromPool returned nil ctx")
@@ -132,7 +136,7 @@ func TestHandleCtx_CallsHandler(t *testing.T) {
 		t.Fatal("Lookup: handler not found")
 	}
 
-	s := makeBS(h)
+	s := makeBS(h, nil)
 	c := s.GetCtxFromPool()
 	c.Req, c.Resp = elem.Acquire()
 
@@ -155,7 +159,7 @@ func TestHandleCtx_RecyclesReq(t *testing.T) {
 	)
 	elem, _ := h.Lookup("basepb.IntTrace")
 
-	s := makeBS(h)
+	s := makeBS(h, nil)
 	c := s.GetCtxFromPool()
 	c.Req, c.Resp = elem.Acquire()
 	if c.Req == nil {
@@ -179,7 +183,7 @@ func TestHandleCtx_HandlerError_NoNatsMsgNoRPCResp(t *testing.T) {
 	)
 	elem, _ := h.Lookup("basepb.ErrorMessage")
 
-	s := makeBS(h)
+	s := makeBS(h, nil)
 	c := s.GetCtxFromPool()
 	c.Req, c.Resp = elem.Acquire()
 	// c.NatsMsg = nil → no NATS reply attempted
@@ -193,10 +197,9 @@ func TestHandleCtx_HandlerError_NoNatsMsgNoRPCResp(t *testing.T) {
 // Written by Claude Code claude-opus-4-6.
 func TestDealNatsMsg_NoLastDot(t *testing.T) {
 	h := handler.NewHandler[ctx.IntTrace, *ctx.IntTrace]()
-	s := makeBS(h)
-	s.dispatch = func(_ *ctx.BaseCtx[ctx.IntTrace, *ctx.IntTrace], _ *handler.Elem[ctx.IntTrace, *ctx.IntTrace]) {
+	s := makeBS(h, func(_ *ctx.BaseCtx[ctx.IntTrace, *ctx.IntTrace], _ *handler.Elem[ctx.IntTrace, *ctx.IntTrace]) {
 		t.Error("dispatch must not be called for a subject without a dot")
-	}
+	})
 	s.DealNatsMsg(&nats.Msg{Subject: "nodot", Data: []byte{0, 0}})
 }
 
@@ -204,10 +207,9 @@ func TestDealNatsMsg_NoLastDot(t *testing.T) {
 // Written by Claude Code claude-opus-4-6.
 func TestDealNatsMsg_ShortData(t *testing.T) {
 	h := handler.NewHandler[ctx.IntTrace, *ctx.IntTrace]()
-	s := makeBS(h)
-	s.dispatch = func(_ *ctx.BaseCtx[ctx.IntTrace, *ctx.IntTrace], _ *handler.Elem[ctx.IntTrace, *ctx.IntTrace]) {
+	s := makeBS(h, func(_ *ctx.BaseCtx[ctx.IntTrace, *ctx.IntTrace], _ *handler.Elem[ctx.IntTrace, *ctx.IntTrace]) {
 		t.Error("dispatch must not be called for short data")
-	}
+	})
 	s.DealNatsMsg(&nats.Msg{Subject: "basepb.IntTrace", Data: []byte{0}})
 }
 
@@ -216,10 +218,9 @@ func TestDealNatsMsg_ShortData(t *testing.T) {
 // Written by Claude Code claude-opus-4-6.
 func TestDealNatsMsg_UnregisteredMsg(t *testing.T) {
 	h := handler.NewHandler[ctx.IntTrace, *ctx.IntTrace]()
-	s := makeBS(h)
-	s.dispatch = func(_ *ctx.BaseCtx[ctx.IntTrace, *ctx.IntTrace], _ *handler.Elem[ctx.IntTrace, *ctx.IntTrace]) {
+	s := makeBS(h, func(_ *ctx.BaseCtx[ctx.IntTrace, *ctx.IntTrace], _ *handler.Elem[ctx.IntTrace, *ctx.IntTrace]) {
 		t.Error("dispatch must not be called for unregistered message")
-	}
+	})
 	s.DealNatsMsg(
 		&nats.Msg{
 			Subject: "basepb.IntTrace",
@@ -240,13 +241,13 @@ func TestDealNatsMsg_Dispatches(t *testing.T) {
 		},
 	)
 
-	s := makeBS(h)
 	var dispatchCount atomic.Int32
-	s.dispatch = func(c *ctx.BaseCtx[ctx.IntTrace, *ctx.IntTrace], e *handler.Elem[ctx.IntTrace, *ctx.IntTrace]) {
+	var s *BaseService[ctx.IntTrace, *ctx.IntTrace]
+	s = makeBS(h, func(c *ctx.BaseCtx[ctx.IntTrace, *ctx.IntTrace], e *handler.Elem[ctx.IntTrace, *ctx.IntTrace]) {
 		dispatchCount.Add(1)
 		// Complete the lifecycle so the ctx is returned to the pool.
 		s.handleCtx(c, e)
-	}
+	})
 
 	s.DealNatsMsg(
 		&nats.Msg{
@@ -273,10 +274,9 @@ func TestDealNatsMsg_CorruptProto(t *testing.T) {
 		},
 	)
 
-	s := makeBS(h)
-	s.dispatch = func(_ *ctx.BaseCtx[ctx.IntTrace, *ctx.IntTrace], _ *handler.Elem[ctx.IntTrace, *ctx.IntTrace]) {
+	s := makeBS(h, func(_ *ctx.BaseCtx[ctx.IntTrace, *ctx.IntTrace], _ *handler.Elem[ctx.IntTrace, *ctx.IntTrace]) {
 		t.Error("dispatch must not be called for corrupt proto")
-	}
+	})
 
 	// [traceSize=0,0] followed by garbage that is not valid proto
 	s.DealNatsMsg(

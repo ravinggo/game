@@ -25,13 +25,17 @@ func NewEventLoopService[TraceData any, TP ctx.TracePtr[TraceData]](
 	natsUrls []string,
 	c Config[TraceData, TP],
 ) *EventLoopService[TraceData, TP] {
-	base := NewBaseService[TraceData, TP](natsUrls, c)
+	el := eventloop.NewDoubleBuffQueue(c.LockQueueThread)
+	base := NewBaseService[TraceData, TP](
+		natsUrls,
+		func(c *ctx.BaseCtx[TraceData, TP], elem *handler.Elem[TraceData, TP]) {
+			el.PostEventQueue(CE[TraceData, TP]{Ctx: c, Elem: elem})
+		},
+		c,
+	)
 	s := &EventLoopService[TraceData, TP]{
 		BaseService: base,
-		el:          eventloop.NewDoubleBuffQueue(base.GetConfig().LockQueueThread),
-	}
-	s.dispatch = func(c *ctx.BaseCtx[TraceData, TP], elem *handler.Elem[TraceData, TP]) {
-		s.el.PostEventQueue(CE[TraceData, TP]{Ctx: c, Elem: elem})
+		el:          el,
 	}
 	return s
 }
