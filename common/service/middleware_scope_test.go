@@ -34,7 +34,7 @@ func TestMiddlewareScope_NATSPath_AllMiddlewaresRun(t *testing.T) {
 		makeOrderMiddleware("B", &calls),
 		makeOrderMiddleware("C", &calls),
 	)
-	handler.RegisterEvent(h, "scope-nats", func(_ *ctx.BaseCtx[ctx.IntTrace, *ctx.IntTrace], _ *basepb.IntTrace) *berror.ErrMsg {
+	h.RegisterEvent("scope-nats", func(_ *ctx.BaseCtx[ctx.IntTrace, *ctx.IntTrace], _ *basepb.IntTrace) *berror.ErrMsg {
 		calls = append(calls, "handler")
 		close(done)
 		return nil

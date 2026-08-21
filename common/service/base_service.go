@@ -47,9 +47,65 @@ type BaseService[TraceData any, TP ctx.TracePtr[TraceData]] struct {
 	dispatch func(*ctx.BaseCtx[TraceData, TP], *handler.Elem[TraceData, TP])
 }
 
-// GetHandler implements handler.IService, returning the shared handler registry.
+// GetHandler returns the shared handler registry used by this service.
 func (s *BaseService[TraceData, TP]) GetHandler() *handler.Handler[TraceData, TP] {
 	return s.h
+}
+
+// RegisterRPCResp registers a request/response handler on this service's registry.
+// The handler owns registration state; the service method keeps service wiring local
+// to the service that will receive the message.
+func (s *BaseService[TraceData, TP]) RegisterRPCResp[REQ define.ProtoMessagePtr[T1], RESP define.ProtoMessagePtr[T2], T1 any, T2 any](
+	desc string,
+	f func(*ctx.BaseCtx[TraceData, TP], REQ, RESP) *berror.ErrMsg,
+	middlewares ...handler.Middleware[TraceData, TP],
+) {
+	s.h.RegisterRPCResp(desc, f, false, middlewares...)
+}
+
+// RegisterRPCRespForce registers a force request/response handler on this service.
+func (s *BaseService[TraceData, TP]) RegisterRPCRespForce[REQ define.ProtoMessagePtr[T1], RESP define.ProtoMessagePtr[T2], T1 any, T2 any](
+	desc string,
+	f func(*ctx.BaseCtx[TraceData, TP], REQ, RESP) *berror.ErrMsg,
+	middlewares ...handler.Middleware[TraceData, TP],
+) {
+	s.h.RegisterRPCResp(desc, f, true, middlewares...)
+}
+
+// RegisterEvent registers a queue-group event handler on this service.
+func (s *BaseService[TraceData, TP]) RegisterEvent[REQ define.ProtoMessagePtr[T1], T1 any](
+	desc string,
+	f func(*ctx.BaseCtx[TraceData, TP], REQ) *berror.ErrMsg,
+	middlewares ...handler.Middleware[TraceData, TP],
+) {
+	s.h.RegisterEvent(desc, f, middlewares...)
+}
+
+// RegisterEventForce registers a force queue-group event handler on this service.
+func (s *BaseService[TraceData, TP]) RegisterEventForce[REQ define.ProtoMessagePtr[T1], T1 any](
+	desc string,
+	f func(*ctx.BaseCtx[TraceData, TP], REQ) *berror.ErrMsg,
+	middlewares ...handler.Middleware[TraceData, TP],
+) {
+	s.h.RegisterEventForce(desc, f, middlewares...)
+}
+
+// RegisterEventBroadcast registers an event delivered to every subscriber.
+func (s *BaseService[TraceData, TP]) RegisterEventBroadcast[REQ define.ProtoMessagePtr[T1], T1 any](
+	desc string,
+	f func(*ctx.BaseCtx[TraceData, TP], REQ) *berror.ErrMsg,
+	middlewares ...handler.Middleware[TraceData, TP],
+) {
+	s.h.RegisterEventBroadcast(desc, f, middlewares...)
+}
+
+// RegisterEventForceBroadcast registers a force event delivered to every subscriber.
+func (s *BaseService[TraceData, TP]) RegisterEventForceBroadcast[REQ define.ProtoMessagePtr[T1], T1 any](
+	desc string,
+	f func(*ctx.BaseCtx[TraceData, TP], REQ) *berror.ErrMsg,
+	middlewares ...handler.Middleware[TraceData, TP],
+) {
+	s.h.RegisterEventForceBroadcast(desc, f, middlewares...)
 }
 
 // NewBaseService initialises shared BaseService infrastructure: NATS cluster client,

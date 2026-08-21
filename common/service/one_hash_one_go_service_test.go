@@ -69,11 +69,10 @@ func postOHOGSEvent(s *OneHashOneGoService[ctx.IntTrace, *ctx.IntTrace], elem *h
 func TestOneHashOneGoService_DispatchCallsHandler(t *testing.T) {
 	h := handler.NewHandler[ctx.IntTrace, *ctx.IntTrace]()
 	done := make(chan struct{})
-	handler.RegisterEvent(
-		h, "ohog-basic", func(_ *ctx.BaseCtx[ctx.IntTrace, *ctx.IntTrace], _ *basepb.IntTrace) *berror.ErrMsg {
-			close(done)
-			return nil
-		},
+	h.RegisterEvent("ohog-basic", func(_ *ctx.BaseCtx[ctx.IntTrace, *ctx.IntTrace], _ *basepb.IntTrace) *berror.ErrMsg {
+		close(done)
+		return nil
+	},
 	)
 	elem, _ := h.Lookup("basepb.IntTrace")
 
@@ -103,18 +102,17 @@ func TestOneHashOneGoService_SameHash_Sequential(t *testing.T) {
 	allDone := make(chan struct{})
 	var count int
 
-	handler.RegisterEvent(
-		h, "ohog-seq", func(_ *ctx.BaseCtx[ctx.IntTrace, *ctx.IntTrace], _ *basepb.IntTrace) *berror.ErrMsg {
-			v := seq.Add(1)
-			mu.Lock()
-			results = append(results, v)
-			count++
-			if count == N {
-				close(allDone)
-			}
-			mu.Unlock()
-			return nil
-		},
+	h.RegisterEvent("ohog-seq", func(_ *ctx.BaseCtx[ctx.IntTrace, *ctx.IntTrace], _ *basepb.IntTrace) *berror.ErrMsg {
+		v := seq.Add(1)
+		mu.Lock()
+		results = append(results, v)
+		count++
+		if count == N {
+			close(allDone)
+		}
+		mu.Unlock()
+		return nil
+	},
 	)
 	elem, _ := h.Lookup("basepb.IntTrace")
 
@@ -148,13 +146,12 @@ func TestOneHashOneGoService_ZeroHash_GetsProcessed(t *testing.T) {
 	allDone := make(chan struct{})
 	const N = 5
 
-	handler.RegisterEvent(
-		h, "ohog-zero", func(_ *ctx.BaseCtx[ctx.IntTrace, *ctx.IntTrace], _ *basepb.IntTrace) *berror.ErrMsg {
-			if received.Add(1) == N {
-				close(allDone)
-			}
-			return nil
-		},
+	h.RegisterEvent("ohog-zero", func(_ *ctx.BaseCtx[ctx.IntTrace, *ctx.IntTrace], _ *basepb.IntTrace) *berror.ErrMsg {
+		if received.Add(1) == N {
+			close(allDone)
+		}
+		return nil
+	},
 	)
 	elem, _ := h.Lookup("basepb.IntTrace")
 
@@ -240,13 +237,12 @@ func TestOneHashOneGoService_Concurrent_MultiHash(t *testing.T) {
 	var received atomic.Int64
 	allDone := make(chan struct{})
 
-	handler.RegisterEvent(
-		h, "ohog-multi", func(_ *ctx.BaseCtx[ctx.IntTrace, *ctx.IntTrace], _ *basepb.IntTrace) *berror.ErrMsg {
-			if received.Add(1) == int64(total) {
-				close(allDone)
-			}
-			return nil
-		},
+	h.RegisterEvent("ohog-multi", func(_ *ctx.BaseCtx[ctx.IntTrace, *ctx.IntTrace], _ *basepb.IntTrace) *berror.ErrMsg {
+		if received.Add(1) == int64(total) {
+			close(allDone)
+		}
+		return nil
+	},
 	)
 	elem, _ := h.Lookup("basepb.IntTrace")
 
@@ -290,23 +286,22 @@ func TestOneHashOneGoService_SameHash_NoRace(t *testing.T) {
 	var received atomic.Int64
 	allDone := make(chan struct{})
 
-	handler.RegisterEvent(
-		h, "ohog-norace", func(_ *ctx.BaseCtx[ctx.IntTrace, *ctx.IntTrace], _ *basepb.IntTrace) *berror.ErrMsg {
-			cur := inFlight.Add(1)
-			// Track the peak concurrency seen for the same hash bucket
-			for {
-				old := maxInFlight.Load()
-				if cur <= old || maxInFlight.CompareAndSwap(old, cur) {
-					break
-				}
+	h.RegisterEvent("ohog-norace", func(_ *ctx.BaseCtx[ctx.IntTrace, *ctx.IntTrace], _ *basepb.IntTrace) *berror.ErrMsg {
+		cur := inFlight.Add(1)
+		// Track the peak concurrency seen for the same hash bucket
+		for {
+			old := maxInFlight.Load()
+			if cur <= old || maxInFlight.CompareAndSwap(old, cur) {
+				break
 			}
-			time.Sleep(time.Millisecond) // hold the slot briefly
-			inFlight.Add(-1)
-			if received.Add(1) == int64(total) {
-				close(allDone)
-			}
-			return nil
-		},
+		}
+		time.Sleep(time.Millisecond) // hold the slot briefly
+		inFlight.Add(-1)
+		if received.Add(1) == int64(total) {
+			close(allDone)
+		}
+		return nil
+	},
 	)
 	elem, _ := h.Lookup("basepb.IntTrace")
 

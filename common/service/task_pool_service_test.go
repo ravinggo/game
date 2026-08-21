@@ -54,7 +54,7 @@ func postTPSEvent(s *TaskPoolService[ctx.IntTrace, *ctx.IntTrace], elem *handler
 func TestTaskPoolService_DispatchCallsHandler(t *testing.T) {
 	h := handler.NewHandler[ctx.IntTrace, *ctx.IntTrace]()
 	done := make(chan struct{})
-	handler.RegisterEvent(h, "tps-basic", func(_ *ctx.BaseCtx[ctx.IntTrace, *ctx.IntTrace], _ *basepb.IntTrace) *berror.ErrMsg {
+	h.RegisterEvent("tps-basic", func(_ *ctx.BaseCtx[ctx.IntTrace, *ctx.IntTrace], _ *basepb.IntTrace) *berror.ErrMsg {
 		close(done)
 		return nil
 	})
@@ -133,7 +133,7 @@ func TestTaskPoolService_PostTask_NilIsNoop(t *testing.T) {
 func TestTaskPoolService_HandlerError_NoNatsMsgNoReply(t *testing.T) {
 	h := handler.NewHandler[ctx.IntTrace, *ctx.IntTrace]()
 	done := make(chan struct{})
-	handler.RegisterEvent(h, "tps-err", func(_ *ctx.BaseCtx[ctx.IntTrace, *ctx.IntTrace], _ *basepb.ErrorMessage) *berror.ErrMsg {
+	h.RegisterEvent("tps-err", func(_ *ctx.BaseCtx[ctx.IntTrace, *ctx.IntTrace], _ *basepb.ErrorMessage) *berror.ErrMsg {
 		defer close(done)
 		return berror.NewProtocolStr("intentional error")
 	})
@@ -165,7 +165,7 @@ func TestTaskPoolService_ConcurrentDispatch_AllDelivered(t *testing.T) {
 	var received atomic.Int64
 	allDone := make(chan struct{})
 
-	handler.RegisterEvent(h, "tps-concurrent", func(_ *ctx.BaseCtx[ctx.IntTrace, *ctx.IntTrace], _ *basepb.IntTrace) *berror.ErrMsg {
+	h.RegisterEvent("tps-concurrent", func(_ *ctx.BaseCtx[ctx.IntTrace, *ctx.IntTrace], _ *basepb.IntTrace) *berror.ErrMsg {
 		if received.Add(1) == int64(total) {
 			close(allDone)
 		}
@@ -206,7 +206,7 @@ func TestTaskPoolService_TrueParallelism(t *testing.T) {
 	var arrivals atomic.Int32
 	allArrived := make(chan struct{})
 
-	handler.RegisterEvent(h, "tps-parallel", func(_ *ctx.BaseCtx[ctx.IntTrace, *ctx.IntTrace], _ *basepb.IntTrace) *berror.ErrMsg {
+	h.RegisterEvent("tps-parallel", func(_ *ctx.BaseCtx[ctx.IntTrace, *ctx.IntTrace], _ *basepb.IntTrace) *berror.ErrMsg {
 		if arrivals.Add(1) == N {
 			close(allArrived)
 		}

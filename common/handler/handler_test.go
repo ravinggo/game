@@ -26,11 +26,11 @@ func newCtx() *ctx.BaseCtx[ctx.IntTrace, *ctx.IntTrace] {
 
 func TestRegisterRPC_LookupFound(t *testing.T) {
 	h := newIntHandler()
-	RegisterRPCResp[*ctx.IntTrace, *basepb.IntTrace, *basepb.ErrorMessage](
-		h, "rpc-test",
+	h.RegisterRPCResp[*basepb.IntTrace, *basepb.ErrorMessage]("rpc-test",
 		func(c *ctx.BaseCtx[ctx.IntTrace, *ctx.IntTrace], req *basepb.IntTrace, resp *basepb.ErrorMessage) *berror.ErrMsg {
 			return nil
 		},
+		false,
 	)
 
 	msgName := "basepb.IntTrace"
@@ -62,11 +62,11 @@ func TestRegisterRPC_LookupMiss(t *testing.T) {
 
 func TestRegisterRPC_MsgName(t *testing.T) {
 	h := newIntHandler()
-	RegisterRPCResp[*ctx.IntTrace, *basepb.IntTrace, *basepb.ErrorMessage](
-		h, "rpc-msgname",
+	h.RegisterRPCResp[*basepb.IntTrace, *basepb.ErrorMessage]("rpc-msgname",
 		func(c *ctx.BaseCtx[ctx.IntTrace, *ctx.IntTrace], req *basepb.IntTrace, resp *basepb.ErrorMessage) *berror.ErrMsg {
 			return nil
 		},
+		false,
 	)
 	elem, _ := h.Lookup("basepb.IntTrace")
 	if elem.MsgName() == "" {
@@ -78,11 +78,11 @@ func TestRegisterRPC_MsgName(t *testing.T) {
 
 func TestRegisterRPCResp_FlagsAndPools(t *testing.T) {
 	h := newIntHandler()
-	RegisterRPCResp[*ctx.IntTrace, *basepb.ErrorMessage, *basepb.IntTrace](
-		h, "rpcresp-test",
+	h.RegisterRPCResp[*basepb.ErrorMessage, *basepb.IntTrace]("rpcresp-test",
 		func(c *ctx.BaseCtx[ctx.IntTrace, *ctx.IntTrace], req *basepb.ErrorMessage, resp *basepb.IntTrace) *berror.ErrMsg {
 			return nil
 		},
+		false,
 	)
 
 	elem, ok := h.Lookup("basepb.ErrorMessage")
@@ -109,8 +109,7 @@ func TestRegisterRPCResp_FlagsAndPools(t *testing.T) {
 
 func TestRegisterEvent_FlagsAndSubjMap(t *testing.T) {
 	h := newIntHandler()
-	RegisterEvent[*ctx.IntTrace, *basepb.ErrorMessage](
-		h, "event-test",
+	h.RegisterEvent[*basepb.ErrorMessage]("event-test",
 		func(c *ctx.BaseCtx[ctx.IntTrace, *ctx.IntTrace], req *basepb.ErrorMessage) *berror.ErrMsg {
 			return nil
 		},
@@ -142,8 +141,7 @@ func TestRegisterEvent_FlagsAndSubjMap(t *testing.T) {
 
 func TestRegisterEventBroadcast_BroadcastSubjMap(t *testing.T) {
 	h := newIntHandler()
-	RegisterEventBroadcast[*ctx.IntTrace, *basepb.ErrorMessage](
-		h, "broadcast-test",
+	h.RegisterEventBroadcast[*basepb.ErrorMessage]("broadcast-test",
 		func(c *ctx.BaseCtx[ctx.IntTrace, *ctx.IntTrace], req *basepb.ErrorMessage) *berror.ErrMsg {
 			return nil
 		},
@@ -171,8 +169,7 @@ func TestRegisterEventBroadcast_BroadcastSubjMap(t *testing.T) {
 
 func TestRegisterEventForce_IsForce(t *testing.T) {
 	h := newIntHandler()
-	RegisterEventForce[*ctx.IntTrace, *basepb.ErrorMessage](
-		h, "force-event",
+	h.RegisterEventForce[*basepb.ErrorMessage]("force-event",
 		func(c *ctx.BaseCtx[ctx.IntTrace, *ctx.IntTrace], req *basepb.ErrorMessage) *berror.ErrMsg {
 			return nil
 		},
@@ -189,8 +186,7 @@ func TestRegisterEventForce_IsForce(t *testing.T) {
 
 func TestRegisterRPCForce_IsForce(t *testing.T) {
 	h := newIntHandler()
-	RegisterRPCRespForce[*ctx.IntTrace, *basepb.IntTrace, *basepb.ErrorMessage](
-		h, "force-rpc",
+	h.RegisterRPCRespForce[*basepb.IntTrace, *basepb.ErrorMessage]("force-rpc",
 		func(c *ctx.BaseCtx[ctx.IntTrace, *ctx.IntTrace], req *basepb.IntTrace, resp *basepb.ErrorMessage) *berror.ErrMsg {
 			return nil
 		},
@@ -209,11 +205,11 @@ func TestRegisterRPCForce_IsForce(t *testing.T) {
 
 func TestDuplicateRegistration_Panics(t *testing.T) {
 	h := newIntHandler()
-	RegisterRPCResp[*ctx.IntTrace, *basepb.IntTrace, *basepb.ErrorMessage](
-		h, "first",
+	h.RegisterRPCResp[*basepb.IntTrace, *basepb.ErrorMessage]("first",
 		func(c *ctx.BaseCtx[ctx.IntTrace, *ctx.IntTrace], req *basepb.IntTrace, resp *basepb.ErrorMessage) *berror.ErrMsg {
 			return nil
 		},
+		false,
 	)
 
 	defer func() {
@@ -222,18 +218,17 @@ func TestDuplicateRegistration_Panics(t *testing.T) {
 		}
 	}()
 
-	RegisterRPCResp[*ctx.IntTrace, *basepb.IntTrace, *basepb.ErrorMessage](
-		h, "duplicate",
+	h.RegisterRPCResp[*basepb.IntTrace, *basepb.ErrorMessage]("duplicate",
 		func(c *ctx.BaseCtx[ctx.IntTrace, *ctx.IntTrace], req *basepb.IntTrace, resp *basepb.ErrorMessage) *berror.ErrMsg {
 			return nil
 		},
+		false,
 	)
 }
 
 func TestDuplicateEventRegistration_Panics(t *testing.T) {
 	h := newIntHandler()
-	RegisterEvent[*ctx.IntTrace, *basepb.ErrorMessage](
-		h, "first-event",
+	h.RegisterEvent[*basepb.ErrorMessage]("first-event",
 		func(c *ctx.BaseCtx[ctx.IntTrace, *ctx.IntTrace], req *basepb.ErrorMessage) *berror.ErrMsg {
 			return nil
 		},
@@ -245,8 +240,7 @@ func TestDuplicateEventRegistration_Panics(t *testing.T) {
 		}
 	}()
 
-	RegisterEvent[*ctx.IntTrace, *basepb.ErrorMessage](
-		h, "duplicate-event",
+	h.RegisterEvent[*basepb.ErrorMessage]("duplicate-event",
 		func(c *ctx.BaseCtx[ctx.IntTrace, *ctx.IntTrace], req *basepb.ErrorMessage) *berror.ErrMsg {
 			return nil
 		},
@@ -264,8 +258,7 @@ func TestSubjectConflict_BroadcastThenNormal_Panics(t *testing.T) {
 	// the "basepb." subject prefix; after the broadcast registration the normal
 	// registration of any basepb message should panic.
 	h := newIntHandler()
-	RegisterEventBroadcast[*ctx.IntTrace, *basepb.ErrorMessage](
-		h, "broadcast",
+	h.RegisterEventBroadcast[*basepb.ErrorMessage]("broadcast",
 		func(c *ctx.BaseCtx[ctx.IntTrace, *ctx.IntTrace], req *basepb.ErrorMessage) *berror.ErrMsg {
 			return nil
 		},
@@ -277,8 +270,7 @@ func TestSubjectConflict_BroadcastThenNormal_Panics(t *testing.T) {
 		}
 	}()
 
-	RegisterEvent[*ctx.IntTrace, *basepb.IntTrace](
-		h, "normal-after-broadcast",
+	h.RegisterEvent[*basepb.IntTrace]("normal-after-broadcast",
 		func(c *ctx.BaseCtx[ctx.IntTrace, *ctx.IntTrace], req *basepb.IntTrace) *berror.ErrMsg {
 			return nil
 		},
@@ -287,8 +279,7 @@ func TestSubjectConflict_BroadcastThenNormal_Panics(t *testing.T) {
 
 func TestSubjectConflict_NormalThenBroadcast_Panics(t *testing.T) {
 	h := newIntHandler()
-	RegisterEvent[*ctx.IntTrace, *basepb.IntTrace](
-		h, "normal",
+	h.RegisterEvent[*basepb.IntTrace]("normal",
 		func(c *ctx.BaseCtx[ctx.IntTrace, *ctx.IntTrace], req *basepb.IntTrace) *berror.ErrMsg {
 			return nil
 		},
@@ -300,8 +291,7 @@ func TestSubjectConflict_NormalThenBroadcast_Panics(t *testing.T) {
 		}
 	}()
 
-	RegisterEventBroadcast[*ctx.IntTrace, *basepb.ErrorMessage](
-		h, "broadcast-after-normal",
+	h.RegisterEventBroadcast[*basepb.ErrorMessage]("broadcast-after-normal",
 		func(c *ctx.BaseCtx[ctx.IntTrace, *ctx.IntTrace], req *basepb.ErrorMessage) *berror.ErrMsg {
 			return nil
 		},
@@ -312,11 +302,11 @@ func TestSubjectConflict_NormalThenBroadcast_Panics(t *testing.T) {
 
 func TestGroup_SharesHandleMap(t *testing.T) {
 	h := newIntHandler()
-	RegisterRPCResp[*ctx.IntTrace, *basepb.IntTrace, *basepb.ErrorMessage](
-		h, "shared",
+	h.RegisterRPCResp[*basepb.IntTrace, *basepb.ErrorMessage]("shared",
 		func(c *ctx.BaseCtx[ctx.IntTrace, *ctx.IntTrace], req *basepb.IntTrace, resp *basepb.ErrorMessage) *berror.ErrMsg {
 			return nil
 		},
+		false,
 	)
 
 	g := h.Group()
@@ -333,8 +323,8 @@ func TestGroup_RegisterInGroupVisibleInParent(t *testing.T) {
 	h := newIntHandler()
 	g := h.Group()
 
-	RegisterEvent[*ctx.IntTrace, *basepb.ErrorMessage](
-		g, "group-event",
+	g.RegisterEvent[*basepb.ErrorMessage](
+		"group-event",
 		func(c *ctx.BaseCtx[ctx.IntTrace, *ctx.IntTrace], req *basepb.ErrorMessage) *berror.ErrMsg {
 			return nil
 		},
@@ -367,8 +357,8 @@ func TestGroup_AddsMiddlewares(t *testing.T) {
 	h := newIntHandler(outerMid)
 	g := h.Group(innerMid)
 
-	RegisterEvent[*ctx.IntTrace, *basepb.ErrorMessage](
-		g, "group-mid",
+	g.RegisterEvent[*basepb.ErrorMessage](
+		"group-mid",
 		func(c *ctx.BaseCtx[ctx.IntTrace, *ctx.IntTrace], req *basepb.ErrorMessage) *berror.ErrMsg {
 			callOrder = append(callOrder, "handler")
 			return nil
@@ -415,8 +405,7 @@ func TestElemCall_MiddlewareChainOrder(t *testing.T) {
 	}
 
 	h := newIntHandler(mid1, mid2)
-	RegisterEvent[*ctx.IntTrace, *basepb.ErrorMessage](
-		h, "chain-test",
+	h.RegisterEvent[*basepb.ErrorMessage]("chain-test",
 		func(c *ctx.BaseCtx[ctx.IntTrace, *ctx.IntTrace], req *basepb.ErrorMessage) *berror.ErrMsg {
 			trace = append(trace, "handler")
 			return nil
@@ -441,8 +430,7 @@ func TestElemCall_MiddlewareChainOrder(t *testing.T) {
 
 func TestElemCall_ReturnsHandlerError(t *testing.T) {
 	h := newIntHandler()
-	RegisterEvent[*ctx.IntTrace, *basepb.ErrorMessage](
-		h, "error-test",
+	h.RegisterEvent[*basepb.ErrorMessage]("error-test",
 		func(c *ctx.BaseCtx[ctx.IntTrace, *ctx.IntTrace], req *basepb.ErrorMessage) *berror.ErrMsg {
 			return berror.NewProtocolStr("test error")
 		},
@@ -460,8 +448,7 @@ func TestElemCall_ReturnsHandlerError(t *testing.T) {
 func TestElemCall_NoMiddlewareRunsHandlerDirectly(t *testing.T) {
 	invoked := false
 	h := newIntHandler()
-	RegisterEvent[*ctx.IntTrace, *basepb.ErrorMessage](
-		h, "no-mid",
+	h.RegisterEvent[*basepb.ErrorMessage]("no-mid",
 		func(c *ctx.BaseCtx[ctx.IntTrace, *ctx.IntTrace], req *basepb.ErrorMessage) *berror.ErrMsg {
 			invoked = true
 			return nil
@@ -482,8 +469,7 @@ func TestElemCall_NoMiddlewareRunsHandlerDirectly(t *testing.T) {
 
 func TestLogger_SuccessPath(t *testing.T) {
 	h := newIntHandler(Logger[ctx.IntTrace, *ctx.IntTrace])
-	RegisterEvent[*ctx.IntTrace, *basepb.ErrorMessage](
-		h, "success-logger",
+	h.RegisterEvent[*basepb.ErrorMessage]("success-logger",
 		func(c *ctx.BaseCtx[ctx.IntTrace, *ctx.IntTrace], req *basepb.ErrorMessage) *berror.ErrMsg {
 			return nil
 		},
@@ -502,8 +488,7 @@ func TestLogger_SuccessPath(t *testing.T) {
 
 func TestRecover_CatchesPanic(t *testing.T) {
 	h := newIntHandler(Recover[ctx.IntTrace, *ctx.IntTrace])
-	RegisterEvent[*ctx.IntTrace, *basepb.ErrorMessage](
-		h, "recover-panic",
+	h.RegisterEvent[*basepb.ErrorMessage]("recover-panic",
 		func(c *ctx.BaseCtx[ctx.IntTrace, *ctx.IntTrace], req *basepb.ErrorMessage) *berror.ErrMsg {
 			panic("recover test")
 		},
@@ -530,8 +515,7 @@ func TestRecover_CatchesPanic(t *testing.T) {
 
 func TestRecover_PassthroughOnSuccess(t *testing.T) {
 	h := newIntHandler(Recover[ctx.IntTrace, *ctx.IntTrace])
-	RegisterEvent[*ctx.IntTrace, *basepb.ErrorMessage](
-		h, "recover-ok",
+	h.RegisterEvent[*basepb.ErrorMessage]("recover-ok",
 		func(c *ctx.BaseCtx[ctx.IntTrace, *ctx.IntTrace], req *basepb.ErrorMessage) *berror.ErrMsg {
 			return nil
 		},
@@ -548,8 +532,7 @@ func TestRecover_PassthroughOnSuccess(t *testing.T) {
 
 func TestRecover_PassthroughHandlerError(t *testing.T) {
 	h := newIntHandler(Recover[ctx.IntTrace, *ctx.IntTrace])
-	RegisterEvent[*ctx.IntTrace, *basepb.ErrorMessage](
-		h, "recover-err",
+	h.RegisterEvent[*basepb.ErrorMessage]("recover-err",
 		func(c *ctx.BaseCtx[ctx.IntTrace, *ctx.IntTrace], req *basepb.ErrorMessage) *berror.ErrMsg {
 			return berror.NewProtocolStr("planned error")
 		},
@@ -564,23 +547,13 @@ func TestRecover_PassthroughHandlerError(t *testing.T) {
 	}
 }
 
-// --- 12. GetHandler() self-implementation on *Handler ---
+// --- 12. GetHandler() self-access on *Handler ---
 
 func TestGetHandler_ReturnsSelf(t *testing.T) {
 	h := newIntHandler()
 	got := h.GetHandler()
 	if got != h {
-		t.Error("GetHandler() should return the receiver itself, satisfying IService")
-	}
-}
-
-func TestGetHandler_ImplementsIService(t *testing.T) {
-	h := newIntHandler()
-	var _ IService[ctx.IntTrace, *ctx.IntTrace] = h
-	// Compile-time check: if *Handler doesn't implement IService this won't compile.
-	got := h.GetHandler()
-	if got == nil {
-		t.Error("GetHandler() must not return nil")
+		t.Error("GetHandler() should return the receiver itself")
 	}
 }
 
@@ -588,11 +561,11 @@ func TestGetHandler_ImplementsIService(t *testing.T) {
 
 func TestElemString_NotEmpty(t *testing.T) {
 	h := newIntHandler()
-	RegisterRPCResp[*ctx.IntTrace, *basepb.IntTrace, *basepb.ErrorMessage](
-		h, "string-test",
+	h.RegisterRPCResp[*basepb.IntTrace, *basepb.ErrorMessage]("string-test",
 		func(c *ctx.BaseCtx[ctx.IntTrace, *ctx.IntTrace], req *basepb.IntTrace, resp *basepb.ErrorMessage) *berror.ErrMsg {
 			return nil
 		},
+		false,
 	)
 	elem, _ := h.Lookup("basepb.IntTrace")
 	if elem.String() == "" {
@@ -602,8 +575,7 @@ func TestElemString_NotEmpty(t *testing.T) {
 
 func TestGetQueueAndBroadcastSubjInfo(t *testing.T) {
 	h := newIntHandler()
-	RegisterEvent[*ctx.IntTrace, *basepb.IntTrace](
-		h, "subj-info",
+	h.RegisterEvent[*basepb.IntTrace]("subj-info",
 		func(c *ctx.BaseCtx[ctx.IntTrace, *ctx.IntTrace], req *basepb.IntTrace) *berror.ErrMsg {
 			return nil
 		},

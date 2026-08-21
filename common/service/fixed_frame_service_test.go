@@ -97,11 +97,10 @@ func TestFixedFrameAbsService_DispatchCallsHandler(t *testing.T) {
 	h := handler.NewHandler[ctx.IntTrace, *ctx.IntTrace]()
 	done := make(chan struct{})
 	var once sync.Once
-	handler.RegisterEvent(
-		h, "ffs-abs-basic", func(_ *ctx.BaseCtx[ctx.IntTrace, *ctx.IntTrace], _ *basepb.IntTrace) *berror.ErrMsg {
-			once.Do(func() { close(done) })
-			return nil
-		},
+	h.RegisterEvent("ffs-abs-basic", func(_ *ctx.BaseCtx[ctx.IntTrace, *ctx.IntTrace], _ *basepb.IntTrace) *berror.ErrMsg {
+		once.Do(func() { close(done) })
+		return nil
+	},
 	)
 	elem, _ := h.Lookup("basepb.IntTrace")
 
@@ -124,11 +123,10 @@ func TestFixedFrameTickerService_DispatchCallsHandler(t *testing.T) {
 	h := handler.NewHandler[ctx.IntTrace, *ctx.IntTrace]()
 	done := make(chan struct{})
 	var once sync.Once
-	handler.RegisterEvent(
-		h, "ffs-ticker-basic", func(_ *ctx.BaseCtx[ctx.IntTrace, *ctx.IntTrace], _ *basepb.IntTrace) *berror.ErrMsg {
-			once.Do(func() { close(done) })
-			return nil
-		},
+	h.RegisterEvent("ffs-ticker-basic", func(_ *ctx.BaseCtx[ctx.IntTrace, *ctx.IntTrace], _ *basepb.IntTrace) *berror.ErrMsg {
+		once.Do(func() { close(done) })
+		return nil
+	},
 	)
 	elem, _ := h.Lookup("basepb.IntTrace")
 
@@ -155,17 +153,16 @@ func TestFixedFrameService_Sequential_Order(t *testing.T) {
 	allDone := make(chan struct{})
 	var count int
 
-	handler.RegisterEvent(
-		h, "ffs-order", func(_ *ctx.BaseCtx[ctx.IntTrace, *ctx.IntTrace], req *basepb.IntTrace) *berror.ErrMsg {
-			mu.Lock()
-			results = append(results, req.RoleId)
-			count++
-			if count == N {
-				close(allDone)
-			}
-			mu.Unlock()
-			return nil
-		},
+	h.RegisterEvent("ffs-order", func(_ *ctx.BaseCtx[ctx.IntTrace, *ctx.IntTrace], req *basepb.IntTrace) *berror.ErrMsg {
+		mu.Lock()
+		results = append(results, req.RoleId)
+		count++
+		if count == N {
+			close(allDone)
+		}
+		mu.Unlock()
+		return nil
+	},
 	)
 	elem, _ := h.Lookup("basepb.IntTrace")
 
@@ -281,13 +278,12 @@ func TestFixedFrameService_ConcurrentPost_AllDelivered(t *testing.T) {
 	var received atomic.Int64
 	allDone := make(chan struct{})
 
-	handler.RegisterEvent(
-		h, "ffs-concurrent", func(_ *ctx.BaseCtx[ctx.IntTrace, *ctx.IntTrace], _ *basepb.IntTrace) *berror.ErrMsg {
-			if received.Add(1) == int64(total) {
-				close(allDone)
-			}
-			return nil
-		},
+	h.RegisterEvent("ffs-concurrent", func(_ *ctx.BaseCtx[ctx.IntTrace, *ctx.IntTrace], _ *basepb.IntTrace) *berror.ErrMsg {
+		if received.Add(1) == int64(total) {
+			close(allDone)
+		}
+		return nil
+	},
 	)
 	elem, _ := h.Lookup("basepb.IntTrace")
 
@@ -321,11 +317,10 @@ func TestFixedFrameService_StopDrainsEvents(t *testing.T) {
 	h := handler.NewHandler[ctx.IntTrace, *ctx.IntTrace]()
 	var count atomic.Int64
 
-	handler.RegisterEvent(
-		h, "ffs-stop", func(_ *ctx.BaseCtx[ctx.IntTrace, *ctx.IntTrace], _ *basepb.IntTrace) *berror.ErrMsg {
-			count.Add(1)
-			return nil
-		},
+	h.RegisterEvent("ffs-stop", func(_ *ctx.BaseCtx[ctx.IntTrace, *ctx.IntTrace], _ *basepb.IntTrace) *berror.ErrMsg {
+		count.Add(1)
+		return nil
+	},
 	)
 	elem, _ := h.Lookup("basepb.IntTrace")
 
@@ -348,11 +343,10 @@ func TestFixedFrameCatchUpService_DispatchCallsHandler(t *testing.T) {
 	h := handler.NewHandler[ctx.IntTrace, *ctx.IntTrace]()
 	done := make(chan struct{})
 	var once sync.Once
-	handler.RegisterEvent(
-		h, "ffs-catchup-basic", func(_ *ctx.BaseCtx[ctx.IntTrace, *ctx.IntTrace], _ *basepb.IntTrace) *berror.ErrMsg {
-			once.Do(func() { close(done) })
-			return nil
-		},
+	h.RegisterEvent("ffs-catchup-basic", func(_ *ctx.BaseCtx[ctx.IntTrace, *ctx.IntTrace], _ *basepb.IntTrace) *berror.ErrMsg {
+		once.Do(func() { close(done) })
+		return nil
+	},
 	)
 	elem, _ := h.Lookup("basepb.IntTrace")
 

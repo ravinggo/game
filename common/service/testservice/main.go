@@ -14,7 +14,6 @@ import (
 	"github.com/ravinggo/game/common/basepb"
 	"github.com/ravinggo/game/common/berror"
 	"github.com/ravinggo/game/common/ctx"
-	"github.com/ravinggo/game/common/handler"
 	callerlocalevent "github.com/ravinggo/game/common/localevent/caller-local-event"
 	"github.com/ravinggo/game/common/logger"
 	"github.com/ravinggo/game/common/natsclient"
@@ -47,9 +46,9 @@ func NewTestService() *TestService {
 }
 
 func (t *TestService) Router() {
-	handler.RegisterRPCResp(t.svc, "test1", t.Trace)
-	handler.RegisterEvent(t.svc, "test2", t.Ping)
-	handler.RegisterRPCResp(t.svc, "test3", t.Error)
+	t.svc.RegisterRPCResp("test1", t.Trace)
+	t.svc.RegisterEvent("test2", t.Ping)
+	t.svc.RegisterRPCResp("test3", t.Error)
 	callerlocalevent.Register("test localevent eventInt", t.eventInt)
 }
 

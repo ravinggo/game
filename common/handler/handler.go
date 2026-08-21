@@ -27,13 +27,6 @@ type Middleware[TraceData any, TP ctx.TracePtr[TraceData]] func(HandleFunc[Trace
 // Written by Claude Code claude-opus-4-6.
 type HandleFunc[TraceData any, TP ctx.TracePtr[TraceData]] func(*ctx.BaseCtx[TraceData, TP]) *berror.ErrMsg
 
-// IService is implemented by any type that owns a handler registry.
-// All concrete service types in the service package implement this interface.
-// *Handler also implements it so that handlers can be registered directly (e.g. in tests).
-type IService[TraceData any, TP ctx.TracePtr[TraceData]] interface {
-	GetHandler() *Handler[TraceData, TP]
-}
-
 // reqRespPair holds a pre-allocated request/response proto pair for pool storage.
 // For event handlers resp is nil; for RPC handlers both fields are non-nil.
 type reqRespPair struct {
@@ -44,7 +37,7 @@ type reqRespPair struct {
 // Elem holds all metadata and runtime state for a single registered message handler.
 // It stores the composed handler function, the middleware chain, pool references for
 // request/response proto messages, and classification flags (RPC, broadcast, force).
-// Callers never construct Elem directly; it is produced by the Register* functions.
+// Callers never construct Elem directly; it is produced by the Handler Register* methods.
 // Written by Claude Code claude-opus-4-6.
 type Elem[TraceData any, TP ctx.TracePtr[TraceData]] struct {
 	h         HandleFunc[TraceData, TP]
@@ -134,7 +127,8 @@ type Handler[TraceData any, TP ctx.TracePtr[TraceData]] struct {
 	broadcastSubj  map[string]struct{}
 }
 
-// GetHandler implements IService, allowing *Handler to be passed wherever IService is expected.
+// GetHandler returns the receiver. It is kept as a small adapter for service code that
+// needs to inspect the registry directly.
 func (h *Handler[TraceData, TP]) GetHandler() *Handler[TraceData, TP] {
 	return h
 }
@@ -153,8 +147,9 @@ func NewHandler[TraceData any, TP ctx.TracePtr[TraceData]](middlewares ...Middle
 // Group creates a new Handler sharing the same routing table with additional middlewares.
 func (h *Handler[TraceData, TP]) Group(middlewares ...Middleware[TraceData, TP]) *Handler[TraceData, TP] {
 	newH := &Handler[TraceData, TP]{
-		handle:  h.handle,
-		subjMap: h.subjMap,
+		handle:        h.handle,
+		subjMap:       h.subjMap,
+		broadcastSubj: h.broadcastSubj,
 	}
 	newH.baseMiddleware = append(newH.baseMiddleware, h.baseMiddleware...)
 	newH.baseMiddleware = append(newH.baseMiddleware, middlewares...)
@@ -186,7 +181,28 @@ func (h *Handler[TraceData, TP]) Logger() {
 	}
 }
 
+// RegisterRPCResp registers a request/response handler. The response value is
+// allocated by the handler registry and passed to f for mutation. isForceHandle
+// controls whether dispatch may bypass service backpressure.
 func (h *Handler[TraceData, TP]) RegisterRPCResp[REQ define.ProtoMessagePtr[T1], RESP define.ProtoMessagePtr[T2], T1 any, T2 any](
+	desc string,
+	f func(*ctx.BaseCtx[TraceData, TP], REQ, RESP) *berror.ErrMsg,
+	isForceHandle bool,
+	middlewares ...Middleware[TraceData, TP],
+) {
+	h.registerRPCResp(desc, f, isForceHandle, middlewares...)
+}
+
+// RegisterRPCRespForce is the backpressure-bypassing variant of RegisterRPCResp.
+func (h *Handler[TraceData, TP]) RegisterRPCRespForce[REQ define.ProtoMessagePtr[T1], RESP define.ProtoMessagePtr[T2], T1 any, T2 any](
+	desc string,
+	f func(*ctx.BaseCtx[TraceData, TP], REQ, RESP) *berror.ErrMsg,
+	middlewares ...Middleware[TraceData, TP],
+) {
+	h.registerRPCResp(desc, f, true, middlewares...)
+}
+
+func (h *Handler[TraceData, TP]) registerRPCResp[REQ define.ProtoMessagePtr[T1], RESP define.ProtoMessagePtr[T2], T1 any, T2 any](
 	desc string,
 	f func(*ctx.BaseCtx[TraceData, TP], REQ, RESP) *berror.ErrMsg, isForceHandle bool,
 	middlewares ...Middleware[TraceData, TP],
@@ -197,7 +213,7 @@ func (h *Handler[TraceData, TP]) RegisterRPCResp[REQ define.ProtoMessagePtr[T1],
 	} else {
 		subj := getSubjPrefix(string(msgName))
 		if _, ok := h.broadcastSubj[subj]; ok {
-			panic(fmt.Sprintf("subj %s already registered as broadcast message,not is normal message[%s]", msgName, v.String()))
+			panic(fmt.Sprintf("subj %s already registered as broadcast message,not is normal message", msgName))
 		}
 		h.subjMap[subj] = struct{}{}
 	}
@@ -233,61 +249,49 @@ func getSubjPrefix(msgName string) string {
 	return msgName[:strings.LastIndexByte(msgName, '.')+1]
 }
 
-// ---- RPCResp (RESP is an in-parameter, pooled) ----
-
-// RegisterRPCResp registers a RPC handler where RESP is an in-parameter (pooled by the framework).
-func RegisterRPCResp[TP ctx.TracePtr[TraceData], REQ define.ProtoMessagePtr[T1], RESP define.ProtoMessagePtr[T2], TraceData any, T1 any, T2 any](
-	svc IService[TraceData, TP], desc string, f func(*ctx.BaseCtx[TraceData, TP], REQ, RESP) *berror.ErrMsg, middlewares ...Middleware[TraceData, TP],
-) {
-	registerRPCResp(svc.GetHandler(), desc, f, false, middlewares...)
-}
-
-// RegisterRPCRespForce registers a pooled-RESP RPC handler that bypasses backpressure.
-func RegisterRPCRespForce[TP ctx.TracePtr[TraceData], REQ define.ProtoMessagePtr[T1], RESP define.ProtoMessagePtr[T2], TraceData any, T1 any, T2 any](
-	svc IService[TraceData, TP], desc string, f func(*ctx.BaseCtx[TraceData, TP], REQ, RESP) *berror.ErrMsg, middlewares ...Middleware[TraceData, TP],
-) {
-	registerRPCResp(svc.GetHandler(), desc, f, true, middlewares...)
-}
-
-// ---- Event (fire-and-forget) ----
-
 // RegisterEvent registers a fire-and-forget handler. One subscriber receives each message.
-func RegisterEvent[TP ctx.TracePtr[TraceData], REQ define.ProtoMessagePtr[T1], TraceData any, T1 any](
-	svc IService[TraceData, TP], desc string, f func(*ctx.BaseCtx[TraceData, TP], REQ) *berror.ErrMsg, middlewares ...Middleware[TraceData, TP],
+func (h *Handler[TraceData, TP]) RegisterEvent[REQ define.ProtoMessagePtr[T1], T1 any](
+	desc string,
+	f func(*ctx.BaseCtx[TraceData, TP], REQ) *berror.ErrMsg,
+	middlewares ...Middleware[TraceData, TP],
 ) {
-	registerEvent(svc.GetHandler(), desc, f, false, false, middlewares...)
+	h.registerEvent(desc, f, false, false, middlewares...)
 }
 
 // RegisterEventForce registers a fire-and-forget handler that bypasses backpressure.
-func RegisterEventForce[TP ctx.TracePtr[TraceData], REQ define.ProtoMessagePtr[T1], TraceData any, T1 any](
-	svc IService[TraceData, TP], desc string, f func(*ctx.BaseCtx[TraceData, TP], REQ) *berror.ErrMsg, middlewares ...Middleware[TraceData, TP],
+func (h *Handler[TraceData, TP]) RegisterEventForce[REQ define.ProtoMessagePtr[T1], T1 any](
+	desc string,
+	f func(*ctx.BaseCtx[TraceData, TP], REQ) *berror.ErrMsg,
+	middlewares ...Middleware[TraceData, TP],
 ) {
-	registerEvent(svc.GetHandler(), desc, f, true, false, middlewares...)
+	h.registerEvent(desc, f, true, false, middlewares...)
 }
 
-// ---- Broadcast (all subscribers receive) ----
-
 // RegisterEventBroadcast registers a handler where all subscribers receive the message.
-func RegisterEventBroadcast[TP ctx.TracePtr[TraceData], REQ define.ProtoMessagePtr[T1], TraceData any, T1 any](
-	svc IService[TraceData, TP], desc string, f func(*ctx.BaseCtx[TraceData, TP], REQ) *berror.ErrMsg, middlewares ...Middleware[TraceData, TP],
+func (h *Handler[TraceData, TP]) RegisterEventBroadcast[REQ define.ProtoMessagePtr[T1], T1 any](
+	desc string,
+	f func(*ctx.BaseCtx[TraceData, TP], REQ) *berror.ErrMsg,
+	middlewares ...Middleware[TraceData, TP],
 ) {
-	registerEvent(svc.GetHandler(), desc, f, false, true, middlewares...)
+	h.registerEvent(desc, f, false, true, middlewares...)
 }
 
 // RegisterEventForceBroadcast registers a critical broadcast handler.
-func RegisterEventForceBroadcast[TP ctx.TracePtr[TraceData], REQ define.ProtoMessagePtr[T1], TraceData any, T1 any](
-	svc IService[TraceData, TP], desc string, f func(*ctx.BaseCtx[TraceData, TP], REQ) *berror.ErrMsg, middlewares ...Middleware[TraceData, TP],
+func (h *Handler[TraceData, TP]) RegisterEventForceBroadcast[REQ define.ProtoMessagePtr[T1], T1 any](
+	desc string,
+	f func(*ctx.BaseCtx[TraceData, TP], REQ) *berror.ErrMsg,
+	middlewares ...Middleware[TraceData, TP],
 ) {
-	registerEvent(svc.GetHandler(), desc, f, true, true, middlewares...)
+	h.registerEvent(desc, f, true, true, middlewares...)
 }
 
-// registerEvent is the internal implementation backing all four public event-registration functions.
+// registerEvent is the internal implementation backing all four event-registration methods.
 // The isBroadcast flag controls whether the subject prefix is recorded in broadcastSubj (all
 // subscribers receive) or subjMap (queue group, one subscriber receives). Mixing the two modes
 // for the same prefix panics at registration time to catch wiring mistakes early.
 // Written by Claude Code claude-opus-4-6.
-func registerEvent[TP ctx.TracePtr[TraceData], REQ define.ProtoMessagePtr[T1], TraceData any, T1 any](
-	h *Handler[TraceData, TP], desc string, f func(*ctx.BaseCtx[TraceData, TP], REQ) *berror.ErrMsg, isForceHandle, isBroadcast bool,
+func (h *Handler[TraceData, TP]) registerEvent[REQ define.ProtoMessagePtr[T1], T1 any](
+	desc string, f func(*ctx.BaseCtx[TraceData, TP], REQ) *berror.ErrMsg, isForceHandle, isBroadcast bool,
 	middlewares ...Middleware[TraceData, TP],
 ) {
 	msgName := define.ProtoMessageName((REQ)(nil))
@@ -297,12 +301,12 @@ func registerEvent[TP ctx.TracePtr[TraceData], REQ define.ProtoMessagePtr[T1], T
 		subj := getSubjPrefix(string(msgName))
 		if isBroadcast {
 			if _, ok := h.subjMap[subj]; ok {
-				panic(fmt.Sprintf("subj %s already registered as normal handler,not is broadcast message[%s]", msgName, v.String()))
+				panic(fmt.Sprintf("subj %s already registered as normal handler,not is broadcast message", msgName))
 			}
 			h.broadcastSubj[subj] = struct{}{}
 		} else {
 			if _, ok := h.broadcastSubj[subj]; ok {
-				panic(fmt.Sprintf("subj %s already registered as broadcast message,not is normal message[%s]", msgName, v.String()))
+				panic(fmt.Sprintf("subj %s already registered as broadcast message,not is normal message", msgName))
 			}
 			h.subjMap[subj] = struct{}{}
 		}

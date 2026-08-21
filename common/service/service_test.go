@@ -228,11 +228,10 @@ func TestReplyTaskPoolFull_EmptyReply(t *testing.T) {
 func TestHandleCtx_CallsHandler(t *testing.T) {
 	h := handler.NewHandler[ctx.IntTrace, *ctx.IntTrace]()
 	var called atomic.Bool
-	handler.RegisterEvent(
-		h, "test-handle-ctx", func(c *ctx.BaseCtx[ctx.IntTrace, *ctx.IntTrace], req *basepb.IntTrace) *berror.ErrMsg {
-			called.Store(true)
-			return nil
-		},
+	h.RegisterEvent("test-handle-ctx", func(c *ctx.BaseCtx[ctx.IntTrace, *ctx.IntTrace], req *basepb.IntTrace) *berror.ErrMsg {
+		called.Store(true)
+		return nil
+	},
 	)
 	elem, ok := h.Lookup("basepb.IntTrace")
 	if !ok {
@@ -255,10 +254,9 @@ func TestHandleCtx_CallsHandler(t *testing.T) {
 // Written by Claude Code claude-opus-4-6.
 func TestHandleCtx_RecyclesReq(t *testing.T) {
 	h := handler.NewHandler[ctx.IntTrace, *ctx.IntTrace]()
-	handler.RegisterEvent(
-		h, "test-recycle", func(c *ctx.BaseCtx[ctx.IntTrace, *ctx.IntTrace], req *basepb.IntTrace) *berror.ErrMsg {
-			return nil
-		},
+	h.RegisterEvent("test-recycle", func(c *ctx.BaseCtx[ctx.IntTrace, *ctx.IntTrace], req *basepb.IntTrace) *berror.ErrMsg {
+		return nil
+	},
 	)
 	elem, _ := h.Lookup("basepb.IntTrace")
 
@@ -279,10 +277,9 @@ func TestHandleCtx_RecyclesReq(t *testing.T) {
 // Written by Claude Code claude-opus-4-6.
 func TestHandleCtx_HandlerError_NoNatsMsgNoRPCResp(t *testing.T) {
 	h := handler.NewHandler[ctx.IntTrace, *ctx.IntTrace]()
-	handler.RegisterEvent(
-		h, "test-err", func(c *ctx.BaseCtx[ctx.IntTrace, *ctx.IntTrace], req *basepb.ErrorMessage) *berror.ErrMsg {
-			return berror.NewProtocolStr("test error")
-		},
+	h.RegisterEvent("test-err", func(c *ctx.BaseCtx[ctx.IntTrace, *ctx.IntTrace], req *basepb.ErrorMessage) *berror.ErrMsg {
+		return berror.NewProtocolStr("test error")
+	},
 	)
 	elem, _ := h.Lookup("basepb.ErrorMessage")
 
@@ -341,10 +338,9 @@ func TestDealNatsMsg_UnregisteredMsg(t *testing.T) {
 // Written by Claude Code claude-opus-4-6.
 func TestDealNatsMsg_Dispatches(t *testing.T) {
 	h := handler.NewHandler[ctx.IntTrace, *ctx.IntTrace]()
-	handler.RegisterEvent(
-		h, "dispatch-test", func(c *ctx.BaseCtx[ctx.IntTrace, *ctx.IntTrace], req *basepb.IntTrace) *berror.ErrMsg {
-			return nil
-		},
+	h.RegisterEvent("dispatch-test", func(c *ctx.BaseCtx[ctx.IntTrace, *ctx.IntTrace], req *basepb.IntTrace) *berror.ErrMsg {
+		return nil
+	},
 	)
 
 	s := makeBS(h)
@@ -373,11 +369,10 @@ func TestDealNatsMsg_Dispatches(t *testing.T) {
 // Written by Claude Code claude-opus-4-6.
 func TestDealNatsMsg_CorruptProto(t *testing.T) {
 	h := handler.NewHandler[ctx.IntTrace, *ctx.IntTrace]()
-	handler.RegisterEvent(
-		h, "corrupt-test", func(c *ctx.BaseCtx[ctx.IntTrace, *ctx.IntTrace], req *basepb.IntTrace) *berror.ErrMsg {
-			t.Error("handler must not be called for corrupt proto")
-			return nil
-		},
+	h.RegisterEvent("corrupt-test", func(c *ctx.BaseCtx[ctx.IntTrace, *ctx.IntTrace], req *basepb.IntTrace) *berror.ErrMsg {
+		t.Error("handler must not be called for corrupt proto")
+		return nil
+	},
 	)
 
 	s := makeBS(h)
