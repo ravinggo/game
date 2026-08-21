@@ -37,7 +37,7 @@ func (s *fixedFrameService[TraceData, TP]) PostTaskCloneCtx(c *ctx.BaseCtx[Trace
 	newCtx := s.GetCtxFromPool()
 	newCtx.TD = c.TD
 	newCtx.GetTrace().SetServerIdAndType(s.serverId, s.serverType)
-	s.fl.PostEventQueue(ce[TraceData, TP]{Ctx: newCtx, Func: f})
+	s.fl.PostEventQueue(CE[TraceData, TP]{Ctx: newCtx, Func: f})
 }
 
 // PostTaskWithRoleId posts f for execution at the next frame boundary using a
@@ -49,7 +49,7 @@ func (s *fixedFrameService[TraceData, TP]) PostTaskWithRoleId(roleId int64, f fu
 	newCtx := s.GetCtxFromPool()
 	newCtx.GetTrace().SetRoleID(roleId)
 	newCtx.GetTrace().SetServerIdAndType(s.serverId, s.serverType)
-	s.fl.PostEventQueue(ce[TraceData, TP]{Ctx: newCtx, Func: f})
+	s.fl.PostEventQueue(CE[TraceData, TP]{Ctx: newCtx, Func: f})
 }
 
 // PostFunc posts a plain func() for execution at the next frame boundary on
@@ -61,12 +61,12 @@ func (s *fixedFrameService[TraceData, TP]) PostFunc(f func()) {
 	s.fl.PostEventQueue(f)
 }
 
-// handleEvent builds the event handler passed to the frame loop: ce events run
+// handleEvent builds the event handler passed to the frame loop: CE events run
 // the middleware chain / registered handler, anything else goes to f.
 func (s *fixedFrameService[TraceData, TP]) handleEvent(f func(any)) func(any) {
 	return func(e any) {
 		switch c := e.(type) {
-		case ce[TraceData, TP]:
+		case CE[TraceData, TP]:
 			if c.Func != nil {
 				if err := s.applyServiceMiddles(c.Func)(c.Ctx); err != nil {
 					c.Ctx.Warn().Err(err).Msg("PostTask func error")
@@ -92,7 +92,7 @@ func (s *fixedFrameService[TraceData, TP]) Start(frame eventloop.FrameFunc, f fu
 		}
 	}
 	s.h.Logger()
-	s.subscribe()
+	s.Subscribe()
 	s.fl.Start(frame, s.handleEvent(f))
 }
 

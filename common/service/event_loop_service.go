@@ -26,14 +26,14 @@ func NewEventLoopService[TraceData any, TP ctx.TracePtr[TraceData]](
 	ops ...Option[TraceData, TP],
 ) *EventLoopService[TraceData, TP] {
 	c := buildConfig(ops)
-	base := newBaseService[TraceData, TP](natsUrls, c)
+	base := NewBaseService[TraceData, TP](natsUrls, c)
 	base.h = handler.NewHandler[TraceData](c.allMiddlewares()...)
 	s := &EventLoopService[TraceData, TP]{
 		BaseService: base,
 		el:          eventloop.NewDoubleBuffQueue(c.lockQueueThread),
 	}
 	s.dispatch = func(c *ctx.BaseCtx[TraceData, TP], elem *handler.Elem[TraceData, TP]) {
-		s.el.PostEventQueue(ce[TraceData, TP]{Ctx: c, Elem: elem})
+		s.el.PostEventQueue(CE[TraceData, TP]{Ctx: c, Elem: elem})
 	}
 	return s
 }
@@ -47,7 +47,7 @@ func (s *EventLoopService[TraceData, TP]) PostTaskCloneCtx(c *ctx.BaseCtx[TraceD
 	newCtx := s.GetCtxFromPool()
 	newCtx.TD = c.TD
 	newCtx.GetTrace().SetServerIdAndType(s.serverId, s.serverType)
-	s.el.PostEventQueue(ce[TraceData, TP]{Ctx: newCtx, Func: f})
+	s.el.PostEventQueue(CE[TraceData, TP]{Ctx: newCtx, Func: f})
 }
 
 // PostTaskWithRoleId posts f for sequential execution on the EventLoop using a fresh pooled ctx with roleId set.
@@ -58,7 +58,7 @@ func (s *EventLoopService[TraceData, TP]) PostTaskWithRoleId(roleId int64, f fun
 	newCtx := s.GetCtxFromPool()
 	newCtx.GetTrace().SetRoleID(roleId)
 	newCtx.GetTrace().SetServerIdAndType(s.serverId, s.serverType)
-	s.el.PostEventQueue(ce[TraceData, TP]{Ctx: newCtx, Func: f})
+	s.el.PostEventQueue(CE[TraceData, TP]{Ctx: newCtx, Func: f})
 }
 
 // Start subscribes to NATS and begins the EventLoop.
@@ -70,11 +70,11 @@ func (s *EventLoopService[TraceData, TP]) Start(f func(any)) {
 		}
 	}
 	s.h.Logger()
-	s.subscribe()
+	s.Subscribe()
 	s.el.Start(
 		func(e any) {
 			switch c := e.(type) {
-			case ce[TraceData, TP]:
+			case CE[TraceData, TP]:
 				if c.Func != nil {
 					if err := s.applyServiceMiddles(c.Func)(c.Ctx); err != nil {
 						c.Ctx.Warn().Err(err).Msg("PostTask func error")

@@ -27,7 +27,7 @@ func NewTaskPoolService[TraceData any, TP ctx.TracePtr[TraceData]](
 	ops ...Option[TraceData, TP],
 ) *TaskPoolService[TraceData, TP] {
 	c := buildConfig(ops)
-	base := newBaseService[TraceData, TP](natsUrls, c)
+	base := NewBaseService[TraceData, TP](natsUrls, c)
 	base.h = handler.NewHandler[TraceData](c.allMiddlewares()...)
 	s := &TaskPoolService[TraceData, TP]{
 		BaseService: base,
@@ -54,12 +54,14 @@ func (s *TaskPoolService[TraceData, TP]) PostTaskCloneCtx(c *ctx.BaseCtx[TraceDa
 	newCtx.TD = c.TD
 	newCtx.GetTrace().SetServerIdAndType(s.serverId, s.serverType)
 	wrapped := s.applyServiceMiddles(f)
-	s.taskPool.PutForce(func() {
-		if err := wrapped(newCtx); err != nil {
-			newCtx.Warn().Err(err).Msg("PostTaskCloneCtx func error")
-		}
-		s.PutCtxToPool(newCtx)
-	})
+	s.taskPool.PutForce(
+		func() {
+			if err := wrapped(newCtx); err != nil {
+				newCtx.Warn().Err(err).Msg("PostTaskCloneCtx func error")
+			}
+			s.PutCtxToPool(newCtx)
+		},
+	)
 }
 
 // PostTaskWithRoleId posts f to the worker pool using a fresh pooled ctx with roleId set.
@@ -71,19 +73,21 @@ func (s *TaskPoolService[TraceData, TP]) PostTaskWithRoleId(roleId int64, f func
 	newCtx.GetTrace().SetRoleID(roleId)
 	newCtx.GetTrace().SetServerIdAndType(s.serverId, s.serverType)
 	wrapped := s.applyServiceMiddles(f)
-	s.taskPool.PutForce(func() {
-		if err := wrapped(newCtx); err != nil {
-			newCtx.Warn().Err(err).Msg("PostTaskWithRoleId func error")
-		}
-		s.PutCtxToPool(newCtx)
-	})
+	s.taskPool.PutForce(
+		func() {
+			if err := wrapped(newCtx); err != nil {
+				newCtx.Warn().Err(err).Msg("PostTaskWithRoleId func error")
+			}
+			s.PutCtxToPool(newCtx)
+		},
+	)
 }
 
 // Start subscribes to NATS. No EventLoop is used; all work runs in TaskPool goroutines.
 // Written by Claude Code claude-opus-4-6.
 func (s *TaskPoolService[TraceData, TP]) Start(_ func(any)) {
 	s.h.Logger()
-	s.subscribe()
+	s.Subscribe()
 	logger.Log.Info().Msg("TaskPoolService started")
 }
 

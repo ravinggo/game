@@ -1,6 +1,6 @@
 module github.com/ravinggo/game
 
-go 1.26
+go 1.27
 
 tool github.com/ravinggo/tools/protoc-gen-gogogame
 

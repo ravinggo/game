@@ -9,12 +9,13 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ravinggo/objectpool"
+
 	"github.com/ravinggo/game/common/basepb"
 	"github.com/ravinggo/game/common/berror"
 	"github.com/ravinggo/game/common/ctx"
 	"github.com/ravinggo/game/common/handler"
 	"github.com/ravinggo/game/common/task_group"
-	"github.com/ravinggo/objectpool"
 )
 
 // makeFHPS constructs a FixedHashPoolService without a NATS connection.
@@ -33,7 +34,7 @@ func makeFHPS(h *handler.Handler[ctx.IntTrace, *ctx.IntTrace]) *FixedHashPoolSer
 	}
 	poolSize := numCpu * 1024
 	s.taskPoolMark = poolSize - 1
-	s.taskGroupHash = make([]task_group.TaskGroup[ce[ctx.IntTrace, *ctx.IntTrace]], poolSize)
+	s.taskGroupHash = make([]task_group.TaskGroup[CE[ctx.IntTrace, *ctx.IntTrace]], poolSize)
 	for i := range s.taskGroupHash {
 		s.taskGroupHash[i].SetMaxCap(128)
 		s.taskGroupHash[i].SetTaskFunc(s.taskFunc)
@@ -61,10 +62,12 @@ func postFHPSEvent(s *FixedHashPoolService[ctx.IntTrace, *ctx.IntTrace], elem *h
 func TestFixedHashPoolService_DispatchCallsHandler(t *testing.T) {
 	h := handler.NewHandler[ctx.IntTrace, *ctx.IntTrace]()
 	done := make(chan struct{})
-	handler.RegisterEvent(h, "fhps-basic", func(_ *ctx.BaseCtx[ctx.IntTrace, *ctx.IntTrace], _ *basepb.IntTrace) *berror.ErrMsg {
-		close(done)
-		return nil
-	})
+	handler.RegisterEvent(
+		h, "fhps-basic", func(_ *ctx.BaseCtx[ctx.IntTrace, *ctx.IntTrace], _ *basepb.IntTrace) *berror.ErrMsg {
+			close(done)
+			return nil
+		},
+	)
 	elem, _ := h.Lookup("basepb.IntTrace")
 
 	s := makeFHPS(h)
@@ -90,17 +93,19 @@ func TestFixedHashPoolService_SameHash_Sequential(t *testing.T) {
 	allDone := make(chan struct{})
 	var count int
 
-	handler.RegisterEvent(h, "fhps-seq", func(_ *ctx.BaseCtx[ctx.IntTrace, *ctx.IntTrace], _ *basepb.IntTrace) *berror.ErrMsg {
-		v := seq.Add(1)
-		mu.Lock()
-		results = append(results, v)
-		count++
-		if count == N {
-			close(allDone)
-		}
-		mu.Unlock()
-		return nil
-	})
+	handler.RegisterEvent(
+		h, "fhps-seq", func(_ *ctx.BaseCtx[ctx.IntTrace, *ctx.IntTrace], _ *basepb.IntTrace) *berror.ErrMsg {
+			v := seq.Add(1)
+			mu.Lock()
+			results = append(results, v)
+			count++
+			if count == N {
+				close(allDone)
+			}
+			mu.Unlock()
+			return nil
+		},
+	)
 	elem, _ := h.Lookup("basepb.IntTrace")
 
 	s := makeFHPS(h)
@@ -127,10 +132,12 @@ func TestFixedHashPoolService_SameHash_Sequential(t *testing.T) {
 func TestFixedHashPoolService_ZeroRoleID_Dispatches(t *testing.T) {
 	h := handler.NewHandler[ctx.IntTrace, *ctx.IntTrace]()
 	done := make(chan struct{})
-	handler.RegisterEvent(h, "fhps-zero", func(_ *ctx.BaseCtx[ctx.IntTrace, *ctx.IntTrace], _ *basepb.IntTrace) *berror.ErrMsg {
-		close(done)
-		return nil
-	})
+	handler.RegisterEvent(
+		h, "fhps-zero", func(_ *ctx.BaseCtx[ctx.IntTrace, *ctx.IntTrace], _ *basepb.IntTrace) *berror.ErrMsg {
+			close(done)
+			return nil
+		},
+	)
 	elem, _ := h.Lookup("basepb.IntTrace")
 
 	s := makeFHPS(h)
@@ -155,10 +162,12 @@ func TestFixedHashPoolService_PostTask_Runs(t *testing.T) {
 	c := s.GetCtxFromPool()
 	c.GetTrace().(*ctx.IntTrace).RoleId = 55
 	ran := make(chan struct{})
-	s.PostTaskCloneCtx(c, func(_ *ctx.BaseCtx[ctx.IntTrace, *ctx.IntTrace]) *berror.ErrMsg {
-		close(ran)
-		return nil
-	})
+	s.PostTaskCloneCtx(
+		c, func(_ *ctx.BaseCtx[ctx.IntTrace, *ctx.IntTrace]) *berror.ErrMsg {
+			close(ran)
+			return nil
+		},
+	)
 	s.PutCtxToPool(c)
 
 	select {
@@ -175,10 +184,12 @@ func TestFixedHashPoolService_PostTaskWithRoleId_Runs(t *testing.T) {
 	s := makeFHPS(h)
 
 	ran := make(chan int64, 1)
-	s.PostTaskWithRoleId(33, func(c *ctx.BaseCtx[ctx.IntTrace, *ctx.IntTrace]) *berror.ErrMsg {
-		ran <- c.GetTrace().GetRoleID()
-		return nil
-	})
+	s.PostTaskWithRoleId(
+		33, func(c *ctx.BaseCtx[ctx.IntTrace, *ctx.IntTrace]) *berror.ErrMsg {
+			ran <- c.GetTrace().GetRoleID()
+			return nil
+		},
+	)
 
 	select {
 	case got := <-ran:
@@ -204,12 +215,14 @@ func TestFixedHashPoolService_ConcurrentDispatch(t *testing.T) {
 	var received atomic.Int64
 	allDone := make(chan struct{})
 
-	handler.RegisterEvent(h, "fhps-concurrent", func(_ *ctx.BaseCtx[ctx.IntTrace, *ctx.IntTrace], _ *basepb.IntTrace) *berror.ErrMsg {
-		if received.Add(1) == int64(total) {
-			close(allDone)
-		}
-		return nil
-	})
+	handler.RegisterEvent(
+		h, "fhps-concurrent", func(_ *ctx.BaseCtx[ctx.IntTrace, *ctx.IntTrace], _ *basepb.IntTrace) *berror.ErrMsg {
+			if received.Add(1) == int64(total) {
+				close(allDone)
+			}
+			return nil
+		},
+	)
 	elem, _ := h.Lookup("basepb.IntTrace")
 
 	s := makeFHPS(h)
@@ -253,21 +266,23 @@ func TestFixedHashPoolService_SameHash_NoRace(t *testing.T) {
 
 	// Force registration bypasses Put() backpressure so the test is not affected by
 	// queue-full drops when many goroutines post to the same bucket simultaneously.
-	handler.RegisterEventForce(h, "fhps-norace", func(_ *ctx.BaseCtx[ctx.IntTrace, *ctx.IntTrace], _ *basepb.IntTrace) *berror.ErrMsg {
-		cur := inFlight.Add(1)
-		for {
-			old := maxInFlight.Load()
-			if cur <= old || maxInFlight.CompareAndSwap(old, cur) {
-				break
+	handler.RegisterEventForce(
+		h, "fhps-norace", func(_ *ctx.BaseCtx[ctx.IntTrace, *ctx.IntTrace], _ *basepb.IntTrace) *berror.ErrMsg {
+			cur := inFlight.Add(1)
+			for {
+				old := maxInFlight.Load()
+				if cur <= old || maxInFlight.CompareAndSwap(old, cur) {
+					break
+				}
 			}
-		}
-		time.Sleep(500 * time.Microsecond)
-		inFlight.Add(-1)
-		if received.Add(1) == int64(total) {
-			close(allDone)
-		}
-		return nil
-	})
+			time.Sleep(500 * time.Microsecond)
+			inFlight.Add(-1)
+			if received.Add(1) == int64(total) {
+				close(allDone)
+			}
+			return nil
+		},
+	)
 	elem, _ := h.Lookup("basepb.IntTrace")
 
 	s := makeFHPS(h)

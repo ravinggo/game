@@ -22,11 +22,11 @@ import (
 
 var ErrNotFoundHandler = berror.NewProtocolStr("not found handler")
 
-// ce is posted to an EventLoop to carry a parsed request or a PostTask callback.
+// CE is posted to an EventLoop to carry a parsed request or a PostTask callback.
 // When Func is non-nil the taskFunc calls it instead of handleCtx, then returns Ctx to pool.
 // RoleID is read from Ctx.GetTrace().GetRoleID() at the point of routing.
 // Written by Claude Code claude-opus-4-6.
-type ce[TraceData any, TP ctx.TracePtr[TraceData]] struct {
+type CE[TraceData any, TP ctx.TracePtr[TraceData]] struct {
 	Ctx  *ctx.BaseCtx[TraceData, TP]
 	Elem *handler.Elem[TraceData, TP]
 	Func func(*ctx.BaseCtx[TraceData, TP]) *berror.ErrMsg
@@ -52,11 +52,11 @@ func (s *BaseService[TraceData, TP]) GetHandler() *handler.Handler[TraceData, TP
 	return s.h
 }
 
-// newBaseService initialises shared BaseService infrastructure: NATS cluster client,
+// NewBaseService initialises shared BaseService infrastructure: NATS cluster client,
 // context pool, server identity, and a low-precision timer. It is called by every
 // concrete service constructor before any dispatch strategy is configured.
 // Written by Claude Code claude-opus-4-6.
-func newBaseService[TraceData any, TP ctx.TracePtr[TraceData]](
+func NewBaseService[TraceData any, TP ctx.TracePtr[TraceData]](
 	natsUrls []string,
 	c config[TraceData, TP],
 ) *BaseService[TraceData, TP] {
@@ -150,11 +150,11 @@ func (s *BaseService[TraceData, TP]) call(c *ctx.BaseCtx[TraceData, TP], e *hand
 	}
 }
 
-// subscribe sets up NATS queue and broadcast subscriptions for all registered handlers.
+// Subscribe sets up NATS queue and broadcast subscriptions for all registered handlers.
 // Queue subjects use serverId-scoped wildcards; broadcast subjects are subscribed globally
 // and, when serverId != 0, also with a serverId-specific wildcard.
 // Written by Claude Code claude-opus-4-6.
-func (s *BaseService[TraceData, TP]) subscribe() {
+func (s *BaseService[TraceData, TP]) Subscribe() {
 	h := s.h
 	subjInfo := h.GetQueueSubjInfo()
 	serverId := baseenv.GetConfig().ServerId
@@ -164,26 +164,26 @@ func (s *BaseService[TraceData, TP]) subscribe() {
 		} else {
 			subj = subj + strconv.FormatInt(serverId, 10) + ".>"
 		}
-		s.natsCluster.QueueSubscribeAll(subj, s.dealNatsMsg)
+		s.natsCluster.QueueSubscribeAll(subj, s.DealNatsMsg)
 		logger.Log.Info().Str("subj", subj).Msg("subscribe queue topic")
 	}
 	broadcastSubjInfo := h.GetBroadcastSubjInfo()
 	for subj := range broadcastSubjInfo {
 		subjTop := subj + ">"
-		s.natsCluster.SubscribeAll(subjTop, s.dealNatsMsg)
+		s.natsCluster.SubscribeAll(subjTop, s.DealNatsMsg)
 		logger.Log.Info().Str("subjTop", subjTop).Msg("subscribe broadcast top topic")
 		if serverId != 0 {
 			subjServerId := subj + strconv.FormatInt(serverId, 10) + ".>"
-			s.natsCluster.SubscribeAll(subjServerId, s.dealNatsMsg)
+			s.natsCluster.SubscribeAll(subjServerId, s.DealNatsMsg)
 			logger.Log.Info().Str("subjServerId", subjTop).Msg("subscribe broadcast topic")
 		}
 	}
 }
 
-// dealNatsMsg is the shared NATS entry point. It parses the wire format and
+// DealNatsMsg is the shared NATS entry point. It parses the wire format and
 // calls s.dispatch — the concrete service owns all routing decisions.
 // Written by Claude Code claude-opus-4-6.
-func (s *BaseService[TraceData, TP]) dealNatsMsg(msg *nats.Msg) {
+func (s *BaseService[TraceData, TP]) DealNatsMsg(msg *nats.Msg) {
 	if s.cnf.dispatchHook != nil && s.cnf.dispatchHook(msg) {
 		return
 	}

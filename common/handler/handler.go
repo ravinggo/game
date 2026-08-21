@@ -54,15 +54,15 @@ type Elem[TraceData any, TP ctx.TracePtr[TraceData]] struct {
 	isRPCResp bool
 	msgName   protoreflect.FullName
 	funcType  string
-	isForce bool
-	msgPool *sync.Pool
+	isForce   bool
+	msgPool   *sync.Pool
 }
 
 // IsForce reports whether the handler bypasses backpressure checks.
-func (this_ *Elem[TraceData, TP]) IsForce() bool   { return this_.isForce }
+func (this_ *Elem[TraceData, TP]) IsForce() bool { return this_.isForce }
 
 // IsRPC reports whether the handler expects a reply to be sent back to the caller.
-func (this_ *Elem[TraceData, TP]) IsRPC() bool     { return this_.isRPC }
+func (this_ *Elem[TraceData, TP]) IsRPC() bool { return this_.isRPC }
 
 // IsRPCResp reports whether the response proto is pooled by the framework.
 func (this_ *Elem[TraceData, TP]) IsRPCResp() bool { return this_.isRPCResp }
@@ -186,36 +186,9 @@ func (h *Handler[TraceData, TP]) Logger() {
 	}
 }
 
-// getSubjPrefix extracts the package-level subject prefix from a fully qualified proto message
-// name by trimming the final component after the last dot. For example,
-// "game.auth.LoginReq" → "game.auth.". The prefix is used to detect subject conflicts
-// between broadcast and non-broadcast registrations within the same package namespace.
-// Written by Claude Code claude-opus-4-6.
-func getSubjPrefix(msgName string) string {
-	return msgName[:strings.LastIndexByte(msgName, '.')+1]
-}
-
-// ---- RPCResp (RESP is an in-parameter, pooled) ----
-
-// RegisterRPCResp registers a RPC handler where RESP is an in-parameter (pooled by the framework).
-func RegisterRPCResp[TP ctx.TracePtr[TraceData], REQ define.ProtoMessagePtr[T1], RESP define.ProtoMessagePtr[T2], TraceData any, T1 any, T2 any](
-	svc IService[TraceData, TP], desc string, f func(*ctx.BaseCtx[TraceData, TP], REQ, RESP) *berror.ErrMsg, middlewares ...Middleware[TraceData, TP],
-) {
-	registerRPCResp(svc.GetHandler(), desc, f, false, middlewares...)
-}
-
-// RegisterRPCRespForce registers a pooled-RESP RPC handler that bypasses backpressure.
-func RegisterRPCRespForce[TP ctx.TracePtr[TraceData], REQ define.ProtoMessagePtr[T1], RESP define.ProtoMessagePtr[T2], TraceData any, T1 any, T2 any](
-	svc IService[TraceData, TP], desc string, f func(*ctx.BaseCtx[TraceData, TP], REQ, RESP) *berror.ErrMsg, middlewares ...Middleware[TraceData, TP],
-) {
-	registerRPCResp(svc.GetHandler(), desc, f, true, middlewares...)
-}
-
-// registerRPCResp is the internal implementation shared by RegisterRPCResp and RegisterRPCRespForce.
-// The response proto is acquired from respPool in dealNatsMsg alongside Req and stored in ctx.Resp.
-// The handler closure receives it via a type-assertion; pool lifecycle is managed by handleCtx.
-func registerRPCResp[TP ctx.TracePtr[TraceData], REQ define.ProtoMessagePtr[T1], RESP define.ProtoMessagePtr[T2], TraceData any, T1 any, T2 any](
-	h *Handler[TraceData, TP], desc string, f func(*ctx.BaseCtx[TraceData, TP], REQ, RESP) *berror.ErrMsg, isForceHandle bool,
+func (h *Handler[TraceData, TP]) RegisterRPCResp[REQ define.ProtoMessagePtr[T1], RESP define.ProtoMessagePtr[T2], T1 any, T2 any](
+	desc string,
+	f func(*ctx.BaseCtx[TraceData, TP], REQ, RESP) *berror.ErrMsg, isForceHandle bool,
 	middlewares ...Middleware[TraceData, TP],
 ) {
 	msgName := define.ProtoMessageName((REQ)(nil))
@@ -242,11 +215,38 @@ func registerRPCResp[TP ctx.TracePtr[TraceData], REQ define.ProtoMessagePtr[T1],
 		isRPCResp: true,
 		msgName:   msgName,
 		isForce:   isForceHandle,
-		funcType: " [" + runtime.FuncForPC(reflect.ValueOf(f).Pointer()).Name() + "] " + reflect.TypeOf(f).String(),
-		msgPool: &sync.Pool{New: func() any {
-			return &reqRespPair{req: (REQ)(new(T1)), resp: (RESP)(new(T2))}
-		}},
+		funcType:  " [" + runtime.FuncForPC(reflect.ValueOf(f).Pointer()).Name() + "] " + reflect.TypeOf(f).String(),
+		msgPool: &sync.Pool{
+			New: func() any {
+				return &reqRespPair{req: (REQ)(new(T1)), resp: (RESP)(new(T2))}
+			},
+		},
 	}
+}
+
+// getSubjPrefix extracts the package-level subject prefix from a fully qualified proto message
+// name by trimming the final component after the last dot. For example,
+// "game.auth.LoginReq" → "game.auth.". The prefix is used to detect subject conflicts
+// between broadcast and non-broadcast registrations within the same package namespace.
+// Written by Claude Code claude-opus-4-6.
+func getSubjPrefix(msgName string) string {
+	return msgName[:strings.LastIndexByte(msgName, '.')+1]
+}
+
+// ---- RPCResp (RESP is an in-parameter, pooled) ----
+
+// RegisterRPCResp registers a RPC handler where RESP is an in-parameter (pooled by the framework).
+func RegisterRPCResp[TP ctx.TracePtr[TraceData], REQ define.ProtoMessagePtr[T1], RESP define.ProtoMessagePtr[T2], TraceData any, T1 any, T2 any](
+	svc IService[TraceData, TP], desc string, f func(*ctx.BaseCtx[TraceData, TP], REQ, RESP) *berror.ErrMsg, middlewares ...Middleware[TraceData, TP],
+) {
+	registerRPCResp(svc.GetHandler(), desc, f, false, middlewares...)
+}
+
+// RegisterRPCRespForce registers a pooled-RESP RPC handler that bypasses backpressure.
+func RegisterRPCRespForce[TP ctx.TracePtr[TraceData], REQ define.ProtoMessagePtr[T1], RESP define.ProtoMessagePtr[T2], TraceData any, T1 any, T2 any](
+	svc IService[TraceData, TP], desc string, f func(*ctx.BaseCtx[TraceData, TP], REQ, RESP) *berror.ErrMsg, middlewares ...Middleware[TraceData, TP],
+) {
+	registerRPCResp(svc.GetHandler(), desc, f, true, middlewares...)
 }
 
 // ---- Event (fire-and-forget) ----
@@ -321,8 +321,10 @@ func registerEvent[TP ctx.TracePtr[TraceData], REQ define.ProtoMessagePtr[T1], T
 		msgName:  msgName,
 		isForce:  isForceHandle,
 		funcType: " [" + runtime.FuncForPC(reflect.ValueOf(f).Pointer()).Name() + "] " + reflect.TypeOf(f).String(),
-		msgPool: &sync.Pool{New: func() any {
-			return &reqRespPair{req: (REQ)(new(T1))}
-		}},
+		msgPool: &sync.Pool{
+			New: func() any {
+				return &reqRespPair{req: (REQ)(new(T1))}
+			},
+		},
 	}
 }

@@ -8,12 +8,13 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ravinggo/objectpool"
+
 	"github.com/ravinggo/game/common/basepb"
 	"github.com/ravinggo/game/common/berror"
 	"github.com/ravinggo/game/common/ctx"
 	"github.com/ravinggo/game/common/eventloop"
 	"github.com/ravinggo/game/common/handler"
-	"github.com/ravinggo/objectpool"
 )
 
 // makeOHOGS constructs a OneHashOneGoService without a NATS connection.
@@ -36,14 +37,16 @@ func makeOHOGS(h *handler.Handler[ctx.IntTrace, *ctx.IntTrace]) *OneHashOneGoSer
 // startOHOGS starts the EventLoop of s and returns a stop func.
 // Written by Claude Code claude-opus-4-6.
 func startOHOGS(s *OneHashOneGoService[ctx.IntTrace, *ctx.IntTrace]) func() {
-	s.el.Start(func(e any) {
-		switch ev := e.(type) {
-		case ce[ctx.IntTrace, *ctx.IntTrace]:
-			s.dealCE(ev)
-		case func():
-			ev()
-		}
-	})
+	s.el.Start(
+		func(e any) {
+			switch ev := e.(type) {
+			case CE[ctx.IntTrace, *ctx.IntTrace]:
+				s.dealCE(ev)
+			case func():
+				ev()
+			}
+		},
+	)
 	return s.el.Stop
 }
 
@@ -66,10 +69,12 @@ func postOHOGSEvent(s *OneHashOneGoService[ctx.IntTrace, *ctx.IntTrace], elem *h
 func TestOneHashOneGoService_DispatchCallsHandler(t *testing.T) {
 	h := handler.NewHandler[ctx.IntTrace, *ctx.IntTrace]()
 	done := make(chan struct{})
-	handler.RegisterEvent(h, "ohog-basic", func(_ *ctx.BaseCtx[ctx.IntTrace, *ctx.IntTrace], _ *basepb.IntTrace) *berror.ErrMsg {
-		close(done)
-		return nil
-	})
+	handler.RegisterEvent(
+		h, "ohog-basic", func(_ *ctx.BaseCtx[ctx.IntTrace, *ctx.IntTrace], _ *basepb.IntTrace) *berror.ErrMsg {
+			close(done)
+			return nil
+		},
+	)
 	elem, _ := h.Lookup("basepb.IntTrace")
 
 	s := makeOHOGS(h)
@@ -98,17 +103,19 @@ func TestOneHashOneGoService_SameHash_Sequential(t *testing.T) {
 	allDone := make(chan struct{})
 	var count int
 
-	handler.RegisterEvent(h, "ohog-seq", func(_ *ctx.BaseCtx[ctx.IntTrace, *ctx.IntTrace], _ *basepb.IntTrace) *berror.ErrMsg {
-		v := seq.Add(1)
-		mu.Lock()
-		results = append(results, v)
-		count++
-		if count == N {
-			close(allDone)
-		}
-		mu.Unlock()
-		return nil
-	})
+	handler.RegisterEvent(
+		h, "ohog-seq", func(_ *ctx.BaseCtx[ctx.IntTrace, *ctx.IntTrace], _ *basepb.IntTrace) *berror.ErrMsg {
+			v := seq.Add(1)
+			mu.Lock()
+			results = append(results, v)
+			count++
+			if count == N {
+				close(allDone)
+			}
+			mu.Unlock()
+			return nil
+		},
+	)
 	elem, _ := h.Lookup("basepb.IntTrace")
 
 	s := makeOHOGS(h)
@@ -141,12 +148,14 @@ func TestOneHashOneGoService_ZeroHash_GetsProcessed(t *testing.T) {
 	allDone := make(chan struct{})
 	const N = 5
 
-	handler.RegisterEvent(h, "ohog-zero", func(_ *ctx.BaseCtx[ctx.IntTrace, *ctx.IntTrace], _ *basepb.IntTrace) *berror.ErrMsg {
-		if received.Add(1) == N {
-			close(allDone)
-		}
-		return nil
-	})
+	handler.RegisterEvent(
+		h, "ohog-zero", func(_ *ctx.BaseCtx[ctx.IntTrace, *ctx.IntTrace], _ *basepb.IntTrace) *berror.ErrMsg {
+			if received.Add(1) == N {
+				close(allDone)
+			}
+			return nil
+		},
+	)
 	elem, _ := h.Lookup("basepb.IntTrace")
 
 	s := makeOHOGS(h)
@@ -176,10 +185,12 @@ func TestOneHashOneGoService_PostTask_Runs(t *testing.T) {
 	c := s.GetCtxFromPool()
 	c.GetTrace().(*ctx.IntTrace).RoleId = 99
 	ran := make(chan struct{})
-	s.PostTaskCloneCtx(c, func(_ *ctx.BaseCtx[ctx.IntTrace, *ctx.IntTrace]) *berror.ErrMsg {
-		close(ran)
-		return nil
-	})
+	s.PostTaskCloneCtx(
+		c, func(_ *ctx.BaseCtx[ctx.IntTrace, *ctx.IntTrace]) *berror.ErrMsg {
+			close(ran)
+			return nil
+		},
+	)
 	s.PutCtxToPool(c)
 
 	select {
@@ -198,10 +209,12 @@ func TestOneHashOneGoService_PostTaskWithRoleId_Runs(t *testing.T) {
 	defer stop()
 
 	ran := make(chan int64, 1)
-	s.PostTaskWithRoleId(77, func(c *ctx.BaseCtx[ctx.IntTrace, *ctx.IntTrace]) *berror.ErrMsg {
-		ran <- c.GetTrace().GetRoleID()
-		return nil
-	})
+	s.PostTaskWithRoleId(
+		77, func(c *ctx.BaseCtx[ctx.IntTrace, *ctx.IntTrace]) *berror.ErrMsg {
+			ran <- c.GetTrace().GetRoleID()
+			return nil
+		},
+	)
 
 	select {
 	case got := <-ran:
@@ -227,12 +240,14 @@ func TestOneHashOneGoService_Concurrent_MultiHash(t *testing.T) {
 	var received atomic.Int64
 	allDone := make(chan struct{})
 
-	handler.RegisterEvent(h, "ohog-multi", func(_ *ctx.BaseCtx[ctx.IntTrace, *ctx.IntTrace], _ *basepb.IntTrace) *berror.ErrMsg {
-		if received.Add(1) == int64(total) {
-			close(allDone)
-		}
-		return nil
-	})
+	handler.RegisterEvent(
+		h, "ohog-multi", func(_ *ctx.BaseCtx[ctx.IntTrace, *ctx.IntTrace], _ *basepb.IntTrace) *berror.ErrMsg {
+			if received.Add(1) == int64(total) {
+				close(allDone)
+			}
+			return nil
+		},
+	)
 	elem, _ := h.Lookup("basepb.IntTrace")
 
 	s := makeOHOGS(h)
@@ -275,22 +290,24 @@ func TestOneHashOneGoService_SameHash_NoRace(t *testing.T) {
 	var received atomic.Int64
 	allDone := make(chan struct{})
 
-	handler.RegisterEvent(h, "ohog-norace", func(_ *ctx.BaseCtx[ctx.IntTrace, *ctx.IntTrace], _ *basepb.IntTrace) *berror.ErrMsg {
-		cur := inFlight.Add(1)
-		// Track the peak concurrency seen for the same hash bucket
-		for {
-			old := maxInFlight.Load()
-			if cur <= old || maxInFlight.CompareAndSwap(old, cur) {
-				break
+	handler.RegisterEvent(
+		h, "ohog-norace", func(_ *ctx.BaseCtx[ctx.IntTrace, *ctx.IntTrace], _ *basepb.IntTrace) *berror.ErrMsg {
+			cur := inFlight.Add(1)
+			// Track the peak concurrency seen for the same hash bucket
+			for {
+				old := maxInFlight.Load()
+				if cur <= old || maxInFlight.CompareAndSwap(old, cur) {
+					break
+				}
 			}
-		}
-		time.Sleep(time.Millisecond) // hold the slot briefly
-		inFlight.Add(-1)
-		if received.Add(1) == int64(total) {
-			close(allDone)
-		}
-		return nil
-	})
+			time.Sleep(time.Millisecond) // hold the slot briefly
+			inFlight.Add(-1)
+			if received.Add(1) == int64(total) {
+				close(allDone)
+			}
+			return nil
+		},
+	)
 	elem, _ := h.Lookup("basepb.IntTrace")
 
 	s := makeOHOGS(h)

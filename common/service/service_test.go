@@ -79,9 +79,11 @@ func TestBuildConfig_Empty(t *testing.T) {
 // TestLockQueueThreadOption_SetsFlag verifies the option sets lockQueueThread.
 // Written by Claude Code claude-opus-4-6.
 func TestLockQueueThreadOption_SetsFlag(t *testing.T) {
-	c := buildConfig([]Option[ctx.IntTrace, *ctx.IntTrace]{
-		LockQueueThreadOption[ctx.IntTrace, *ctx.IntTrace](),
-	})
+	c := buildConfig(
+		[]Option[ctx.IntTrace, *ctx.IntTrace]{
+			LockQueueThreadOption[ctx.IntTrace, *ctx.IntTrace](),
+		},
+	)
 	if !c.lockQueueThread {
 		t.Error("LockQueueThreadOption should set lockQueueThread=true")
 	}
@@ -91,9 +93,11 @@ func TestLockQueueThreadOption_SetsFlag(t *testing.T) {
 // Written by Claude Code claude-opus-4-6.
 func TestRPCTimeoutOption_SetsTimeout(t *testing.T) {
 	want := 7 * time.Second
-	c := buildConfig([]Option[ctx.IntTrace, *ctx.IntTrace]{
-		RPCTimeoutOption[ctx.IntTrace, *ctx.IntTrace](want),
-	})
+	c := buildConfig(
+		[]Option[ctx.IntTrace, *ctx.IntTrace]{
+			RPCTimeoutOption[ctx.IntTrace, *ctx.IntTrace](want),
+		},
+	)
 	if c.rpcTimeout != want {
 		t.Errorf("rpcTimeout = %v, want %v", c.rpcTimeout, want)
 	}
@@ -104,9 +108,11 @@ func TestRPCTimeoutOption_SetsTimeout(t *testing.T) {
 func TestMiddlesOption_AppendsMiddleware(t *testing.T) {
 	mid1 := handler.Logger[ctx.IntTrace, *ctx.IntTrace]
 	mid2 := handler.Recover[ctx.IntTrace, *ctx.IntTrace]
-	c := buildConfig([]Option[ctx.IntTrace, *ctx.IntTrace]{
-		MiddlesOption[ctx.IntTrace, *ctx.IntTrace](mid1, mid2),
-	})
+	c := buildConfig(
+		[]Option[ctx.IntTrace, *ctx.IntTrace]{
+			MiddlesOption[ctx.IntTrace, *ctx.IntTrace](mid1, mid2),
+		},
+	)
 	if len(c.middles) != 2 {
 		t.Errorf("len(middles) = %d, want 2", len(c.middles))
 	}
@@ -115,9 +121,11 @@ func TestMiddlesOption_AppendsMiddleware(t *testing.T) {
 // TestNatsOptions_AppendsNatsOptions verifies that nats.Option values are stored.
 // Written by Claude Code claude-opus-4-6.
 func TestNatsOptions_AppendsNatsOptions(t *testing.T) {
-	c := buildConfig([]Option[ctx.IntTrace, *ctx.IntTrace]{
-		NatsOptions[ctx.IntTrace, *ctx.IntTrace](nats.Name("a"), nats.Name("b")),
-	})
+	c := buildConfig(
+		[]Option[ctx.IntTrace, *ctx.IntTrace]{
+			NatsOptions[ctx.IntTrace, *ctx.IntTrace](nats.Name("a"), nats.Name("b")),
+		},
+	)
 	if len(c.natsOptions) != 2 {
 		t.Errorf("len(natsOptions) = %d, want 2", len(c.natsOptions))
 	}
@@ -138,11 +146,15 @@ func TestServerUserBase_ForwardsOptions(t *testing.T) {
 // TestInitCtxOption_SetsField verifies that InitCtxOption stores the function in config.
 func TestInitCtxOption_SetsField(t *testing.T) {
 	called := false
-	c := buildConfig([]Option[ctx.IntTrace, *ctx.IntTrace]{
-		InitCtxOption(func(_ *ctx.BaseCtx[ctx.IntTrace, *ctx.IntTrace]) {
-			called = true
-		}),
-	})
+	c := buildConfig(
+		[]Option[ctx.IntTrace, *ctx.IntTrace]{
+			InitCtxOption(
+				func(_ *ctx.BaseCtx[ctx.IntTrace, *ctx.IntTrace]) {
+					called = true
+				},
+			),
+		},
+	)
 	if c.initCtx == nil {
 		t.Fatal("initCtx should be non-nil after InitCtxOption")
 	}
@@ -216,10 +228,12 @@ func TestReplyTaskPoolFull_EmptyReply(t *testing.T) {
 func TestHandleCtx_CallsHandler(t *testing.T) {
 	h := handler.NewHandler[ctx.IntTrace, *ctx.IntTrace]()
 	var called atomic.Bool
-	handler.RegisterEvent(h, "test-handle-ctx", func(c *ctx.BaseCtx[ctx.IntTrace, *ctx.IntTrace], req *basepb.IntTrace) *berror.ErrMsg {
-		called.Store(true)
-		return nil
-	})
+	handler.RegisterEvent(
+		h, "test-handle-ctx", func(c *ctx.BaseCtx[ctx.IntTrace, *ctx.IntTrace], req *basepb.IntTrace) *berror.ErrMsg {
+			called.Store(true)
+			return nil
+		},
+	)
 	elem, ok := h.Lookup("basepb.IntTrace")
 	if !ok {
 		t.Fatal("Lookup: handler not found")
@@ -241,9 +255,11 @@ func TestHandleCtx_CallsHandler(t *testing.T) {
 // Written by Claude Code claude-opus-4-6.
 func TestHandleCtx_RecyclesReq(t *testing.T) {
 	h := handler.NewHandler[ctx.IntTrace, *ctx.IntTrace]()
-	handler.RegisterEvent(h, "test-recycle", func(c *ctx.BaseCtx[ctx.IntTrace, *ctx.IntTrace], req *basepb.IntTrace) *berror.ErrMsg {
-		return nil
-	})
+	handler.RegisterEvent(
+		h, "test-recycle", func(c *ctx.BaseCtx[ctx.IntTrace, *ctx.IntTrace], req *basepb.IntTrace) *berror.ErrMsg {
+			return nil
+		},
+	)
 	elem, _ := h.Lookup("basepb.IntTrace")
 
 	s := makeBS(h)
@@ -263,9 +279,11 @@ func TestHandleCtx_RecyclesReq(t *testing.T) {
 // Written by Claude Code claude-opus-4-6.
 func TestHandleCtx_HandlerError_NoNatsMsgNoRPCResp(t *testing.T) {
 	h := handler.NewHandler[ctx.IntTrace, *ctx.IntTrace]()
-	handler.RegisterEvent(h, "test-err", func(c *ctx.BaseCtx[ctx.IntTrace, *ctx.IntTrace], req *basepb.ErrorMessage) *berror.ErrMsg {
-		return berror.NewProtocolStr("test error")
-	})
+	handler.RegisterEvent(
+		h, "test-err", func(c *ctx.BaseCtx[ctx.IntTrace, *ctx.IntTrace], req *basepb.ErrorMessage) *berror.ErrMsg {
+			return berror.NewProtocolStr("test error")
+		},
+	)
 	elem, _ := h.Lookup("basepb.ErrorMessage")
 
 	s := makeBS(h)
@@ -286,7 +304,7 @@ func TestDealNatsMsg_NoLastDot(t *testing.T) {
 	s.dispatch = func(_ *ctx.BaseCtx[ctx.IntTrace, *ctx.IntTrace], _ *handler.Elem[ctx.IntTrace, *ctx.IntTrace]) {
 		t.Error("dispatch must not be called for a subject without a dot")
 	}
-	s.dealNatsMsg(&nats.Msg{Subject: "nodot", Data: []byte{0, 0}})
+	s.DealNatsMsg(&nats.Msg{Subject: "nodot", Data: []byte{0, 0}})
 }
 
 // TestDealNatsMsg_ShortData verifies that payloads shorter than 2 bytes are dropped.
@@ -297,7 +315,7 @@ func TestDealNatsMsg_ShortData(t *testing.T) {
 	s.dispatch = func(_ *ctx.BaseCtx[ctx.IntTrace, *ctx.IntTrace], _ *handler.Elem[ctx.IntTrace, *ctx.IntTrace]) {
 		t.Error("dispatch must not be called for short data")
 	}
-	s.dealNatsMsg(&nats.Msg{Subject: "basepb.IntTrace", Data: []byte{0}})
+	s.DealNatsMsg(&nats.Msg{Subject: "basepb.IntTrace", Data: []byte{0}})
 }
 
 // TestDealNatsMsg_UnregisteredMsg verifies that an unregistered subject is dropped
@@ -309,11 +327,13 @@ func TestDealNatsMsg_UnregisteredMsg(t *testing.T) {
 	s.dispatch = func(_ *ctx.BaseCtx[ctx.IntTrace, *ctx.IntTrace], _ *handler.Elem[ctx.IntTrace, *ctx.IntTrace]) {
 		t.Error("dispatch must not be called for unregistered message")
 	}
-	s.dealNatsMsg(&nats.Msg{
-		Subject: "basepb.IntTrace",
-		Data:    []byte{0, 0},
-		Reply:   "",
-	})
+	s.DealNatsMsg(
+		&nats.Msg{
+			Subject: "basepb.IntTrace",
+			Data:    []byte{0, 0},
+			Reply:   "",
+		},
+	)
 }
 
 // TestDealNatsMsg_Dispatches verifies the full parse-and-dispatch path: the wire
@@ -321,9 +341,11 @@ func TestDealNatsMsg_UnregisteredMsg(t *testing.T) {
 // Written by Claude Code claude-opus-4-6.
 func TestDealNatsMsg_Dispatches(t *testing.T) {
 	h := handler.NewHandler[ctx.IntTrace, *ctx.IntTrace]()
-	handler.RegisterEvent(h, "dispatch-test", func(c *ctx.BaseCtx[ctx.IntTrace, *ctx.IntTrace], req *basepb.IntTrace) *berror.ErrMsg {
-		return nil
-	})
+	handler.RegisterEvent(
+		h, "dispatch-test", func(c *ctx.BaseCtx[ctx.IntTrace, *ctx.IntTrace], req *basepb.IntTrace) *berror.ErrMsg {
+			return nil
+		},
+	)
 
 	s := makeBS(h)
 	var dispatchCount atomic.Int32
@@ -333,11 +355,13 @@ func TestDealNatsMsg_Dispatches(t *testing.T) {
 		s.handleCtx(c, e)
 	}
 
-	s.dealNatsMsg(&nats.Msg{
-		Subject: "basepb.IntTrace",
-		Data:    buildWireData(t, &basepb.IntTrace{RoleId: 99}),
-		Reply:   "",
-	})
+	s.DealNatsMsg(
+		&nats.Msg{
+			Subject: "basepb.IntTrace",
+			Data:    buildWireData(t, &basepb.IntTrace{RoleId: 99}),
+			Reply:   "",
+		},
+	)
 
 	if dispatchCount.Load() != 1 {
 		t.Fatalf("dispatch called %d times, want 1", dispatchCount.Load())
@@ -349,10 +373,12 @@ func TestDealNatsMsg_Dispatches(t *testing.T) {
 // Written by Claude Code claude-opus-4-6.
 func TestDealNatsMsg_CorruptProto(t *testing.T) {
 	h := handler.NewHandler[ctx.IntTrace, *ctx.IntTrace]()
-	handler.RegisterEvent(h, "corrupt-test", func(c *ctx.BaseCtx[ctx.IntTrace, *ctx.IntTrace], req *basepb.IntTrace) *berror.ErrMsg {
-		t.Error("handler must not be called for corrupt proto")
-		return nil
-	})
+	handler.RegisterEvent(
+		h, "corrupt-test", func(c *ctx.BaseCtx[ctx.IntTrace, *ctx.IntTrace], req *basepb.IntTrace) *berror.ErrMsg {
+			t.Error("handler must not be called for corrupt proto")
+			return nil
+		},
+	)
 
 	s := makeBS(h)
 	s.dispatch = func(_ *ctx.BaseCtx[ctx.IntTrace, *ctx.IntTrace], _ *handler.Elem[ctx.IntTrace, *ctx.IntTrace]) {
@@ -360,9 +386,11 @@ func TestDealNatsMsg_CorruptProto(t *testing.T) {
 	}
 
 	// [traceSize=0,0] followed by garbage that is not valid proto
-	s.dealNatsMsg(&nats.Msg{
-		Subject: "basepb.IntTrace",
-		Data:    []byte{0, 0, 0xff, 0xff, 0xff, 0xff},
-		Reply:   "",
-	})
+	s.DealNatsMsg(
+		&nats.Msg{
+			Subject: "basepb.IntTrace",
+			Data:    []byte{0, 0, 0xff, 0xff, 0xff, 0xff},
+			Reply:   "",
+		},
+	)
 }

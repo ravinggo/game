@@ -29,7 +29,7 @@ func makeELS(h *handler.Handler[ctx.IntTrace, *ctx.IntTrace]) *EventLoopService[
 		el: eventloop.NewDoubleBuffQueue(false),
 	}
 	s.dispatch = func(c *ctx.BaseCtx[ctx.IntTrace, *ctx.IntTrace], elem *handler.Elem[ctx.IntTrace, *ctx.IntTrace]) {
-		s.el.PostEventQueue(ce[ctx.IntTrace, *ctx.IntTrace]{Ctx: c, Elem: elem})
+		s.el.PostEventQueue(CE[ctx.IntTrace, *ctx.IntTrace]{Ctx: c, Elem: elem})
 	}
 	return s
 }
@@ -40,7 +40,7 @@ func startELS(s *EventLoopService[ctx.IntTrace, *ctx.IntTrace]) func() {
 	s.el.Start(
 		func(e any) {
 			switch ev := e.(type) {
-			case ce[ctx.IntTrace, *ctx.IntTrace]:
+			case CE[ctx.IntTrace, *ctx.IntTrace]:
 				if ev.Func != nil {
 					if err := s.applyServiceMiddles(ev.Func)(ev.Ctx); err != nil {
 						ev.Ctx.Warn().Err(err).Msg("PostTask func error")
@@ -157,10 +157,12 @@ func TestEventLoopService_PostTask_Runs(t *testing.T) {
 	c := s.GetCtxFromPool()
 	c.GetTrace().(*ctx.IntTrace).RoleId = 7
 	ran := make(chan struct{})
-	s.PostTaskCloneCtx(c, func(_ *ctx.BaseCtx[ctx.IntTrace, *ctx.IntTrace]) *berror.ErrMsg {
-		close(ran)
-		return nil
-	})
+	s.PostTaskCloneCtx(
+		c, func(_ *ctx.BaseCtx[ctx.IntTrace, *ctx.IntTrace]) *berror.ErrMsg {
+			close(ran)
+			return nil
+		},
+	)
 	s.PutCtxToPool(c)
 
 	select {
@@ -179,10 +181,12 @@ func TestEventLoopService_PostTaskWithRoleId_Runs(t *testing.T) {
 	defer stop()
 
 	ran := make(chan int64, 1)
-	s.PostTaskWithRoleId(42, func(c *ctx.BaseCtx[ctx.IntTrace, *ctx.IntTrace]) *berror.ErrMsg {
-		ran <- c.GetTrace().GetRoleID()
-		return nil
-	})
+	s.PostTaskWithRoleId(
+		42, func(c *ctx.BaseCtx[ctx.IntTrace, *ctx.IntTrace]) *berror.ErrMsg {
+			ran <- c.GetTrace().GetRoleID()
+			return nil
+		},
+	)
 
 	select {
 	case got := <-ran:

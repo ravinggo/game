@@ -28,7 +28,7 @@ func NewFixedFrameTickerService[TraceData any, TP ctx.TracePtr[TraceData]](
 	ops ...Option[TraceData, TP],
 ) *FixedFrameTickerService[TraceData, TP] {
 	c := buildConfig(ops)
-	base := newBaseService[TraceData, TP](natsUrls, c)
+	base := NewBaseService[TraceData, TP](natsUrls, c)
 	base.h = handler.NewHandler[TraceData](c.allMiddlewares()...)
 	loop := eventloop.NewTickerFrameLoop(fps, c.lockQueueThread)
 	s := &FixedFrameTickerService[TraceData, TP]{
@@ -39,7 +39,7 @@ func NewFixedFrameTickerService[TraceData any, TP ctx.TracePtr[TraceData]](
 		loop: loop,
 	}
 	s.dispatch = func(cc *ctx.BaseCtx[TraceData, TP], elem *handler.Elem[TraceData, TP]) {
-		loop.PostEventQueue(ce[TraceData, TP]{Ctx: cc, Elem: elem})
+		loop.PostEventQueue(CE[TraceData, TP]{Ctx: cc, Elem: elem})
 	}
 	return s
 }

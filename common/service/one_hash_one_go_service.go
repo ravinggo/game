@@ -20,7 +20,7 @@ import (
 // timeTask wraps a TaskGroup with housekeeping state for idle cleanup.
 // Written by Claude Code claude-opus-4-6.
 type timeTask[TraceData any, TP ctx.TracePtr[TraceData]] struct {
-	task_group.TaskGroup[ce[TraceData, TP]]
+	task_group.TaskGroup[CE[TraceData, TP]]
 	lastDealTime int64
 	roleID       int64
 	uniqueID     int64
@@ -45,7 +45,7 @@ func NewOneHashOneGoService[TraceData any, TP ctx.TracePtr[TraceData]](
 	ops ...Option[TraceData, TP],
 ) *OneHashOneGoService[TraceData, TP] {
 	c := buildConfig(ops)
-	base := newBaseService[TraceData, TP](natsUrls, c)
+	base := NewBaseService[TraceData, TP](natsUrls, c)
 	base.h = handler.NewHandler[TraceData](c.allMiddlewares()...)
 	s := &OneHashOneGoService[TraceData, TP]{
 		BaseService:   base,
@@ -66,7 +66,7 @@ func (s *OneHashOneGoService[TraceData, TP]) PostTaskCloneCtx(c *ctx.BaseCtx[Tra
 	newCtx := s.GetCtxFromPool()
 	newCtx.TD = c.TD
 	newCtx.GetTrace().SetServerIdAndType(s.serverId, s.serverType)
-	s.el.PostEventQueue(ce[TraceData, TP]{Ctx: newCtx, Func: f})
+	s.el.PostEventQueue(CE[TraceData, TP]{Ctx: newCtx, Func: f})
 }
 
 // PostTaskWithRoleId posts f to the TaskGroup for roleId using a fresh pooled ctx.
@@ -78,7 +78,7 @@ func (s *OneHashOneGoService[TraceData, TP]) PostTaskWithRoleId(roleId int64, f 
 	newCtx := s.GetCtxFromPool()
 	newCtx.GetTrace().SetRoleID(roleId)
 	newCtx.GetTrace().SetServerIdAndType(s.serverId, s.serverType)
-	s.el.PostEventQueue(ce[TraceData, TP]{Ctx: newCtx, Func: f})
+	s.el.PostEventQueue(CE[TraceData, TP]{Ctx: newCtx, Func: f})
 }
 
 // Start subscribes to NATS and begins the EventLoop.
@@ -90,11 +90,11 @@ func (s *OneHashOneGoService[TraceData, TP]) Start(f func(any)) {
 		}
 	}
 	s.h.Logger()
-	s.subscribe()
+	s.Subscribe()
 	s.el.Start(
 		func(e any) {
 			switch c := e.(type) {
-			case ce[TraceData, TP]:
+			case CE[TraceData, TP]:
 				s.dealCE(c)
 			case func():
 				c()
@@ -114,10 +114,10 @@ func (s *OneHashOneGoService[TraceData, TP]) Stop() {
 }
 
 // taskFunc is the worker callback for each per-RoleID TaskGroup.
-// When ce.Func is set: acquire ctx (from pool if nil), call Func, return ctx to pool.
-// When ce.Func is nil: if Elem is present, invoke handleCtx.
+// When CE.Func is set: acquire ctx (from pool if nil), call Func, return ctx to pool.
+// When CE.Func is nil: if Elem is present, invoke handleCtx.
 // Written by Claude Code claude-opus-4-6.
-func (s *OneHashOneGoService[TraceData, TP]) taskFunc(e task_group.TaskGroupElem[ce[TraceData, TP]]) {
+func (s *OneHashOneGoService[TraceData, TP]) taskFunc(e task_group.TaskGroupElem[CE[TraceData, TP]]) {
 	defer safego.Recover()
 	if e.Data.Func != nil {
 		data := e.Data.Ctx
@@ -143,7 +143,7 @@ func (s *OneHashOneGoService[TraceData, TP]) doDispatch(
 ) {
 	roleID := c.GetTrace().GetRoleID()
 	if roleID != 0 {
-		s.el.PostEventQueue(ce[TraceData, TP]{Ctx: c, Elem: elem})
+		s.el.PostEventQueue(CE[TraceData, TP]{Ctx: c, Elem: elem})
 		return
 	}
 	safego.Go(
@@ -154,10 +154,10 @@ func (s *OneHashOneGoService[TraceData, TP]) doDispatch(
 	)
 }
 
-// dealCE dispatches an EventLoop ce event: RoleID==0 runs inline (sequential),
+// dealCE dispatches an EventLoop CE event: RoleID==0 runs inline (sequential),
 // RoleID!=0 routes to the per-RoleID dynamic TaskGroup.
 // Written by Claude Code claude-opus-4-6.
-func (s *OneHashOneGoService[TraceData, TP]) dealCE(c ce[TraceData, TP]) {
+func (s *OneHashOneGoService[TraceData, TP]) dealCE(c CE[TraceData, TP]) {
 	roleID := c.Ctx.GetTrace().GetRoleID()
 	if roleID == 0 {
 		if c.Func != nil {

@@ -21,7 +21,7 @@ import (
 // Written by Claude Code claude-opus-4-6.
 type FixedHashPoolService[TraceData any, TP ctx.TracePtr[TraceData]] struct {
 	*BaseService[TraceData, TP]
-	taskGroupHash []task_group.TaskGroup[ce[TraceData, TP]]
+	taskGroupHash []task_group.TaskGroup[CE[TraceData, TP]]
 	taskPoolMark  uint64
 }
 
@@ -32,7 +32,7 @@ func NewFixedHashPoolService[TraceData any, TP ctx.TracePtr[TraceData]](
 	ops ...Option[TraceData, TP],
 ) *FixedHashPoolService[TraceData, TP] {
 	c := buildConfig(ops)
-	base := newBaseService[TraceData, TP](natsUrls, c)
+	base := NewBaseService[TraceData, TP](natsUrls, c)
 	base.h = handler.NewHandler[TraceData](c.allMiddlewares()...)
 	s := &FixedHashPoolService[TraceData, TP]{
 		BaseService: base,
@@ -44,7 +44,7 @@ func NewFixedHashPoolService[TraceData any, TP ctx.TracePtr[TraceData]](
 	}
 	poolSize := numCpu * 1024
 	s.taskPoolMark = poolSize - 1
-	s.taskGroupHash = make([]task_group.TaskGroup[ce[TraceData, TP]], poolSize)
+	s.taskGroupHash = make([]task_group.TaskGroup[CE[TraceData, TP]], poolSize)
 	for i := range s.taskGroupHash {
 		s.taskGroupHash[i].SetMaxCap(128)
 		s.taskGroupHash[i].SetTaskFunc(s.taskFunc)
@@ -55,10 +55,10 @@ func NewFixedHashPoolService[TraceData any, TP ctx.TracePtr[TraceData]](
 }
 
 // taskFunc is the worker callback passed to each TaskGroup.
-// When ce.Func is set: acquire ctx (from pool if nil), call Func, return ctx to pool.
-// When ce.Func is nil: if Elem is present, invoke handleCtx.
+// When CE.Func is set: acquire ctx (from pool if nil), call Func, return ctx to pool.
+// When CE.Func is nil: if Elem is present, invoke handleCtx.
 // Written by Claude Code claude-opus-4-6.
-func (s *FixedHashPoolService[TraceData, TP]) taskFunc(e task_group.TaskGroupElem[ce[TraceData, TP]]) {
+func (s *FixedHashPoolService[TraceData, TP]) taskFunc(e task_group.TaskGroupElem[CE[TraceData, TP]]) {
 	defer safego.Recover()
 	if e.Data.Func != nil {
 		data := e.Data.Ctx
@@ -94,9 +94,9 @@ func (s *FixedHashPoolService[TraceData, TP]) doDispatch(
 		bucket = uint64(roleID) & s.taskPoolMark
 	}
 	if elem.IsForce() {
-		s.taskGroupHash[bucket].PutForce(ce[TraceData, TP]{Ctx: c, Elem: elem}, nil)
+		s.taskGroupHash[bucket].PutForce(CE[TraceData, TP]{Ctx: c, Elem: elem}, nil)
 	} else {
-		if !s.taskGroupHash[bucket].Put(ce[TraceData, TP]{Ctx: c, Elem: elem}, nil) {
+		if !s.taskGroupHash[bucket].Put(CE[TraceData, TP]{Ctx: c, Elem: elem}, nil) {
 			ReplyTaskPoolFull(c)
 			c.Warn().Msg("task group full")
 			s.PutCtxToPool(c)
@@ -124,7 +124,7 @@ func (s *FixedHashPoolService[TraceData, TP]) PostTaskCloneCtx(c *ctx.BaseCtx[Tr
 		}
 		bucket = uint64(r) & s.taskPoolMark
 	}
-	s.taskGroupHash[bucket].PutForce(ce[TraceData, TP]{Ctx: newCtx, Func: f}, nil)
+	s.taskGroupHash[bucket].PutForce(CE[TraceData, TP]{Ctx: newCtx, Func: f}, nil)
 }
 
 // PostTaskWithRoleId posts f to the bucket derived from roleId using a fresh pooled ctx.
@@ -146,13 +146,13 @@ func (s *FixedHashPoolService[TraceData, TP]) PostTaskWithRoleId(roleId int64, f
 		}
 		bucket = uint64(r) & s.taskPoolMark
 	}
-	s.taskGroupHash[bucket].PutForce(ce[TraceData, TP]{Ctx: newCtx, Func: f}, nil)
+	s.taskGroupHash[bucket].PutForce(CE[TraceData, TP]{Ctx: newCtx, Func: f}, nil)
 }
 
 // Start subscribes to NATS. No EventLoop is used; all work runs in TaskGroup goroutines.
 // Written by Claude Code claude-opus-4-6.
 func (s *FixedHashPoolService[TraceData, TP]) Start(_ func(any)) {
 	s.h.Logger()
-	s.subscribe()
+	s.Subscribe()
 	logger.Log.Info().Msg("FixedHashPoolService started")
 }
