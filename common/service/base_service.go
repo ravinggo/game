@@ -183,9 +183,9 @@ func (s *BaseService[TraceData, TP]) Stop() {
 	s.natsCluster.Shutdown()
 }
 
-// handleCtx runs the handler chain for a single request context, then recycles Req and Resp
+// HandleCtx runs the handler chain for a single request context, then recycles Req and Resp
 // back to their pools together, and returns the context to the pool when done.
-func (s *BaseService[TraceData, TP]) handleCtx(c *ctx.BaseCtx[TraceData, TP], e *handler.Elem[TraceData, TP]) {
+func (s *BaseService[TraceData, TP]) HandleCtx(c *ctx.BaseCtx[TraceData, TP], e *handler.Elem[TraceData, TP]) {
 	s.call(c, e)
 	if c.Req != nil {
 		e.Release(c.Req, c.Resp)
@@ -194,7 +194,7 @@ func (s *BaseService[TraceData, TP]) handleCtx(c *ctx.BaseCtx[TraceData, TP], e 
 }
 
 // call invokes the handler middleware chain and sends the NATS reply when one is expected.
-// Resp pool lifecycle is managed by handleCtx; call() only performs the network reply.
+// Resp pool lifecycle is managed by HandleCtx; call() only performs the network reply.
 func (s *BaseService[TraceData, TP]) call(c *ctx.BaseCtx[TraceData, TP], e *handler.Elem[TraceData, TP]) {
 	err := e.Call(c)
 	if err != nil {

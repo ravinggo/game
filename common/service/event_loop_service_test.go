@@ -48,7 +48,7 @@ func startELS(s *EventLoopService[ctx.IntTrace, *ctx.IntTrace]) func() {
 					}
 					s.PutCtxToPool(ev.Ctx)
 				} else {
-					s.handleCtx(ev.Ctx, ev.Elem)
+					s.HandleCtx(ev.Ctx, ev.Elem)
 				}
 			case func():
 				ev()

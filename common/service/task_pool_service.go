@@ -103,10 +103,10 @@ func (s *TaskPoolService[TraceData, TP]) doDispatch(
 	c *ctx.BaseCtx[TraceData, TP], elem *handler.Elem[TraceData, TP],
 ) {
 	if elem.IsForce() {
-		s.taskPool.PutForce(func() { s.handleCtx(c, elem) })
+		s.taskPool.PutForce(func() { s.HandleCtx(c, elem) })
 		return
 	}
-	if !s.taskPool.Put(func() { s.handleCtx(c, elem) }) {
+	if !s.taskPool.Put(func() { s.HandleCtx(c, elem) }) {
 		ReplyTaskPoolFull(c)
 		c.Warn().Msg("task pool full")
 		s.PutCtxToPool(c)

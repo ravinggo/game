@@ -73,7 +73,7 @@ func (s *fixedFrameService[TraceData, TP]) handleEvent(f func(any)) func(any) {
 				}
 				s.PutCtxToPool(c.Ctx)
 			} else {
-				s.handleCtx(c.Ctx, c.Elem)
+				s.HandleCtx(c.Ctx, c.Elem)
 			}
 		default:
 			f(e)

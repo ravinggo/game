@@ -140,7 +140,7 @@ func TestHandleCtx_CallsHandler(t *testing.T) {
 	c := s.GetCtxFromPool()
 	c.Req, c.Resp = elem.Acquire()
 
-	s.handleCtx(c, elem)
+	s.HandleCtx(c, elem)
 
 	if !called.Load() {
 		t.Fatal("handler was not called by handleCtx")
@@ -166,7 +166,7 @@ func TestHandleCtx_RecyclesReq(t *testing.T) {
 		t.Fatal("Req should be non-nil before handleCtx")
 	}
 
-	s.handleCtx(c, elem)
+	s.HandleCtx(c, elem)
 	// After handleCtx returns the ctx is back in the pool; c itself is now stale.
 	// The observable side-effect is that no panic occurred and the handler ran.
 }
@@ -188,7 +188,7 @@ func TestHandleCtx_HandlerError_NoNatsMsgNoRPCResp(t *testing.T) {
 	c.Req, c.Resp = elem.Acquire()
 	// c.NatsMsg = nil → no NATS reply attempted
 
-	s.handleCtx(c, elem) // must not panic
+	s.HandleCtx(c, elem) // must not panic
 }
 
 // ── dealNatsMsg ───────────────────────────────────────────────────────────────
@@ -197,9 +197,11 @@ func TestHandleCtx_HandlerError_NoNatsMsgNoRPCResp(t *testing.T) {
 // Written by Claude Code claude-opus-4-6.
 func TestDealNatsMsg_NoLastDot(t *testing.T) {
 	h := handler.NewHandler[ctx.IntTrace, *ctx.IntTrace]()
-	s := makeBS(h, func(_ *ctx.BaseCtx[ctx.IntTrace, *ctx.IntTrace], _ *handler.Elem[ctx.IntTrace, *ctx.IntTrace]) {
-		t.Error("dispatch must not be called for a subject without a dot")
-	})
+	s := makeBS(
+		h, func(_ *ctx.BaseCtx[ctx.IntTrace, *ctx.IntTrace], _ *handler.Elem[ctx.IntTrace, *ctx.IntTrace]) {
+			t.Error("dispatch must not be called for a subject without a dot")
+		},
+	)
 	s.DealNatsMsg(&nats.Msg{Subject: "nodot", Data: []byte{0, 0}})
 }
 
@@ -207,9 +209,11 @@ func TestDealNatsMsg_NoLastDot(t *testing.T) {
 // Written by Claude Code claude-opus-4-6.
 func TestDealNatsMsg_ShortData(t *testing.T) {
 	h := handler.NewHandler[ctx.IntTrace, *ctx.IntTrace]()
-	s := makeBS(h, func(_ *ctx.BaseCtx[ctx.IntTrace, *ctx.IntTrace], _ *handler.Elem[ctx.IntTrace, *ctx.IntTrace]) {
-		t.Error("dispatch must not be called for short data")
-	})
+	s := makeBS(
+		h, func(_ *ctx.BaseCtx[ctx.IntTrace, *ctx.IntTrace], _ *handler.Elem[ctx.IntTrace, *ctx.IntTrace]) {
+			t.Error("dispatch must not be called for short data")
+		},
+	)
 	s.DealNatsMsg(&nats.Msg{Subject: "basepb.IntTrace", Data: []byte{0}})
 }
 
@@ -218,9 +222,11 @@ func TestDealNatsMsg_ShortData(t *testing.T) {
 // Written by Claude Code claude-opus-4-6.
 func TestDealNatsMsg_UnregisteredMsg(t *testing.T) {
 	h := handler.NewHandler[ctx.IntTrace, *ctx.IntTrace]()
-	s := makeBS(h, func(_ *ctx.BaseCtx[ctx.IntTrace, *ctx.IntTrace], _ *handler.Elem[ctx.IntTrace, *ctx.IntTrace]) {
-		t.Error("dispatch must not be called for unregistered message")
-	})
+	s := makeBS(
+		h, func(_ *ctx.BaseCtx[ctx.IntTrace, *ctx.IntTrace], _ *handler.Elem[ctx.IntTrace, *ctx.IntTrace]) {
+			t.Error("dispatch must not be called for unregistered message")
+		},
+	)
 	s.DealNatsMsg(
 		&nats.Msg{
 			Subject: "basepb.IntTrace",
@@ -243,11 +249,13 @@ func TestDealNatsMsg_Dispatches(t *testing.T) {
 
 	var dispatchCount atomic.Int32
 	var s *BaseService[ctx.IntTrace, *ctx.IntTrace]
-	s = makeBS(h, func(c *ctx.BaseCtx[ctx.IntTrace, *ctx.IntTrace], e *handler.Elem[ctx.IntTrace, *ctx.IntTrace]) {
-		dispatchCount.Add(1)
-		// Complete the lifecycle so the ctx is returned to the pool.
-		s.handleCtx(c, e)
-	})
+	s = makeBS(
+		h, func(c *ctx.BaseCtx[ctx.IntTrace, *ctx.IntTrace], e *handler.Elem[ctx.IntTrace, *ctx.IntTrace]) {
+			dispatchCount.Add(1)
+			// Complete the lifecycle so the ctx is returned to the pool.
+			s.HandleCtx(c, e)
+		},
+	)
 
 	s.DealNatsMsg(
 		&nats.Msg{
@@ -274,9 +282,11 @@ func TestDealNatsMsg_CorruptProto(t *testing.T) {
 		},
 	)
 
-	s := makeBS(h, func(_ *ctx.BaseCtx[ctx.IntTrace, *ctx.IntTrace], _ *handler.Elem[ctx.IntTrace, *ctx.IntTrace]) {
-		t.Error("dispatch must not be called for corrupt proto")
-	})
+	s := makeBS(
+		h, func(_ *ctx.BaseCtx[ctx.IntTrace, *ctx.IntTrace], _ *handler.Elem[ctx.IntTrace, *ctx.IntTrace]) {
+			t.Error("dispatch must not be called for corrupt proto")
+		},
+	)
 
 	// [traceSize=0,0] followed by garbage that is not valid proto
 	s.DealNatsMsg(

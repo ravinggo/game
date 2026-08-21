@@ -135,7 +135,7 @@ func (s *OneHashOneGoService[TraceData, TP]) taskFunc(e task_group.TaskGroupElem
 		return
 	}
 	if e.Data.Elem != nil {
-		s.handleCtx(e.Data.Ctx, e.Data.Elem)
+		s.HandleCtx(e.Data.Ctx, e.Data.Elem)
 	}
 }
 
@@ -153,7 +153,7 @@ func (s *OneHashOneGoService[TraceData, TP]) doDispatch(
 	safego.Go(
 		func() {
 			defer safego.RecoverWithLogger(c)
-			s.handleCtx(c, elem)
+			s.HandleCtx(c, elem)
 		},
 	)
 }
@@ -170,7 +170,7 @@ func (s *OneHashOneGoService[TraceData, TP]) dealCE(c CE[TraceData, TP]) {
 			}
 			s.PutCtxToPool(c.Ctx)
 		} else {
-			s.handleCtx(c.Ctx, c.Elem)
+			s.HandleCtx(c.Ctx, c.Elem)
 		}
 		return
 	}

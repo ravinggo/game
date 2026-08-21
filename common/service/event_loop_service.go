@@ -83,7 +83,7 @@ func (s *EventLoopService[TraceData, TP]) Start(f func(any)) {
 					}
 					s.PutCtxToPool(c.Ctx)
 				} else {
-					s.handleCtx(c.Ctx, c.Elem)
+					s.HandleCtx(c.Ctx, c.Elem)
 				}
 			case func():
 				c()

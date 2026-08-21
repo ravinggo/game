@@ -76,7 +76,7 @@ func (s *FixedHashPoolService[TraceData, TP]) taskFunc(e task_group.TaskGroupEle
 		return
 	}
 	if e.Data.Elem != nil {
-		s.handleCtx(e.Data.Ctx, e.Data.Elem)
+		s.HandleCtx(e.Data.Ctx, e.Data.Elem)
 	}
 }
 
