@@ -29,9 +29,8 @@ type FixedHashPoolService[TraceData any, TP ctx.TracePtr[TraceData]] struct {
 // Written by Claude Code claude-opus-4-6.
 func NewFixedHashPoolService[TraceData any, TP ctx.TracePtr[TraceData]](
 	natsUrls []string,
-	ops ...Option[TraceData, TP],
+	c Config[TraceData, TP],
 ) *FixedHashPoolService[TraceData, TP] {
-	c := buildConfig(ops)
 	base := NewBaseService[TraceData, TP](natsUrls, c)
 	base.h = handler.NewHandler[TraceData](c.allMiddlewares()...)
 	s := &FixedHashPoolService[TraceData, TP]{

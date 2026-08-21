@@ -25,12 +25,11 @@ type FixedFrameTickerService[TraceData any, TP ctx.TracePtr[TraceData]] struct {
 func NewFixedFrameTickerService[TraceData any, TP ctx.TracePtr[TraceData]](
 	natsUrls []string,
 	fps int,
-	ops ...Option[TraceData, TP],
+	c Config[TraceData, TP],
 ) *FixedFrameTickerService[TraceData, TP] {
-	c := buildConfig(ops)
 	base := NewBaseService[TraceData, TP](natsUrls, c)
 	base.h = handler.NewHandler[TraceData](c.allMiddlewares()...)
-	loop := eventloop.NewTickerFrameLoop(fps, c.lockQueueThread)
+	loop := eventloop.NewTickerFrameLoop(fps, c.LockQueueThread)
 	s := &FixedFrameTickerService[TraceData, TP]{
 		fixedFrameService: fixedFrameService[TraceData, TP]{
 			BaseService: base,

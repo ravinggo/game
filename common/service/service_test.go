@@ -1,4 +1,4 @@
-// Package service internal tests — exercises config, BaseService dispatch, and helper
+// Package service internal tests — exercises BaseService dispatch and helper
 // functions without a live NATS connection.
 // Written by Claude Code claude-opus-4-6.
 package service
@@ -7,7 +7,6 @@ import (
 	"os"
 	"sync/atomic"
 	"testing"
-	"time"
 
 	"github.com/nats-io/nats.go"
 	"github.com/ravinggo/objectpool"
@@ -19,7 +18,6 @@ import (
 	"github.com/ravinggo/game/common/define"
 	"github.com/ravinggo/game/common/handler"
 	"github.com/ravinggo/game/common/logger"
-	"github.com/ravinggo/game/common/natsclient"
 	"github.com/ravinggo/game/common/timer"
 )
 
@@ -59,119 +57,14 @@ func buildWireData(t *testing.T, msg proto.Message) []byte {
 	return data
 }
 
-// ── config.go ──────────────────────────────────────────────────────────────────
-
-// TestBuildConfig_Empty verifies that buildConfig with no options produces a zero config.
-// Written by Claude Code claude-opus-4-6.
-func TestBuildConfig_Empty(t *testing.T) {
-	c := buildConfig[ctx.IntTrace, *ctx.IntTrace](nil)
-	if c.lockQueueThread {
-		t.Error("lockQueueThread should default to false")
-	}
-	if c.rpcTimeout != 0 {
-		t.Errorf("rpcTimeout should default to 0, got %v", c.rpcTimeout)
-	}
-	if len(c.middles) != 0 {
-		t.Errorf("middles should be empty, got %d", len(c.middles))
-	}
-}
-
-// TestLockQueueThreadOption_SetsFlag verifies the option sets lockQueueThread.
-// Written by Claude Code claude-opus-4-6.
-func TestLockQueueThreadOption_SetsFlag(t *testing.T) {
-	c := buildConfig(
-		[]Option[ctx.IntTrace, *ctx.IntTrace]{
-			LockQueueThreadOption[ctx.IntTrace, *ctx.IntTrace](),
-		},
-	)
-	if !c.lockQueueThread {
-		t.Error("LockQueueThreadOption should set lockQueueThread=true")
-	}
-}
-
-// TestRPCTimeoutOption_SetsTimeout verifies the option stores the given duration.
-// Written by Claude Code claude-opus-4-6.
-func TestRPCTimeoutOption_SetsTimeout(t *testing.T) {
-	want := 7 * time.Second
-	c := buildConfig(
-		[]Option[ctx.IntTrace, *ctx.IntTrace]{
-			RPCTimeoutOption[ctx.IntTrace, *ctx.IntTrace](want),
-		},
-	)
-	if c.rpcTimeout != want {
-		t.Errorf("rpcTimeout = %v, want %v", c.rpcTimeout, want)
-	}
-}
-
-// TestMiddlesOption_AppendsMiddleware verifies that middleware is appended in order.
-// Written by Claude Code claude-opus-4-6.
-func TestMiddlesOption_AppendsMiddleware(t *testing.T) {
-	mid1 := handler.Logger[ctx.IntTrace, *ctx.IntTrace]
-	mid2 := handler.Recover[ctx.IntTrace, *ctx.IntTrace]
-	c := buildConfig(
-		[]Option[ctx.IntTrace, *ctx.IntTrace]{
-			MiddlesOption[ctx.IntTrace, *ctx.IntTrace](mid1, mid2),
-		},
-	)
-	if len(c.middles) != 2 {
-		t.Errorf("len(middles) = %d, want 2", len(c.middles))
-	}
-}
-
-// TestNatsOptions_AppendsNatsOptions verifies that nats.Option values are stored.
-// Written by Claude Code claude-opus-4-6.
-func TestNatsOptions_AppendsNatsOptions(t *testing.T) {
-	c := buildConfig(
-		[]Option[ctx.IntTrace, *ctx.IntTrace]{
-			NatsOptions[ctx.IntTrace, *ctx.IntTrace](nats.Name("a"), nats.Name("b")),
-		},
-	)
-	if len(c.natsOptions) != 2 {
-		t.Errorf("len(natsOptions) = %d, want 2", len(c.natsOptions))
-	}
-}
-
-// TestServerUserBase_ForwardsOptions verifies the option copies base Options into the config.
-// Uses natsclient.ServerIntUserSubject which already satisfies ServerUserSubjectPtr.
-// Written by Claude Code claude-opus-4-6.
-func TestServerUserBase_ForwardsOptions(t *testing.T) {
-	opt := ServerUserBase[natsclient.ServerIntUserSubject, ctx.IntTrace, *ctx.IntTrace, *natsclient.ServerIntUserSubject](
-		RPCTimeoutOption[ctx.IntTrace, *ctx.IntTrace](3 * time.Second),
-	)
-	if opt == nil {
-		t.Fatal("ServerUserBase returned nil option")
-	}
-}
-
-// TestInitCtxOption_SetsField verifies that InitCtxOption stores the function in config.
-func TestInitCtxOption_SetsField(t *testing.T) {
-	called := false
-	c := buildConfig(
-		[]Option[ctx.IntTrace, *ctx.IntTrace]{
-			InitCtxOption(
-				func(_ *ctx.BaseCtx[ctx.IntTrace, *ctx.IntTrace]) {
-					called = true
-				},
-			),
-		},
-	)
-	if c.initCtx == nil {
-		t.Fatal("initCtx should be non-nil after InitCtxOption")
-	}
-	c.initCtx(nil)
-	if !called {
-		t.Error("initCtx function was not stored correctly")
-	}
-}
-
 // TestGetCtxFromPool_CallsInitCtx verifies that GetCtxFromPool calls initCtx on every
-// acquired context when InitCtxOption has been applied.
+// acquired context when Config.InitCtx is set.
 func TestGetCtxFromPool_CallsInitCtx(t *testing.T) {
 	h := handler.NewHandler[ctx.IntTrace, *ctx.IntTrace]()
 	s := makeBS(h)
 
 	var calls int
-	s.cnf.initCtx = func(c *ctx.BaseCtx[ctx.IntTrace, *ctx.IntTrace]) {
+	s.cnf.InitCtx = func(c *ctx.BaseCtx[ctx.IntTrace, *ctx.IntTrace]) {
 		if c == nil {
 			t.Error("initCtx received nil ctx")
 		}
@@ -192,7 +85,7 @@ func TestGetCtxFromPool_CallsInitCtx(t *testing.T) {
 }
 
 // TestGetCtxFromPool_NilInitCtx verifies that GetCtxFromPool does not panic when
-// no InitCtxOption has been set (initCtx == nil).
+// Config.InitCtx is nil.
 func TestGetCtxFromPool_NilInitCtx(t *testing.T) {
 	h := handler.NewHandler[ctx.IntTrace, *ctx.IntTrace]()
 	s := makeBS(h)
@@ -228,10 +121,11 @@ func TestReplyTaskPoolFull_EmptyReply(t *testing.T) {
 func TestHandleCtx_CallsHandler(t *testing.T) {
 	h := handler.NewHandler[ctx.IntTrace, *ctx.IntTrace]()
 	var called atomic.Bool
-	h.RegisterEvent("test-handle-ctx", func(c *ctx.BaseCtx[ctx.IntTrace, *ctx.IntTrace], req *basepb.IntTrace) *berror.ErrMsg {
-		called.Store(true)
-		return nil
-	},
+	h.RegisterEvent(
+		"test-handle-ctx", func(c *ctx.BaseCtx[ctx.IntTrace, *ctx.IntTrace], req *basepb.IntTrace) *berror.ErrMsg {
+			called.Store(true)
+			return nil
+		},
 	)
 	elem, ok := h.Lookup("basepb.IntTrace")
 	if !ok {
@@ -254,9 +148,10 @@ func TestHandleCtx_CallsHandler(t *testing.T) {
 // Written by Claude Code claude-opus-4-6.
 func TestHandleCtx_RecyclesReq(t *testing.T) {
 	h := handler.NewHandler[ctx.IntTrace, *ctx.IntTrace]()
-	h.RegisterEvent("test-recycle", func(c *ctx.BaseCtx[ctx.IntTrace, *ctx.IntTrace], req *basepb.IntTrace) *berror.ErrMsg {
-		return nil
-	},
+	h.RegisterEvent(
+		"test-recycle", func(c *ctx.BaseCtx[ctx.IntTrace, *ctx.IntTrace], req *basepb.IntTrace) *berror.ErrMsg {
+			return nil
+		},
 	)
 	elem, _ := h.Lookup("basepb.IntTrace")
 
@@ -277,9 +172,10 @@ func TestHandleCtx_RecyclesReq(t *testing.T) {
 // Written by Claude Code claude-opus-4-6.
 func TestHandleCtx_HandlerError_NoNatsMsgNoRPCResp(t *testing.T) {
 	h := handler.NewHandler[ctx.IntTrace, *ctx.IntTrace]()
-	h.RegisterEvent("test-err", func(c *ctx.BaseCtx[ctx.IntTrace, *ctx.IntTrace], req *basepb.ErrorMessage) *berror.ErrMsg {
-		return berror.NewProtocolStr("test error")
-	},
+	h.RegisterEvent(
+		"test-err", func(c *ctx.BaseCtx[ctx.IntTrace, *ctx.IntTrace], req *basepb.ErrorMessage) *berror.ErrMsg {
+			return berror.NewProtocolStr("test error")
+		},
 	)
 	elem, _ := h.Lookup("basepb.ErrorMessage")
 
@@ -338,9 +234,10 @@ func TestDealNatsMsg_UnregisteredMsg(t *testing.T) {
 // Written by Claude Code claude-opus-4-6.
 func TestDealNatsMsg_Dispatches(t *testing.T) {
 	h := handler.NewHandler[ctx.IntTrace, *ctx.IntTrace]()
-	h.RegisterEvent("dispatch-test", func(c *ctx.BaseCtx[ctx.IntTrace, *ctx.IntTrace], req *basepb.IntTrace) *berror.ErrMsg {
-		return nil
-	},
+	h.RegisterEvent(
+		"dispatch-test", func(c *ctx.BaseCtx[ctx.IntTrace, *ctx.IntTrace], req *basepb.IntTrace) *berror.ErrMsg {
+			return nil
+		},
 	)
 
 	s := makeBS(h)
@@ -369,10 +266,11 @@ func TestDealNatsMsg_Dispatches(t *testing.T) {
 // Written by Claude Code claude-opus-4-6.
 func TestDealNatsMsg_CorruptProto(t *testing.T) {
 	h := handler.NewHandler[ctx.IntTrace, *ctx.IntTrace]()
-	h.RegisterEvent("corrupt-test", func(c *ctx.BaseCtx[ctx.IntTrace, *ctx.IntTrace], req *basepb.IntTrace) *berror.ErrMsg {
-		t.Error("handler must not be called for corrupt proto")
-		return nil
-	},
+	h.RegisterEvent(
+		"corrupt-test", func(c *ctx.BaseCtx[ctx.IntTrace, *ctx.IntTrace], req *basepb.IntTrace) *berror.ErrMsg {
+			t.Error("handler must not be called for corrupt proto")
+			return nil
+		},
 	)
 
 	s := makeBS(h)

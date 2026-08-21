@@ -25,23 +25,19 @@ type ServerUserService[T1 any, TraceData any, TP ctx.TracePtr[TraceData], US nat
 // Written by Claude Code claude-opus-4-6.
 func NewServerUserService[T1 any, TraceData any, TP ctx.TracePtr[TraceData], US natsclient.ServerUserSubjectPtr[T1]](
 	natsUrls []string,
-	ops ...ServerUserOption[T1, TraceData, TP, US],
+	c ServerUserConfig[T1, TraceData, TP, US],
 ) *ServerUserService[T1, TraceData, TP, US] {
-	serverCnf := &serverUserConfig[T1, TraceData, TP, US]{}
-	for _, op := range ops {
-		op(serverCnf)
-	}
+	serverCnf := &ServerUserConfig[T1, TraceData, TP, US]{}
 	s := &ServerUserService[T1, TraceData, TP, US]{
 		OneHashOneGoService: NewOneHashOneGoService[TraceData, TP](
-			natsUrls,
-			serverCnf.options...,
+			natsUrls, c.Config,
 		),
 	}
-	if serverCnf.hookUserMsg != nil {
-		s.hookUserMsg = serverCnf.hookUserMsg
+	if serverCnf.HookUserMsg != nil {
+		s.hookUserMsg = serverCnf.HookUserMsg
 	}
 	s.userNatsCluster = natsclient.NewClusterClientServerUser2[T1, US](
-		s.BaseService.natsCluster, s.DealServerUserNatsMsg, serverCnf.unOptions...,
+		s.BaseService.natsCluster, s.DealServerUserNatsMsg, serverCnf.UNOptions...,
 	)
 	return s
 }

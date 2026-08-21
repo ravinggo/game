@@ -23,14 +23,12 @@ type EventLoopService[TraceData any, TP ctx.TracePtr[TraceData]] struct {
 // Written by Claude Code claude-opus-4-6.
 func NewEventLoopService[TraceData any, TP ctx.TracePtr[TraceData]](
 	natsUrls []string,
-	ops ...Option[TraceData, TP],
+	c Config[TraceData, TP],
 ) *EventLoopService[TraceData, TP] {
-	c := buildConfig(ops)
 	base := NewBaseService[TraceData, TP](natsUrls, c)
-	base.h = handler.NewHandler[TraceData](c.allMiddlewares()...)
 	s := &EventLoopService[TraceData, TP]{
 		BaseService: base,
-		el:          eventloop.NewDoubleBuffQueue(c.lockQueueThread),
+		el:          eventloop.NewDoubleBuffQueue(base.GetConfig().LockQueueThread),
 	}
 	s.dispatch = func(c *ctx.BaseCtx[TraceData, TP], elem *handler.Elem[TraceData, TP]) {
 		s.el.PostEventQueue(CE[TraceData, TP]{Ctx: c, Elem: elem})

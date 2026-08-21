@@ -26,12 +26,11 @@ type FixedFrameCatchUpService[TraceData any, TP ctx.TracePtr[TraceData]] struct 
 func NewFixedFrameCatchUpService[TraceData any, TP ctx.TracePtr[TraceData]](
 	natsUrls []string,
 	fps int,
-	ops ...Option[TraceData, TP],
+	c Config[TraceData, TP],
 ) *FixedFrameCatchUpService[TraceData, TP] {
-	c := buildConfig(ops)
 	base := NewBaseService[TraceData, TP](natsUrls, c)
 	base.h = handler.NewHandler[TraceData](c.allMiddlewares()...)
-	loop := eventloop.NewCatchUpFrameLoop(fps, c.lockQueueThread)
+	loop := eventloop.NewCatchUpFrameLoop(fps, c.LockQueueThread)
 	s := &FixedFrameCatchUpService[TraceData, TP]{
 		fixedFrameService: fixedFrameService[TraceData, TP]{
 			BaseService: base,

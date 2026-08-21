@@ -42,14 +42,13 @@ type OneHashOneGoService[TraceData any, TP ctx.TracePtr[TraceData]] struct {
 // Written by Claude Code claude-opus-4-6.
 func NewOneHashOneGoService[TraceData any, TP ctx.TracePtr[TraceData]](
 	natsUrls []string,
-	ops ...Option[TraceData, TP],
+	c Config[TraceData, TP],
 ) *OneHashOneGoService[TraceData, TP] {
-	c := buildConfig(ops)
 	base := NewBaseService[TraceData, TP](natsUrls, c)
 	base.h = handler.NewHandler[TraceData](c.allMiddlewares()...)
 	s := &OneHashOneGoService[TraceData, TP]{
 		BaseService:   base,
-		el:            eventloop.NewDoubleBuffQueue(c.lockQueueThread),
+		el:            eventloop.NewDoubleBuffQueue(c.LockQueueThread),
 		taskMap:       map[int64]*timeTask[TraceData, TP]{},
 		taskGroupPool: objectpool.GetTypePool[timeTask[TraceData, TP]](),
 	}
@@ -189,7 +188,7 @@ func (s *OneHashOneGoService[TraceData, TP]) dealCE(c CE[TraceData, TP]) {
 // a message within the idle timeout it is evicted and returned to the pool for reuse.
 // The timeout is set via IdleCleanupTimeoutOption and defaults to 30 seconds.
 func (s *OneHashOneGoService[TraceData, TP]) scheduleIdleCleanup(tg *timeTask[TraceData, TP]) {
-	timeout := s.cnf.idleCleanupTimeout
+	timeout := s.cnf.IdleCleanupTimeout
 	if timeout == 0 {
 		timeout = 30 * time.Second
 	}

@@ -40,7 +40,7 @@ type BaseService[TraceData any, TP ctx.TracePtr[TraceData]] struct {
 	ctxPool        *sync.Pool
 	serverId       int64
 	serverType     string
-	cnf            config[TraceData, TP]
+	cnf            Config[TraceData, TP]
 	serviceMiddles []handler.Middleware[TraceData, TP]
 	h              *handler.Handler[TraceData, TP]
 	// dispatch is set by each concrete service constructor.
@@ -114,21 +114,27 @@ func (s *BaseService[TraceData, TP]) RegisterEventForceBroadcast[REQ define.Prot
 // Written by Claude Code claude-opus-4-6.
 func NewBaseService[TraceData any, TP ctx.TracePtr[TraceData]](
 	natsUrls []string,
-	c config[TraceData, TP],
+	c Config[TraceData, TP],
 ) *BaseService[TraceData, TP] {
-	if c.rpcTimeout <= 0 {
-		c.rpcTimeout = time.Second * 10
+	if c.RpcTimeout <= 0 {
+		c.RpcTimeout = time.Second * 10
 	}
 	s := &BaseService[TraceData, TP]{
-		natsCluster: natsclient.NewClusterClient(natsUrls, c.rpcTimeout),
+		natsCluster: natsclient.NewClusterClient(natsUrls, c.RpcTimeout),
 		serverId:    baseenv.GetConfig().ServerId,
 		serverType:  baseenv.GetConfig().ServerType,
 		ctxPool:     objectpool.GetTypePool[ctx.BaseCtx[TraceData, TP]](),
 		cnf:         c,
+		h:           handler.NewHandler[TraceData](c.allMiddlewares()...),
 	}
+
 	s.serviceMiddles = c.serviceMiddlewares()
 	timer.StartLowPrecisionTime()
 	return s
+}
+
+func (s *BaseService[TraceData, TP]) GetConfig() Config[TraceData, TP] {
+	return s.cnf
 }
 
 // applyServiceMiddles wraps f with all service-scoped middlewares in declaration order.
@@ -147,8 +153,8 @@ func (s *BaseService[TraceData, TP]) applyServiceMiddles(
 // Written by Claude Code claude-opus-4-6.
 func (s *BaseService[TraceData, TP]) GetCtxFromPool() *ctx.BaseCtx[TraceData, TP] {
 	c := s.ctxPool.Get().(*ctx.BaseCtx[TraceData, TP])
-	if s.cnf.initCtx != nil {
-		s.cnf.initCtx(c)
+	if s.cnf.InitCtx != nil {
+		s.cnf.InitCtx(c)
 	}
 	return c
 }
@@ -199,7 +205,7 @@ func (s *BaseService[TraceData, TP]) call(c *ctx.BaseCtx[TraceData, TP], e *hand
 		return
 	}
 	if c.NatsMsg != nil && c.Resp != nil {
-		err = natsclient.NatsMsgReply(c.NatsMsg, s.cnf.respFirst, c.Resp, c.OtherResp...)
+		err = natsclient.NatsMsgReply(c.NatsMsg, s.cnf.RespFirst, c.Resp, c.OtherResp...)
 		if err != nil {
 			logger.Log.Warn().Err(err).Msg("NatsMsgReply fail")
 		}
@@ -240,7 +246,7 @@ func (s *BaseService[TraceData, TP]) Subscribe() {
 // calls s.dispatch — the concrete service owns all routing decisions.
 // Written by Claude Code claude-opus-4-6.
 func (s *BaseService[TraceData, TP]) DealNatsMsg(msg *nats.Msg) {
-	if s.cnf.dispatchHook != nil && s.cnf.dispatchHook(msg) {
+	if s.cnf.DispatchHook != nil && s.cnf.DispatchHook(msg) {
 		return
 	}
 	msgName := msg.Subject

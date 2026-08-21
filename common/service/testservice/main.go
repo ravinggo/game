@@ -29,14 +29,16 @@ func NewTestService() *TestService {
 	t := &TestService{
 		svc: service.NewServerUserService[natsclient.ServerIntUserSubject, ctx.IntTrace](
 			[]string{
-				"nats://192.168.0.160:4222",
+				"nats://192.168.0.148:4222",
 			},
-			service.ServerUserBase[natsclient.ServerIntUserSubject, ctx.IntTrace](service.IdleCleanupTimeoutOption[ctx.IntTrace](time.Second)),
+			service.ServerUserConfig[natsclient.ServerIntUserSubject, ctx.IntTrace, *ctx.IntTrace, *natsclient.ServerIntUserSubject]{
+				Config: service.Config[ctx.IntTrace, *ctx.IntTrace]{IdleCleanupTimeout: time.Second},
+			},
 		),
 	}
 	t.nc = natsclient.NewClusterClientServerUser[natsclient.ServerIntUserSubject](
 		[]string{
-			"nats://192.168.0.160:4222",
+			"nats://192.168.0.148:4222",
 		},
 		time.Second*10,
 		t.svc.DealServerUserNatsMsg,

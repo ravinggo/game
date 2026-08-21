@@ -24,9 +24,8 @@ type TaskPoolService[TraceData any, TP ctx.TracePtr[TraceData]] struct {
 // Written by Claude Code claude-opus-4-6.
 func NewTaskPoolService[TraceData any, TP ctx.TracePtr[TraceData]](
 	natsUrls []string,
-	ops ...Option[TraceData, TP],
+	c Config[TraceData, TP],
 ) *TaskPoolService[TraceData, TP] {
-	c := buildConfig(ops)
 	base := NewBaseService[TraceData, TP](natsUrls, c)
 	base.h = handler.NewHandler[TraceData](c.allMiddlewares()...)
 	s := &TaskPoolService[TraceData, TP]{

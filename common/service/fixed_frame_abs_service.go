@@ -24,12 +24,11 @@ type FixedFrameAbsService[TraceData any, TP ctx.TracePtr[TraceData]] struct {
 func NewFixedFrameAbsService[TraceData any, TP ctx.TracePtr[TraceData]](
 	natsUrls []string,
 	fps int,
-	ops ...Option[TraceData, TP],
+	c Config[TraceData, TP],
 ) *FixedFrameAbsService[TraceData, TP] {
-	c := buildConfig(ops)
 	base := NewBaseService[TraceData, TP](natsUrls, c)
 	base.h = handler.NewHandler[TraceData](c.allMiddlewares()...)
-	loop := eventloop.NewAbsFrameLoop(fps, c.lockQueueThread)
+	loop := eventloop.NewAbsFrameLoop(fps, c.LockQueueThread)
 	s := &FixedFrameAbsService[TraceData, TP]{
 		fixedFrameService: fixedFrameService[TraceData, TP]{
 			BaseService: base,
