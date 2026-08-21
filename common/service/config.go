@@ -20,14 +20,14 @@ type HookUserMsg[T1 any, US natsclient.ServerUserSubjectPtr[T1]] = func(us US, t
 type middlewareScope uint8
 
 const (
-	scopeHandler middlewareScope = iota // NATS messages only
-	scopeService                        // NATS messages + PostTaskXXX
+	ScopeHandler middlewareScope = iota // NATS messages only
+	ScopeService                        // NATS messages + PostTaskXXX
 )
 
-// scopedMiddle pairs a middleware with its execution scope.
-type scopedMiddle[TraceData any, TP ctx.TracePtr[TraceData]] struct {
-	mid   handler.Middleware[TraceData, TP]
-	scope middlewareScope
+// ScopedMiddle pairs a middleware with its execution scope.
+type ScopedMiddle[TraceData any, TP ctx.TracePtr[TraceData]] struct {
+	Mid   handler.Middleware[TraceData, TP]
+	Scope middlewareScope
 }
 
 // Config holds construction-time settings shared by all service types. It is populated
@@ -40,7 +40,7 @@ type Config[TraceData any, TP ctx.TracePtr[TraceData]] struct {
 	RespFirst          bool
 	RpcTimeout         time.Duration
 	IdleCleanupTimeout time.Duration
-	Middles            []scopedMiddle[TraceData, TP]
+	Middles            []ScopedMiddle[TraceData, TP]
 	NatsOptions        []nats.Option
 	InitCtx            func(*ctx.BaseCtx[TraceData, TP])
 	DispatchHook       func(msg *nats.Msg) bool
@@ -58,7 +58,7 @@ func (c *Config[TraceData, TP]) allMiddlewares() []handler.Middleware[TraceData,
 		all = append(all, handler.Recover[TraceData, TP])
 	}
 	for _, sm := range c.Middles {
-		all = append(all, sm.mid)
+		all = append(all, sm.Mid)
 	}
 	return all
 }
@@ -68,8 +68,8 @@ func (c *Config[TraceData, TP]) allMiddlewares() []handler.Middleware[TraceData,
 func (c *Config[TraceData, TP]) serviceMiddlewares() []handler.Middleware[TraceData, TP] {
 	var svc []handler.Middleware[TraceData, TP]
 	for _, sm := range c.Middles {
-		if sm.scope == scopeService {
-			svc = append(svc, sm.mid)
+		if sm.Scope == ScopeService {
+			svc = append(svc, sm.Mid)
 		}
 	}
 	return svc
