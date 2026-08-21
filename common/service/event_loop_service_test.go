@@ -43,7 +43,7 @@ func startELS(s *EventLoopService[ctx.IntTrace, *ctx.IntTrace]) func() {
 			switch ev := e.(type) {
 			case CE[ctx.IntTrace, *ctx.IntTrace]:
 				if ev.Func != nil {
-					if err := s.applyServiceMiddles(ev.Func)(ev.Ctx); err != nil {
+					if err := s.ApplyServiceMiddles(ev.Func)(ev.Ctx); err != nil {
 						ev.Ctx.Warn().Err(err).Msg("PostTask func error")
 					}
 					s.PutCtxToPool(ev.Ctx)
@@ -77,12 +77,13 @@ func TestEventLoopService_DispatchCallsHandler(t *testing.T) {
 	h := handler.NewHandler[ctx.IntTrace, *ctx.IntTrace]()
 	var called atomic.Bool
 	done := make(chan struct{})
-	h.RegisterEvent("els-basic", func(_ *ctx.BaseCtx[ctx.IntTrace, *ctx.IntTrace], _ *basepb.IntTrace) *berror.ErrMsg {
-		if called.CompareAndSwap(false, true) {
-			close(done)
-		}
-		return nil
-	},
+	h.RegisterEvent(
+		"els-basic", func(_ *ctx.BaseCtx[ctx.IntTrace, *ctx.IntTrace], _ *basepb.IntTrace) *berror.ErrMsg {
+			if called.CompareAndSwap(false, true) {
+				close(done)
+			}
+			return nil
+		},
 	)
 	elem, _ := h.Lookup("basepb.IntTrace")
 
@@ -110,16 +111,17 @@ func TestEventLoopService_Sequential_Order(t *testing.T) {
 	allDone := make(chan struct{})
 	var count int
 
-	h.RegisterEvent("els-order", func(_ *ctx.BaseCtx[ctx.IntTrace, *ctx.IntTrace], req *basepb.IntTrace) *berror.ErrMsg {
-		mu.Lock()
-		results = append(results, req.RoleId)
-		count++
-		if count == N {
-			close(allDone)
-		}
-		mu.Unlock()
-		return nil
-	},
+	h.RegisterEvent(
+		"els-order", func(_ *ctx.BaseCtx[ctx.IntTrace, *ctx.IntTrace], req *basepb.IntTrace) *berror.ErrMsg {
+			mu.Lock()
+			results = append(results, req.RoleId)
+			count++
+			if count == N {
+				close(allDone)
+			}
+			mu.Unlock()
+			return nil
+		},
 	)
 	elem, _ := h.Lookup("basepb.IntTrace")
 
@@ -203,10 +205,11 @@ func TestEventLoopService_PostTaskWithRoleId_Runs(t *testing.T) {
 func TestEventLoopService_HandlerError_NoNatsMsgNoReply(t *testing.T) {
 	h := handler.NewHandler[ctx.IntTrace, *ctx.IntTrace]()
 	done := make(chan struct{})
-	h.RegisterEvent("els-err", func(_ *ctx.BaseCtx[ctx.IntTrace, *ctx.IntTrace], _ *basepb.IntTrace) *berror.ErrMsg {
-		defer close(done)
-		return berror.NewProtocolStr("intentional error")
-	},
+	h.RegisterEvent(
+		"els-err", func(_ *ctx.BaseCtx[ctx.IntTrace, *ctx.IntTrace], _ *basepb.IntTrace) *berror.ErrMsg {
+			defer close(done)
+			return berror.NewProtocolStr("intentional error")
+		},
 	)
 	elem, _ := h.Lookup("basepb.IntTrace")
 
@@ -239,12 +242,13 @@ func TestEventLoopService_ConcurrentPost_AllDelivered(t *testing.T) {
 	var received atomic.Int64
 	allDone := make(chan struct{})
 
-	h.RegisterEvent("els-concurrent", func(_ *ctx.BaseCtx[ctx.IntTrace, *ctx.IntTrace], _ *basepb.IntTrace) *berror.ErrMsg {
-		if received.Add(1) == int64(total) {
-			close(allDone)
-		}
-		return nil
-	},
+	h.RegisterEvent(
+		"els-concurrent", func(_ *ctx.BaseCtx[ctx.IntTrace, *ctx.IntTrace], _ *basepb.IntTrace) *berror.ErrMsg {
+			if received.Add(1) == int64(total) {
+				close(allDone)
+			}
+			return nil
+		},
 	)
 	elem, _ := h.Lookup("basepb.IntTrace")
 
@@ -280,10 +284,11 @@ func TestEventLoopService_StopDrainsEvents(t *testing.T) {
 	h := handler.NewHandler[ctx.IntTrace, *ctx.IntTrace]()
 	var count atomic.Int64
 
-	h.RegisterEvent("els-stop", func(_ *ctx.BaseCtx[ctx.IntTrace, *ctx.IntTrace], _ *basepb.IntTrace) *berror.ErrMsg {
-		count.Add(1)
-		return nil
-	},
+	h.RegisterEvent(
+		"els-stop", func(_ *ctx.BaseCtx[ctx.IntTrace, *ctx.IntTrace], _ *basepb.IntTrace) *berror.ErrMsg {
+			count.Add(1)
+			return nil
+		},
 	)
 	elem, _ := h.Lookup("basepb.IntTrace")
 

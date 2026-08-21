@@ -128,7 +128,7 @@ func (s *OneHashOneGoService[TraceData, TP]) taskFunc(e task_group.TaskGroupElem
 		if data == nil {
 			data = s.GetCtxFromPool()
 		}
-		if err := s.applyServiceMiddles(e.Data.Func)(data); err != nil {
+		if err := s.ApplyServiceMiddles(e.Data.Func)(data); err != nil {
 			data.Warn().Err(err).Msg("PostTask func error")
 		}
 		s.PutCtxToPool(data)
@@ -165,7 +165,7 @@ func (s *OneHashOneGoService[TraceData, TP]) dealCE(c CE[TraceData, TP]) {
 	roleID := c.Ctx.GetTrace().GetRoleID()
 	if roleID == 0 {
 		if c.Func != nil {
-			if err := s.applyServiceMiddles(c.Func)(c.Ctx); err != nil {
+			if err := s.ApplyServiceMiddles(c.Func)(c.Ctx); err != nil {
 				c.Ctx.Warn().Err(err).Msg("PostTask func error")
 			}
 			s.PutCtxToPool(c.Ctx)

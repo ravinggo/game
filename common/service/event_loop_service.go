@@ -78,7 +78,7 @@ func (s *EventLoopService[TraceData, TP]) Start(f func(any)) {
 			switch c := e.(type) {
 			case CE[TraceData, TP]:
 				if c.Func != nil {
-					if err := s.applyServiceMiddles(c.Func)(c.Ctx); err != nil {
+					if err := s.ApplyServiceMiddles(c.Func)(c.Ctx); err != nil {
 						c.Ctx.Warn().Err(err).Msg("PostTask func error")
 					}
 					s.PutCtxToPool(c.Ctx)

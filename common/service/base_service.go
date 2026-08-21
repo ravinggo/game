@@ -139,9 +139,9 @@ func (s *BaseService[TraceData, TP]) GetConfig() Config[TraceData, TP] {
 	return s.cnf
 }
 
-// applyServiceMiddles wraps f with all service-scoped middlewares in declaration order.
+// ApplyServiceMiddles wraps f with all service-scoped middlewares in declaration order.
 // middlewares[0] is the outermost wrapper. Returns f unchanged when no service middlewares are set.
-func (s *BaseService[TraceData, TP]) applyServiceMiddles(
+func (s *BaseService[TraceData, TP]) ApplyServiceMiddles(
 	f func(*ctx.BaseCtx[TraceData, TP]) *berror.ErrMsg,
 ) func(*ctx.BaseCtx[TraceData, TP]) *berror.ErrMsg {
 	for i := len(s.serviceMiddles) - 1; i >= 0; i-- {

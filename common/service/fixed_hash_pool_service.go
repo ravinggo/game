@@ -69,7 +69,7 @@ func (s *FixedHashPoolService[TraceData, TP]) taskFunc(e task_group.TaskGroupEle
 		if data == nil {
 			data = s.GetCtxFromPool()
 		}
-		if err := s.applyServiceMiddles(e.Data.Func)(data); err != nil {
+		if err := s.ApplyServiceMiddles(e.Data.Func)(data); err != nil {
 			data.Warn().Err(err).Msg("PostTask func error")
 		}
 		s.PutCtxToPool(data)

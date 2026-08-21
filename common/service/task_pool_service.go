@@ -57,7 +57,7 @@ func (s *TaskPoolService[TraceData, TP]) PostTaskCloneCtx(c *ctx.BaseCtx[TraceDa
 	newCtx := s.GetCtxFromPool()
 	newCtx.TD = c.TD
 	newCtx.GetTrace().SetServerIdAndType(s.serverId, s.serverType)
-	wrapped := s.applyServiceMiddles(f)
+	wrapped := s.ApplyServiceMiddles(f)
 	s.taskPool.PutForce(
 		func() {
 			if err := wrapped(newCtx); err != nil {
@@ -76,7 +76,7 @@ func (s *TaskPoolService[TraceData, TP]) PostTaskWithRoleId(roleId int64, f func
 	newCtx := s.GetCtxFromPool()
 	newCtx.GetTrace().SetRoleID(roleId)
 	newCtx.GetTrace().SetServerIdAndType(s.serverId, s.serverType)
-	wrapped := s.applyServiceMiddles(f)
+	wrapped := s.ApplyServiceMiddles(f)
 	s.taskPool.PutForce(
 		func() {
 			if err := wrapped(newCtx); err != nil {
