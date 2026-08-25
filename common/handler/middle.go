@@ -4,9 +4,30 @@ import (
 	"fmt"
 	"time"
 
+	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/reflect/protoreflect"
+
 	"github.com/ravinggo/game/common/berror"
 	"github.com/ravinggo/game/common/ctx"
+	"github.com/ravinggo/game/common/define"
 )
+
+func LoggerWithFilter[TraceData any, TP ctx.TracePtr[TraceData]](msgS ...proto.Message) Middleware[TraceData, TP] {
+	filter := make(map[protoreflect.FullName]struct{}, len(msgS))
+	for _, msg := range msgS {
+		filter[define.ProtoMessageName(msg)] = struct{}{}
+	}
+	return func(next HandleFunc[TraceData, TP]) HandleFunc[TraceData, TP] {
+		return func(c *ctx.BaseCtx[TraceData, TP]) *berror.ErrMsg {
+			if len(filter) != 0 && c.Req != nil {
+				if _, ok := filter[define.ProtoMessageName(c.Req)]; ok {
+					return next(c)
+				}
+			}
+			return Logger(next)(c)
+		}
+	}
+}
 
 // Logger logs the inbound request, calls the next handler, then logs the outcome with duration.
 // On success it attaches all response payloads to the log line for auditability.
