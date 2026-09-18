@@ -198,6 +198,7 @@ func (s *BaseService[TraceData, TP]) HandleCtx(c *ctx.BaseCtx[TraceData, TP], e 
 func (s *BaseService[TraceData, TP]) call(c *ctx.BaseCtx[TraceData, TP], e *handler.Elem[TraceData, TP]) {
 	err := e.Call(c)
 	if err != nil {
+		err.FromMessageName = string(define.ProtoMessageName(c.Req))
 		if e.IsRPC() && c.NatsMsg != nil {
 			err = natsclient.NatsMsgReplyError(c.NatsMsg, err)
 			if err != nil {
