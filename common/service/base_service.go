@@ -204,7 +204,7 @@ func (s *BaseService[TraceData, TP]) call(c *ctx.BaseCtx[TraceData, TP], e *hand
 				logger.Log.Warn().Err(err).Msg("NatsMsgReplyError fail")
 			}
 		} else if s.cnf.DealPushResult != nil {
-			s.cnf.DealPushResult(err, nil)
+			s.cnf.DealPushResult(err, c)
 		}
 		return
 	}
@@ -215,7 +215,7 @@ func (s *BaseService[TraceData, TP]) call(c *ctx.BaseCtx[TraceData, TP], e *hand
 				logger.Log.Warn().Err(err).Msg("NatsMsgReply fail")
 			}
 		} else {
-			s.cnf.DealPushResult(nil, c.Resp, c.OtherResp...)
+			s.cnf.DealPushResult(nil, c)
 		}
 	}
 }
