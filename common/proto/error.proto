@@ -48,4 +48,7 @@ message ErrorMessage{
 
   // extra for error. For example, if there is an insufficient item error, this field can be the specific item ID.
   string err_extra_info = 5;
+
+  // from_message_name 标明该错误来自哪个请求
+  string from_message_name = 6;
 }
