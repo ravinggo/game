@@ -4,7 +4,9 @@ import (
 	"time"
 
 	"github.com/nats-io/nats.go"
+	"google.golang.org/protobuf/proto"
 
+	"github.com/ravinggo/game/common/berror"
 	"github.com/ravinggo/game/common/ctx"
 	"github.com/ravinggo/game/common/handler"
 	"github.com/ravinggo/game/common/natsclient"
@@ -44,6 +46,8 @@ type Config[TraceData any, TP ctx.TracePtr[TraceData]] struct {
 	NatsOptions        []nats.Option
 	InitCtx            func(*ctx.BaseCtx[TraceData, TP])
 	DispatchHook       func(msg *nats.Msg) bool
+	// 当整个游戏只有push，没有做RPC时，但是服务器有使用RPC注册器注册了回调，请实现此函数
+	DealPushResult func(err *berror.ErrMsg, resp proto.Message, otherResp ...proto.Message)
 }
 
 // allMiddlewares returns the full middleware chain for NATS message handling.

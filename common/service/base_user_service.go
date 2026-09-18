@@ -135,7 +135,7 @@ func (s *ServerUserService[T1, TraceData, TP, US]) DealServerUserNatsMsg(msg *na
 				}
 			}
 			c.Req, c.Resp = elem.Acquire()
-			if elem.IsRPC() {
+			if elem.IsRPC() && msg.Reply != "" {
 				c.NatsMsg = msg
 			}
 			err = define.ProtoUnmarshal(data, c.Req)

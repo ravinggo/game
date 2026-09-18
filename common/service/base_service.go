@@ -198,18 +198,24 @@ func (s *BaseService[TraceData, TP]) HandleCtx(c *ctx.BaseCtx[TraceData, TP], e 
 func (s *BaseService[TraceData, TP]) call(c *ctx.BaseCtx[TraceData, TP], e *handler.Elem[TraceData, TP]) {
 	err := e.Call(c)
 	if err != nil {
-		if e.IsRPC() {
+		if e.IsRPC() && c.NatsMsg != nil {
 			err = natsclient.NatsMsgReplyError(c.NatsMsg, err)
 			if err != nil {
 				logger.Log.Warn().Err(err).Msg("NatsMsgReplyError fail")
 			}
+		} else if s.cnf.DealPushResult != nil {
+			s.cnf.DealPushResult(err, nil)
 		}
 		return
 	}
-	if c.NatsMsg != nil && c.Resp != nil {
-		err = natsclient.NatsMsgReply(c.NatsMsg, s.cnf.RespFirst, c.Resp, c.OtherResp...)
-		if err != nil {
-			logger.Log.Warn().Err(err).Msg("NatsMsgReply fail")
+	if c.Resp != nil {
+		if e.IsRPC() && c.NatsMsg != nil {
+			err = natsclient.NatsMsgReply(c.NatsMsg, s.cnf.RespFirst, c.Resp, c.OtherResp...)
+			if err != nil {
+				logger.Log.Warn().Err(err).Msg("NatsMsgReply fail")
+			}
+		} else {
+			s.cnf.DealPushResult(nil, c.Resp, c.OtherResp...)
 		}
 	}
 }
@@ -296,7 +302,7 @@ func (s *BaseService[TraceData, TP]) DealNatsMsg(msg *nats.Msg) {
 	}
 
 	c.Req, c.Resp = elem.Acquire()
-	if elem.IsRPC() {
+	if elem.IsRPC() && msg.Reply != "" {
 		c.NatsMsg = msg
 	}
 	err := define.ProtoUnmarshal(data[2+traceSize:], c.Req)
