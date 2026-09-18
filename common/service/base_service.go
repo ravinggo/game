@@ -214,7 +214,7 @@ func (s *BaseService[TraceData, TP]) call(c *ctx.BaseCtx[TraceData, TP], e *hand
 			if err != nil {
 				logger.Log.Warn().Err(err).Msg("NatsMsgReply fail")
 			}
-		} else {
+		} else if s.cnf.DealPushResult != nil {
 			s.cnf.DealPushResult(nil, c)
 		}
 	}
